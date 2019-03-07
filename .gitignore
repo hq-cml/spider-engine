@@ -1,4 +1,6 @@
 spider-engine
 .idea/
 spider-engine.iml
-component/
+component/btree/spiderbtree
+component/btree/btree.go
+component/btree/boltbtree/btree.go
