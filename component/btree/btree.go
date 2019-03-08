@@ -1,5 +1,8 @@
 package btree
 
+/*
+ * B+树接口
+ */
 type Btree interface {
 	AddBTree(treeName string)
 	Set(treeName, key string, value uint64) error

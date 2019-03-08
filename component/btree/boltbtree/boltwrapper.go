@@ -22,7 +22,7 @@ type BoltWrapper struct {
 	Tables   map[string]bool
 }
 
-//单实例
+//单例
 var gBoltWrapper *BoltWrapper = nil
 
 //惯例New
@@ -38,7 +38,14 @@ func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*
 		return nil, err
 	}
 
-	//TODO 填充Tables
+	//初始化填充Tables
+	wrapper.db.View(func(tx *bolt.Tx) error {
+		tx.ForEach(func(k []byte, v *bolt.Bucket) error {
+			wrapper.Tables[string(k)] = true
+			return nil
+		})
+		return nil
+	})
 
 	return wrapper, nil
 }
@@ -194,14 +201,14 @@ func (br *BoltWrapper) GetValue(tableName, key string) ([]byte, bool) {
 		return nil
 	}); err != nil {
 		log.Errln("Get Error:", err)
-		return "", false
+		return nil, false
 	}
 
 	if value == nil {
-		return "", false
+		return nil, false
 	}
 
-	return string(value), true
+	return value, true
 }
 
 //HasKey
@@ -268,7 +275,6 @@ func (br *BoltWrapper) CloseDB() error {
 
 //print all k,v
 func (br *BoltWrapper) DisplayTable(tableName string) error {
-
 	if err := br.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(tableName))
 		if b == nil {
@@ -281,7 +287,7 @@ func (br *BoltWrapper) DisplayTable(tableName string) error {
 		return nil
 	}); err != nil {
 		log.Errln("DisplayTable Error:", err)
-		return "", "", err
+		return err
 	}
 
 	return nil
