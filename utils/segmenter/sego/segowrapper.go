@@ -1,21 +1,22 @@
 package sego
 
 import (
+	"github.com/hq-cml/spider-engine/utils/segmenter"
 	"github.com/huichen/sego"
 )
 
-type SegoSgememter struct{
+type SegoWrapper struct{
 	sego.Segmenter
 }
 
-func NewSegoSegmenter() SegoSgememter {
-	ss := SegoSgememter{}
-	ss.Segmenter.LoadDictionary("/tmp/dic.txt")
-	return ss
+func NewSegoWrapper(dictFile string) segmenter.Segmenter {
+	ss := SegoWrapper{}
+	ss.Segmenter.LoadDictionary(dictFile)
+	return &ss
 }
 
-func (ss *SegoSgememter)DoSegment(content []byte) []string {
-	result := ss.Segmenter.Segment(content)
+func (ss *SegoWrapper)DoSegment(content string, searchMode bool) []string {
+	result := ss.Segmenter.Segment([]byte(content))
 
-	return sego.SegmentsToSlice(result, false)
+	return sego.SegmentsToSlice(result, searchMode)
 }
