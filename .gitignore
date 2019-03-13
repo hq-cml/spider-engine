@@ -3,4 +3,3 @@ spider-engine
 spider-engine.iml
 component/btree/spiderbtree
 test.go
-utils/bitmap/
