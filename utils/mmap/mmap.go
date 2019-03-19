@@ -8,27 +8,27 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"syscall"
 	"unsafe"
 )
 
 //MMap封装结构
+//首部隐藏了8个字节, 保存了InternalIdx值, 用于二次加载映射
 type Mmap struct {
 	DataBytes   []byte
 	Path        string
-	Capacity    int64     //容量
-	InternalIdx int64     //内部操作指针, 从0开始, 指向下一个要append的位置
+	Capacity    int64     //容量, 这个是算上了HEADER_LEN的. 所以真实容量是Capacity-HEADER_LEN
+	InternalIdx int64     //内部操作指针, 从(0+HEADER_LEN)开始, 指向下一次要append的位置
 	MapType     int64
 	FilePtr     *os.File  //底层file句柄
 }
 
-//const APPEND_LEN int64 = 1024 * 1024     //1M
-const APPEND_LEN int64 = 16  //test
+
+//const APPEND_LEN int64 = 16  //test
 
 const (
-	MODE_APPEND = iota
-	MODE_CREATE
+	APPEND_LEN int64 = 1024 * 1024  //1M
+	HEADER_LEN int64 = 8   		    //头部, 保存InternalIdx便于加载
 )
 
 //创建文件, 并建立mmap映射
@@ -64,8 +64,9 @@ func NewMmap(filePath string, load bool) (*Mmap, error) {
 		if err != nil {
 			return nil, err
 		}
-		syscall.Ftruncate(int(mmp.FilePtr.Fd()), APPEND_LEN)
-		mmp.Capacity = APPEND_LEN
+		syscall.Ftruncate(int(mmp.FilePtr.Fd()), APPEND_LEN + HEADER_LEN) //申请空间需要算上头
+		mmp.Capacity = APPEND_LEN + HEADER_LEN
+		mmp.InternalIdx = HEADER_LEN //指针从0+HEADER_LEN开始
 	}
 
 	//建立mmap映射
@@ -74,21 +75,19 @@ func NewMmap(filePath string, load bool) (*Mmap, error) {
 		return nil, err
 	}
 
+	if load {
+		mmp.InternalIdx = mmp.ReadInt64(0)  //从头部加载长度
+	}
+
 	return mmp, nil
 }
 
-//TODO ??
-func (mmp *Mmap) SetFileEnd(fileLen int64) {
-	mmp.InternalIdx = fileLen
-}
+//func (mmp *Mmap) SetFileEnd(fileLen int64) {
+//	mmp.InternalIdx = fileLen
+//}
 
 //判断是否应该扩容, 如果应该, 则进一步确认扩多大
 func (mmp *Mmap) checkNeedExpand(length int64) (int64, bool) {
-	fmt.Println(mmp.InternalIdx)
-	fmt.Println(length)
-	fmt.Println(mmp.Capacity)
-	fmt.Println()
-
 	if mmp.InternalIdx + length > mmp.Capacity {
 		var i int64 = 1
 
@@ -105,11 +104,11 @@ func (mmp *Mmap) checkNeedExpand(length int64) (int64, bool) {
 //扩容
 func (mmp *Mmap) doExpand(length int64) error {
 	//trucate file, 扩容
-	err := syscall.Ftruncate(int(mmp.FilePtr.Fd()), mmp.Capacity + APPEND_LEN)
+	err := syscall.Ftruncate(int(mmp.FilePtr.Fd()), mmp.Capacity + length)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Ftruncate error : %v\n", err))
 	}
-	mmp.Capacity += APPEND_LEN
+	mmp.Capacity += length
 	syscall.Munmap(mmp.DataBytes)
 
 	//重新建立mmap映射
@@ -122,12 +121,12 @@ func (mmp *Mmap) doExpand(length int64) error {
 	return nil
 }
 
-func (this *Mmap) isEndOfFile(start int64) bool {
-	if this.InternalIdx == start {
-		return true
-	}
-	return false
-}
+//func (this *Mmap) isEndOfFile(start int64) bool {
+//	if this.InternalIdx == start {
+//		return true
+//	}
+//	return false
+//}
 
 func (mmp *Mmap) ReadInt64(start int64) int64 {
 	return int64(binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8]))
@@ -145,25 +144,25 @@ func (mmp *Mmap) Read(start, end int64) []byte {
 	return mmp.DataBytes[start:end]
 }
 
-//写[]byte, 不考虑越界
+//指定位置写[]byte, 不考虑越界
 func (mmp *Mmap) Write(start int64, buffer []byte) error {
 	copy(mmp.DataBytes[start:int(start)+len(buffer)], buffer)
 	return nil
 }
 
-//写int64, 不考虑越界
+//指定位置写int64, 不考虑越界
 func (mmp *Mmap) WriteUInt64(start int64, value uint64) error {
 	binary.LittleEndian.PutUint64(mmp.DataBytes[start:start+8], uint64(value))
 	return nil
 }
 
-//写uint64, 不考虑越界
+//指定位置写uint64, 不考虑越界
 func (mmp *Mmap) WriteInt64(start, value int64) error {
 	binary.LittleEndian.PutUint64(mmp.DataBytes[start:start+8], uint64(value))
 	return nil
 }
 
-//追加int64, 考虑越界
+//从Idx向后追加int64, 考虑越界
 func (mmp *Mmap) AppendInt64(value int64) error {
 	expLen, b := mmp.checkNeedExpand(8)
 	if b {
@@ -177,7 +176,7 @@ func (mmp *Mmap) AppendInt64(value int64) error {
 	return nil
 }
 
-//追加uint64, 考虑越界
+//从Idx向后追加uint64, 考虑越界
 func (mmp *Mmap) AppendUInt64(value uint64) error {
 	expLen, b := mmp.checkNeedExpand(8)
 	if b {
@@ -191,14 +190,13 @@ func (mmp *Mmap) AppendUInt64(value uint64) error {
 	return nil
 }
 
-
 //func (this *Mmap) AppendStringWithLen(value string) error {
 //	this.AppendInt64(int64(len(value)))
 //	this.AppendString(value)
 //	return nil
 //}
 
-//追加[]byte, 考虑越界
+//从Idx向后追加[]byte, 考虑越界
 func (mmp *Mmap) AppendBytes(value []byte) error {
 	length := int64(len(value))
 	expLen, b := mmp.checkNeedExpand(length)
@@ -212,32 +210,41 @@ func (mmp *Mmap) AppendBytes(value []byte) error {
 	return nil
 }
 
-//追加string, 考虑越界
+//从Idx向后追加string, 考虑越界
 func (mmp *Mmap) AppendString(value string) error {
 	return mmp.AppendBytes([]byte(value))
-
 }
 
 //Unmmap
-func (this *Mmap) Unmap() error {
-
-	syscall.Munmap(this.DataBytes)
-	this.FilePtr.Close()
+//根据linux规范, mmap会导致数据整体刷新到disk
+func (mmp *Mmap) Unmap() error {
+	mmp.WriteInt64(0, mmp.InternalIdx) //写回首部
+	syscall.Munmap(mmp.DataBytes)
+	mmp.FilePtr.Close()
 	return nil
 }
 
 //
-func (this *Mmap) GetPointer() int64 {
-	return this.InternalIdx
-}
+//func (this *Mmap) GetPointer() int64 {
+//	return this.InternalIdx
+//}
 
-func (this *Mmap) header() *reflect.SliceHeader {
-	return (*reflect.SliceHeader)(unsafe.Pointer(&this.DataBytes))
-}
+//func (mmp *Mmap) header() *reflect.SliceHeader {
+//	return (*reflect.SliceHeader)(unsafe.Pointer(&mmp.DataBytes))
+//}
 
-func (this *Mmap) Sync() error {
-	dh := this.header()
-	_, _, err := syscall.Syscall(syscall.SYS_MSYNC, dh.Data, uintptr(dh.Len), syscall.MS_SYNC)
+//Sync
+//在未调用Unmmap的情况下,手动刷新数据到disk
+func (mmp *Mmap) Sync() error {
+	//dh := mmp.header()
+	//_, _, err := syscall.Syscall(syscall.SYS_MSYNC, dh.Data, uintptr(dh.Len), syscall.MS_SYNC)
+
+	mmp.WriteInt64(0, mmp.InternalIdx) //写回首部
+	_, _, err := syscall.Syscall(syscall.SYS_MSYNC,
+		uintptr(unsafe.Pointer(&mmp.DataBytes[0])),
+		uintptr(len(mmp.DataBytes)),
+		syscall.MS_SYNC,
+	)
 	if err != 0 {
 		fmt.Printf("Sync Error ")
 		return errors.New("Sync Error")
