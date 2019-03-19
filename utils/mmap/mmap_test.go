@@ -29,7 +29,7 @@ func TestCreateFile(t *testing.T) {
 }
 
 func TestNewMmap(t *testing.T) {
-	m, err := NewMmap("/tmp/ee", false)
+	m, err := NewMmap("/tmp/ee", false, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,70 +38,71 @@ func TestNewMmap(t *testing.T) {
 	m.DataBytes [8] = 'a'
 }
 
-func TestLoadNewMmap(t *testing.T) {
-	mmp, err := NewMmap("/tmp/ee", true)
+func TestLoadMmap(t *testing.T) {
+	mmp, err := NewMmap("/tmp/bitmap.dat", true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mmp.Unmap()
 
-	t.Log(mmp.ReadString(8, 1))
+	t.Log(mmp.Capacity)
+	t.Log(mmp.internalIdx)
 }
 
 func TestCheckNeedExpand(t *testing.T) {
-	mmp, err := NewMmap("/tmp/cc", true)
+	mmp, err := NewMmap("/tmp/cc", true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mmp.Unmap()
 
 	mmp.Capacity = 12 //实际容量只有4
-	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
+	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.internalIdx)
 
-	mmp.InternalIdx = 8
+	mmp.internalIdx = 8
 	tt, b := mmp.checkNeedExpand(3) //不扩
 	t.Log(b, tt)
 
-	mmp.InternalIdx = 8
+	mmp.internalIdx = 8
 	tt, b = mmp.checkNeedExpand(4)  //不扩
 	t.Log(b, tt)
 
-	mmp.InternalIdx = 8
+	mmp.internalIdx = 8
 	tt, b = mmp.checkNeedExpand(5)  //扩一次
 	t.Log(b, tt)
 
 
-	mmp.InternalIdx = 11
+	mmp.internalIdx = 11
 	tt, b = mmp.checkNeedExpand(16)  //扩一次
 	t.Log(b, tt)
 
-	mmp.InternalIdx = 12
+	mmp.internalIdx = 12
 	tt, b = mmp.checkNeedExpand(16)  //扩一次
 	t.Log(b, tt)
 
-	mmp.InternalIdx = 11
+	mmp.internalIdx = 11
 	tt, b = mmp.checkNeedExpand(17)  //扩一次
 	t.Log(b, tt)
 
-	mmp.InternalIdx = 11
+	mmp.internalIdx = 11
 	tt, b = mmp.checkNeedExpand(18)  //扩2次
 	t.Log(b, tt)
 
-	mmp.InternalIdx = 12
+	mmp.internalIdx = 12
 	tt, b = mmp.checkNeedExpand(17)  //扩2次
 	t.Log(b, tt)
 }
 
 func TestExpand(t *testing.T) {
-	mmp, err := NewMmap("/tmp/cc", false)
+	mmp, err := NewMmap("/tmp/cc", false, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mmp.Unmap()
-	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
+	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.internalIdx)
 
 	mmp.AppendString("abcdefghijklmno") //15
-	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
+	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.internalIdx)
 
 	tt, b := mmp.checkNeedExpand(1)  //不扩
 	t.Log(b, tt)
@@ -110,17 +111,17 @@ func TestExpand(t *testing.T) {
 	t.Log(b, tt)
 	if b {
 		mmp.doExpand(tt)
-		t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
+		t.Log("Cap:", mmp.Capacity, "Idx:", mmp.internalIdx)
 	}
 }
 
 func TestWriteString(t *testing.T) {
-	mmp, err := NewMmap("/tmp/cc", false)
+	mmp, err := NewMmap("/tmp/cc", false, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mmp.Unmap()
-	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
+	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.internalIdx)
 
 	//mmp.AppendString("abcdefghijklmno") //15
 	//t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
@@ -129,22 +130,22 @@ func TestWriteString(t *testing.T) {
 	//t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
 
 	mmp.AppendString("abcdefghijklmnopr") //17
-	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
+	t.Log("Cap:", mmp.Capacity, "Idx:", mmp.internalIdx)
 }
 
 //感觉没啥效果, 在执行Sync之前, 文件也是同步更改的...
 func TestSync(t *testing.T) {
-	mmp, err := NewMmap("/tmp/cc", true)
+	mmp, err := NewMmap("/tmp/cc", true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mmp.Unmap()
-	fmt.Println("Cap:", mmp.Capacity, "Idx:", mmp.InternalIdx)
+	fmt.Println("Cap:", mmp.Capacity, "Idx:", mmp.internalIdx)
 
 	//t.Log("C: ", mmp.DataBytes, len(mmp.DataBytes))
 	fmt.Println("Before:", mmp.ReadString(8, 16))
 
-	mmp.Write(8, []byte("123"))
+	mmp.WriteBytes(8, []byte("123"))
 
 	fmt.Println("After:", mmp.ReadString(8, 16))
 

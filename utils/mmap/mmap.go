@@ -10,6 +10,7 @@ import (
 	"os"
 	"syscall"
 	"unsafe"
+	"bytes"
 )
 
 //MMap封装结构
@@ -17,14 +18,11 @@ import (
 type Mmap struct {
 	DataBytes   []byte
 	Path        string
-	Capacity    int64     //容量, 这个是算上了HEADER_LEN的. 所以真实容量是Capacity-HEADER_LEN
-	InternalIdx int64     //内部操作指针, 从(0+HEADER_LEN)开始, 指向下一次要append的位置
+	Capacity    int64    //容量, 这个是算上了HEADER_LEN的. 所以真实容量是Capacity-HEADER_LEN
+	internalIdx int64    //内部操作指针, 从(0+HEADER_LEN)开始, 指向下一次要append的位置
 	MapType     int64
-	FilePtr     *os.File  //底层file句柄
+	FilePtr     *os.File //底层file句柄
 }
-
-
-//const APPEND_LEN int64 = 16  //test
 
 const (
 	APPEND_LEN int64 = 1024 * 1024  //1M
@@ -35,7 +33,7 @@ const (
 //load参数:
 // true-加载已有文件(文件不存在则报错)
 // false-创建新文件(如果存在旧文件会被清空)
-func NewMmap(filePath string, load bool) (*Mmap, error) {
+func NewMmap(filePath string, load bool, size int64) (*Mmap, error) {
 
 	mmp := &Mmap {
 		DataBytes: make([]byte, 0),
@@ -45,7 +43,6 @@ func NewMmap(filePath string, load bool) (*Mmap, error) {
 	var err error
 	if load {
 		//尝试打开并加载文件
-		//mmp.FilePtr, err = os.Open(filePath)
 		mmp.FilePtr, err = os.OpenFile(filePath, os.O_RDWR, 0664)
 		//defer mmp.FilePtr.Close()
 		if err != nil {
@@ -64,9 +61,13 @@ func NewMmap(filePath string, load bool) (*Mmap, error) {
 		if err != nil {
 			return nil, err
 		}
-		syscall.Ftruncate(int(mmp.FilePtr.Fd()), APPEND_LEN + HEADER_LEN) //申请空间需要算上头
-		mmp.Capacity = APPEND_LEN + HEADER_LEN
-		mmp.InternalIdx = HEADER_LEN //指针从0+HEADER_LEN开始
+
+		if size < 0 {
+			size = APPEND_LEN
+		}
+		syscall.Ftruncate(int(mmp.FilePtr.Fd()), size + HEADER_LEN) //申请空间需要算上头
+		mmp.Capacity = size + HEADER_LEN
+		mmp.internalIdx = HEADER_LEN //指针从0+HEADER_LEN开始
 	}
 
 	//建立mmap映射
@@ -76,22 +77,28 @@ func NewMmap(filePath string, load bool) (*Mmap, error) {
 	}
 
 	if load {
-		mmp.InternalIdx = mmp.ReadInt64(0)  //从头部加载长度
+		mmp.internalIdx = mmp.ReadInt64(0)  //从头部加载长度
 	}
 
 	return mmp, nil
 }
 
-//func (mmp *Mmap) SetFileEnd(fileLen int64) {
-//	mmp.InternalIdx = fileLen
-//}
+//谨慎使用, 最好通过程序自动增加
+func (mmp *Mmap) SetInternalIdx(idx int64) {
+	mmp.internalIdx = idx
+}
+
+//判断是否应该扩容, 如果应该, 则进一步确认扩多大
+func (mmp *Mmap) RealCapcity() int64 {
+	return (mmp.Capacity - HEADER_LEN)
+}
 
 //判断是否应该扩容, 如果应该, 则进一步确认扩多大
 func (mmp *Mmap) checkNeedExpand(length int64) (int64, bool) {
-	if mmp.InternalIdx + length > mmp.Capacity {
+	if mmp.internalIdx + length > mmp.Capacity {
 		var i int64 = 1
 
-		for mmp.InternalIdx + length  > mmp.Capacity + i * APPEND_LEN {
+		for mmp.internalIdx + length  > mmp.Capacity + i * APPEND_LEN {
 			i ++
 		}
 
@@ -128,41 +135,72 @@ func (mmp *Mmap) doExpand(length int64) error {
 //	return false
 //}
 
+//Read系列, 未忽略Header
 func (mmp *Mmap) ReadInt64(start int64) int64 {
 	return int64(binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8]))
 }
-
 func (mmp *Mmap) ReadUInt64(start uint64) uint64 {
 	return binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8])
 }
-
-func (mmp *Mmap) ReadString(start, lens int64) string {
-	return string(mmp.DataBytes[start : start+lens])
+func (mmp *Mmap) ReadString(start, length int64) string {
+	return string(mmp.DataBytes[start : start + length])
+}
+func (mmp *Mmap) ReadBytes(start, length int64) []byte {
+	return mmp.DataBytes[start : start + length]
+}
+func (mmp *Mmap) ReadByte(start int64) byte {
+	return mmp.DataBytes[start]
 }
 
-func (mmp *Mmap) Read(start, end int64) []byte {
-	return mmp.DataBytes[start:end]
+//Get系列, 隐藏了Header的影响
+func (mmp *Mmap) GetByte(start int64) byte {
+	return mmp.DataBytes[start + HEADER_LEN]
+}
+func (mmp *Mmap) GetBytes(start, length int64) []byte {
+	return mmp.DataBytes[start + HEADER_LEN : start+ HEADER_LEN + length]
+}
+func (mmp *Mmap) GetString(start, length int64) string {
+	return string(mmp.DataBytes[start + HEADER_LEN : start + HEADER_LEN +length])
+}
+func (mmp *Mmap) GetInt64(start int64) int64 {
+	return int64(binary.LittleEndian.Uint64(mmp.DataBytes[start + HEADER_LEN : start + HEADER_LEN + 8]))
+}
+func (mmp *Mmap) GetUInt64(start int64) uint64 {
+	return binary.LittleEndian.Uint64(mmp.DataBytes[start + HEADER_LEN : start + HEADER_LEN + 8])
 }
 
-//指定位置写[]byte, 不考虑越界
-func (mmp *Mmap) Write(start int64, buffer []byte) error {
+//Write系列, 指定位置写, 不考虑越界
+func (mmp *Mmap) WriteByte(start int64, b byte) {
+	mmp.DataBytes[start] = b
+}
+func (mmp *Mmap) WriteBytes(start int64, buffer []byte) {
 	copy(mmp.DataBytes[start:int(start)+len(buffer)], buffer)
-	return nil
 }
-
-//指定位置写int64, 不考虑越界
-func (mmp *Mmap) WriteUInt64(start int64, value uint64) error {
+func (mmp *Mmap) WriteUInt64(start int64, value uint64) {
 	binary.LittleEndian.PutUint64(mmp.DataBytes[start:start+8], uint64(value))
-	return nil
 }
-
-//指定位置写uint64, 不考虑越界
-func (mmp *Mmap) WriteInt64(start, value int64) error {
+func (mmp *Mmap) WriteInt64(start, value int64) {
 	binary.LittleEndian.PutUint64(mmp.DataBytes[start:start+8], uint64(value))
-	return nil
 }
 
-//从Idx向后追加int64, 考虑越界
+//Set系列, 隐藏了Header的影响, 不考虑越界
+func (mmp *Mmap) SetByte(start int64, b byte) {
+	mmp.DataBytes[start + HEADER_LEN] = b
+}
+func (mmp *Mmap) SetBytes(start int64, b []byte) {
+	copy(mmp.DataBytes[start + HEADER_LEN :int(start) + int(HEADER_LEN) + len(b)], b)
+}
+func (mmp *Mmap) SetString(start int64, s string) {
+	mmp.SetBytes(start, []byte(s))
+}
+func (mmp *Mmap) SetInt64(start int64, value int64) {
+	binary.LittleEndian.PutUint64(mmp.DataBytes[start+ HEADER_LEN : start+ HEADER_LEN +8], uint64(value))
+}
+func (mmp *Mmap) SetUInt64(start int64, value uint64) {
+	binary.LittleEndian.PutUint64(mmp.DataBytes[start+ HEADER_LEN : start+ HEADER_LEN +8], uint64(value))
+}
+
+//Append系列, 从Idx向后追加, 考虑越界
 func (mmp *Mmap) AppendInt64(value int64) error {
 	expLen, b := mmp.checkNeedExpand(8)
 	if b {
@@ -171,12 +209,10 @@ func (mmp *Mmap) AppendInt64(value int64) error {
 		}
 	}
 
-	binary.LittleEndian.PutUint64(mmp.DataBytes[mmp.InternalIdx:mmp.InternalIdx +8], uint64(value))
-	mmp.InternalIdx += 8
+	binary.LittleEndian.PutUint64(mmp.DataBytes[mmp.internalIdx:mmp.internalIdx +8], uint64(value))
+	mmp.internalIdx += 8
 	return nil
 }
-
-//从Idx向后追加uint64, 考虑越界
 func (mmp *Mmap) AppendUInt64(value uint64) error {
 	expLen, b := mmp.checkNeedExpand(8)
 	if b {
@@ -185,18 +221,10 @@ func (mmp *Mmap) AppendUInt64(value uint64) error {
 		}
 	}
 
-	binary.LittleEndian.PutUint64(mmp.DataBytes[mmp.InternalIdx:mmp.InternalIdx +8], value)
-	mmp.InternalIdx += 8
+	binary.LittleEndian.PutUint64(mmp.DataBytes[mmp.internalIdx:mmp.internalIdx +8], value)
+	mmp.internalIdx += 8
 	return nil
 }
-
-//func (this *Mmap) AppendStringWithLen(value string) error {
-//	this.AppendInt64(int64(len(value)))
-//	this.AppendString(value)
-//	return nil
-//}
-
-//从Idx向后追加[]byte, 考虑越界
 func (mmp *Mmap) AppendBytes(value []byte) error {
 	length := int64(len(value))
 	expLen, b := mmp.checkNeedExpand(length)
@@ -205,12 +233,10 @@ func (mmp *Mmap) AppendBytes(value []byte) error {
 			return err
 		}
 	}
-	copy(mmp.DataBytes[mmp.InternalIdx : mmp.InternalIdx + length], value)
-	mmp.InternalIdx += length
+	copy(mmp.DataBytes[mmp.internalIdx : mmp.internalIdx + length], value)
+	mmp.internalIdx += length
 	return nil
 }
-
-//从Idx向后追加string, 考虑越界
 func (mmp *Mmap) AppendString(value string) error {
 	return mmp.AppendBytes([]byte(value))
 }
@@ -218,7 +244,7 @@ func (mmp *Mmap) AppendString(value string) error {
 //Unmmap
 //根据linux规范, mmap会导致数据整体刷新到disk
 func (mmp *Mmap) Unmap() error {
-	mmp.WriteInt64(0, mmp.InternalIdx) //写回首部
+	mmp.WriteInt64(0, mmp.internalIdx) //写回首部
 	syscall.Munmap(mmp.DataBytes)
 	mmp.FilePtr.Close()
 	return nil
@@ -239,7 +265,7 @@ func (mmp *Mmap) Sync() error {
 	//dh := mmp.header()
 	//_, _, err := syscall.Syscall(syscall.SYS_MSYNC, dh.Data, uintptr(dh.Len), syscall.MS_SYNC)
 
-	mmp.WriteInt64(0, mmp.InternalIdx) //写回首部
+	mmp.WriteInt64(0, mmp.internalIdx) //写回首部
 	_, _, err := syscall.Syscall(syscall.SYS_MSYNC,
 		uintptr(unsafe.Pointer(&mmp.DataBytes[0])),
 		uintptr(len(mmp.DataBytes)),
@@ -258,3 +284,10 @@ func (mmp *Mmap) Sync() error {
 //}
 
 
+func (mmp *Mmap) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("The Mmap => \n")
+	buf.WriteString(fmt.Sprintf("  Capcity: %d\n", mmp.Capacity))
+	buf.WriteString(fmt.Sprintf("  InternalIdx: %d\n", mmp.internalIdx))
+	return buf.String()
+}
