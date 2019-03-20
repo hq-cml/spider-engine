@@ -11,16 +11,16 @@ import (
 )
 
 const (
-	BitmapMaxMax = 0x01 << 63   //最大容忍值, 超过这个直接报错( 因为int64, 符号位占用1位, 所以63
-	BitmapMaxNum = 0x01 << 32   //2^32个bit位, 能够表示2^32个槽位, 即 0 - 2^32-1 的数字范围
-	BYTE_SIZE = 8				//一个字节占bit数
+	BitmapMaxMax = (0x01 << 63) -1 //最大容忍值, 超过这个直接报错( 因为int64, 符号位占用1位, 所以63
+	BitmapMaxNum = 0x01 << 32      //2^32个bit位, 能够表示2^32个槽位, 即 0 - 2^32-1 的数字范围
+	BYTE_SIZE = 8				   //一个字节占bit数
 )
 
 // Bitmap
 type Bitmap struct {
 	DataMap     *mmap.Mmap
 	MaxNum      int64 //指示该Bitmap能表示的最大的数
-	FirstOneIdx int64 //Bitmap被设置为1的最大位置（方便遍历）
+	FirstOneIdx int64 //Bitmap被设置为1的最大值（方便遍历）
 }
 
 // NewBitmap 使用默认容量实例化一个 Bitmap
@@ -31,7 +31,7 @@ func NewBitmap(indexname string, loadFile bool) *Bitmap {
 //根据指定的 size 实例化一个 Bitmap
 //如果size非8的整数倍, 则会进行修正
 func NewBitmapSize(size int, fileName string, loadFile bool) *Bitmap {
-	if size > BitmapMaxMax {
+	if size > BitmapMaxMax-1 {
 		panic("No suport bitmap size!!!")
 	}
 	//参数修正
@@ -51,8 +51,9 @@ func NewBitmapSize(size int, fileName string, loadFile bool) *Bitmap {
 			return nil
 		}
 	} else {
-		bm.MaxNum = uint64(size - 1)
-		bm.map2File(fileName)
+		bm.MaxNum = int64(size - 1)
+		bm.FirstOneIdx = -1
+		bm.newFile(fileName)
 	}
 
 	return bm
@@ -65,7 +66,7 @@ func (bm *Bitmap) loadFile(indexName string) error {
 	if err != nil {
 		return err
 	}
-	bm.MaxNum = uint64(bm.DataMap.RealCapcity() * BYTE_SIZE - 1)
+	bm.MaxNum = bm.DataMap.RealCapcity() * BYTE_SIZE - 1
 
 	//找到最大的1
 	bm.FindMaxOne()
@@ -74,10 +75,10 @@ func (bm *Bitmap) loadFile(indexName string) error {
 }
 
 //将Bitmap和磁盘文件建立mmap映射
-func (bm *Bitmap)map2File(indexName string) error {
+func (bm *Bitmap)newFile(indexName string) error {
 	var err error
-	fmt.Println("Map size: ", int64((bm.MaxNum+1)/BYTE_SIZE))
 
+	//按理说, 应该先创建0长度的mmap, 然后append一个对应长度的bitmap
 	//bm.DataMap, err = mmap.NewMmap(indexName, false, 0)
 	//if err != nil {
 	//	return err
@@ -87,9 +88,8 @@ func (bm *Bitmap)map2File(indexName string) error {
 	//	return err
 	//}
 
-	//因为bitmap没有append一说, 设置好了直接使用
-	//所以这里直接生成合适的大小, 而不进行新append扩充
-	//并且直接设置InternalIdx, 这里多少有点
+	//但是, 因为bitmap没有append一说, 设置好了直接使用
+	//所以这里直接生成合适的大小,并且直接设置InternalIdx指向最后
 	bm.DataMap, err = mmap.NewMmap(indexName, false, int64((bm.MaxNum+1)/BYTE_SIZE))
 	if err != nil {
 		return err
@@ -101,8 +101,6 @@ func (bm *Bitmap)map2File(indexName string) error {
 //找到最大的1, 有点烧脑
 //从最高位开始, 逐个Byte探测
 func (bm *Bitmap)FindMaxOne() {
-	OUT:
-
 	for i := bm.DataMap.RealCapcity() - 1; i >= 0 ; i-- {
 		v := bm.DataMap.GetByte(i)
 		if v == 0 {
@@ -110,11 +108,12 @@ func (bm *Bitmap)FindMaxOne() {
 		}
 		for j:=7; j>=0; j-- {
 			if (v & (0x01<<uint(j))) == 0x01<<uint(j) {
-				bm.FirstOneIdx = uint64(i * int64(BYTE_SIZE) + int64(j))
-				break OUT
+				bm.FirstOneIdx = i * int64(BYTE_SIZE) + int64(j)
+				return
 			}
 		}
 	}
+	bm.FirstOneIdx = -1
 }
 
 func (bm *Bitmap) Set(idx uint64) bool {
@@ -130,7 +129,7 @@ func (bm *Bitmap) Clear(idx uint64) bool {
 func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 	index, pos := idx / BYTE_SIZE, idx % BYTE_SIZE
 
-	if bm.MaxNum < idx {
+	if bm.MaxNum < int64(idx) {
 		return false
 	}
 
@@ -140,7 +139,7 @@ func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 		bm.DataMap.SetByte(int64(index), tmp)
 
 		//如果idx==FirstOneIdx, 则需要重新找到最大的1
-		if bm.FirstOneIdx == idx {
+		if bm.FirstOneIdx == int64(idx) {
 			bm.FindMaxOne()
 		}
 	} else {
@@ -149,8 +148,8 @@ func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 		bm.DataMap.SetByte(int64(index), tmp)
 
 		//记录曾经设置为 1 的最大位置
-		if bm.FirstOneIdx < idx {
-			bm.FirstOneIdx = idx
+		if bm.FirstOneIdx < int64(idx) {
+			bm.FirstOneIdx = int64(idx)
 		}
 	}
 
@@ -162,7 +161,7 @@ func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 func (bm *Bitmap) GetBit(idx uint64) uint8 {
 	index, pos := idx / BYTE_SIZE, idx % BYTE_SIZE
 
-	if bm.MaxNum < idx {
+	if bm.MaxNum < int64(idx) {
 		return 0
 	}
 
@@ -170,18 +169,18 @@ func (bm *Bitmap) GetBit(idx uint64) uint8 {
 }
 
 //Maxpos 获的置为 1 的最大位置
-func (bm *Bitmap) Maxpos() uint64 {
+func (bm *Bitmap) Maxpos() int64 {
 	return bm.FirstOneIdx
 }
 
 //实现Stringer接口（输出所有的1的索引位置）
 func (bm *Bitmap) String() string {
-	var max uint64 = bm.FirstOneIdx + 1
+	var max int64 = bm.FirstOneIdx + 1
 
-	numSlice := make([]uint64, 0)
-	var offset uint64
+	numSlice := make([]int64, 0)
+	var offset int64
 	for offset =0; offset < max; offset++ {
-		if bm.GetBit(offset) == 1 {
+		if bm.GetBit(uint64(offset)) == 1 {
 			numSlice = append(numSlice, offset)
 		}
 	}

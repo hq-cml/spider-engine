@@ -2,114 +2,105 @@ package bitmap
 
 import (
 	"testing"
-	//"os"
 )
-
-//func TestA(t *testing.T) {
-//	v := 132
-//	j := 7
-//	fmt.Println(v, (0x01<<uint(j)), (v & (0x01<<uint(j))))
-//}
 
 func TestLeftShift(t *testing.T) {
 	a := 0x01<<8
 	if a != 256 {
 		t.Log("Error 0x01<<8")
 	}
+	t.Log("\n")
 }
-//
-//func TestNewBitmap(t *testing.T) {
-//	bm := NewBitmapSize(16, "/tmp/bitmap.dat", false)
-//
-//	fmt.Println(bm)
-//	fmt.Println(bm.DataMap.DataBytes)
-//}
-//
-//func TestSetGet(t *testing.T) {
-//	bm := NewBitmapSize(32, "/tmp/bitmap.dat", false)
-//	defer bm.Close()
-//
-//	fmt.Println(bm)
-//	fmt.Println(bm.DataMap)
-//
-//	bm.Set(3)
-//	//fmt.Println()
-//	//fmt.Println(bm)
-//	//fmt.Println(bm.DataMap)
-//	//fmt.Println(bm.DataMap.ReadBytes(8, 2))
-//
-//	bm.Set(7)
-//	//fmt.Println(bm)
-//
-//	bm.Set(10)
-//	//fmt.Println(bm)
-//
-//	bm.Set(15)
-//	//fmt.Println(bm)
-//
-//	bm.Set(21)
-//	fmt.Println(bm)
-//}
-//
-//func TestLoadBitmap(t *testing.T) {
-//	bm := NewBitmapSize(16, "/tmp/bitmap.dat", true)
-//
-//	fmt.Println(bm)
-//	fmt.Println(bm.DataMap)
-//}
 
-//func TestFindMax1(t *testing.T) {
-//	bm := NewBitmapSize(32, "/tmp/bitmap.dat", false)
-//	fmt.Println(bm)
-//
-//	bm.Set(3)
-//	fmt.Println(bm)
-//
-//	bm.Set(7)
-//	fmt.Println(bm)
-//
-//	bm.Set(10)
-//	fmt.Println(bm)
-//
-//	//bm.Set(11)
-//	//fmt.Println(bm)
-//
-//	bm.Set(15)
-//	fmt.Println(bm)
-//
-//	fmt.Println(bm.Data)
-//
-//	OUT:
-//	for i := len(bm.Data) - 1; i >= 0 ; i-- {
-//		fmt.Println("A-------------", i)
-//		v := bm.Data[i]
-//		if v == 0 {
-//			continue
-//		}
-//		for j:=7; j>=0; j-- {
-//			fmt.Println("B-------------", j, v, (0x01<<uint(j)), (v & (0x01<<uint(j))))
-//			if (v & (0x01<<uint(j))) == 0x01<<uint(j) {
-//				fmt.Println("C-------------", i, j)
-//				bm.FirstOneIdx = uint64(i * BYTE_SIZE + j)
-//				break OUT
-//			}
-//		}
-//	}
-//
-//	fmt.Println("Max: ", bm.FirstOneIdx)
-//}
+func TestNewBitmap(t *testing.T) {
+	bm := NewBitmapSize(16, "/tmp/bitmap.dat", false)
 
-//func TestClose(t *testing.T) {
-//	bm := NewBitmapSize(32, "/tmp/bitmap.dat", true)
-//
-//	bm.Set(16)
-//
-//	err := bm.Close()
-//	if err != nil {
-//		fmt.Println("Error: ", err)
-//	} else {
-//		fmt.Println("ok~")
-//	}
-//}
+	t.Log("Create bitmap:", bm)
+	t.Log("Create bitmap:", bm.DataMap)
+
+	if bm.FirstOneIdx != -1 {
+		t.Fatal("wrong")
+	}
+
+	if bm.MaxNum != 15 {
+		t.Fatal("wrong")
+	}
+
+	if bm.DataMap.RealCapcity() != 2 {
+		t.Fatal("wrong")
+	}
+
+	if bm.DataMap.Capacity != 10 {
+		t.Fatal("wrong")
+	}
+	t.Log("\n")
+}
+
+func TestSetGet(t *testing.T) {
+	bm := NewBitmapSize(32, "/tmp/bitmap.dat", false)
+	defer bm.Close()
+
+	t.Log("Create bitmap:", bm)
+	t.Log("Create bitmap:", bm.DataMap)
+
+	t.Log("Before Foreach: ", bm)
+
+	bm.Set(3)
+	bm.Set(7)
+	bm.Set(10)
+	bm.Set(15)
+	bm.Set(21)
+	t.Log("After Foreach: ", bm)
+
+	bm.Clear(2)
+	bm.Clear(7)
+	bm.Clear(15)
+	bm.Clear(21)
+	t.Log("Clear Foreach: ", bm)
+
+	bm.Set(31)
+	bm.Set(19)
+	bm.Set(27)
+	t.Log("Final Foreach: ", bm)
+
+	bm.Clear(19)
+	t.Log("Clear Foreach: ", bm)
+
+	t.Log("\n")
+}
+
+func TestLoadBitmap(t *testing.T) {
+	bm := NewBitmapSize(0, "/tmp/bitmap.dat", true)
+
+	t.Log("Load bitmap:", bm)
+	t.Log("Load bitmap:", bm.DataMap)
+
+	if bm.GetBit(3) != 1 ||
+		bm.GetBit(10) != 1 ||
+		bm.GetBit(27) != 1 ||
+		bm.GetBit(31) != 1 ||
+		bm.GetBit(2) == 1 ||
+		bm.GetBit(4) == 1 ||
+		bm.GetBit(5) == 1 ||
+		bm.GetBit(11) == 1 ||
+		bm.GetBit(17) == 1 ||
+		bm.GetBit(23) == 1 ||
+		bm.GetBit(24) == 1 {
+		t.Fatal("wrong data")
+	}
+	t.Log("\n")
+}
+
+func TestClose(t *testing.T) {
+	bm := NewBitmapSize(0, "/tmp/bitmap.dat", true)
+
+	bm.Set(16)
+
+	err := bm.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("\n")
+}
 
 
