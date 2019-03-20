@@ -1,7 +1,9 @@
 package jieba
 
+/*
+ * 结巴分词器包装
+ */
 import (
-	"github.com/hq-cml/spider-engine/utils/segmenter"
 	"github.com/yanyiwu/gojieba"
 )
 
@@ -9,13 +11,13 @@ type JiebaWrapper struct {
 	*gojieba.Jieba
 }
 
-func NewJiebaWrapper() segmenter.Segmenter {
-	jw := JiebaWrapper{}
-	jw.Jieba = gojieba.NewJieba()
-	return &jw
+func NewJiebaWrapper() *JiebaWrapper {
+	return &JiebaWrapper {
+		Jieba: gojieba.NewJieba(),
+	}
 }
 
-func (jw *JiebaWrapper)DoSegment(content string, searchMode bool) []string {
+func (jw *JiebaWrapper)DoSplit(content string, searchMode bool) []string {
 	use_hmm := true
 	if searchMode {
 		return jw.Jieba.CutForSearch(content, use_hmm)
