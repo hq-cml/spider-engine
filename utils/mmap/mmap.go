@@ -1,7 +1,11 @@
 package mmap
 
 /**
- * 封装syscall.Mmap
+ * 封装 syscall.Mmap
+ *
+ * 参考:
+ *   https://github.com/edsrzf/mmap-go/blob/master/mmap.go
+ *   https://github.com/riobard/go-mmap/blob/master/mmap.go
  */
 import (
 	"encoding/binary"
@@ -176,6 +180,9 @@ func (mmp *Mmap) WriteByte(start int64, b byte) {
 func (mmp *Mmap) WriteBytes(start int64, buffer []byte) {
 	copy(mmp.DataBytes[start:int(start)+len(buffer)], buffer)
 }
+func (mmp *Mmap) WriteString(start int64, s string) {
+	mmp.WriteBytes(start, []byte(s))
+}
 func (mmp *Mmap) WriteUInt64(start int64, value uint64) {
 	binary.LittleEndian.PutUint64(mmp.DataBytes[start:start+8], uint64(value))
 }
@@ -208,7 +215,6 @@ func (mmp *Mmap) AppendInt64(value int64) error {
 			return err
 		}
 	}
-
 	binary.LittleEndian.PutUint64(mmp.DataBytes[mmp.internalIdx:mmp.internalIdx +8], uint64(value))
 	mmp.internalIdx += 8
 	return nil
@@ -236,6 +242,9 @@ func (mmp *Mmap) AppendBytes(value []byte) error {
 	copy(mmp.DataBytes[mmp.internalIdx : mmp.internalIdx + length], value)
 	mmp.internalIdx += length
 	return nil
+}
+func (mmp *Mmap) AppendByte(b byte) error {
+	return mmp.AppendBytes([]byte{b})
 }
 func (mmp *Mmap) AppendString(value string) error {
 	return mmp.AppendBytes([]byte(value))

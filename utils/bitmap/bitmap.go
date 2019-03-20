@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	BitmapMaxMax = 0x01 << 63   //最大容忍值, 超过这个直接报错( 因为int64, 符号位占用1位, 所以63
 	BitmapMaxNum = 0x01 << 32   //2^32个bit位, 能够表示2^32个槽位, 即 0 - 2^32-1 的数字范围
 	BYTE_SIZE = 8				//一个字节占bit数
 )
@@ -18,8 +19,8 @@ const (
 // Bitmap
 type Bitmap struct {
 	DataMap     *mmap.Mmap
-	MaxNum      uint64 //指示该Bitmap能表示的最大的数
-	FirstOneIdx uint64 //Bitmap被设置为1的最大位置（方便遍历）
+	MaxNum      int64 //指示该Bitmap能表示的最大的数
+	FirstOneIdx int64 //Bitmap被设置为1的最大位置（方便遍历）
 }
 
 // NewBitmap 使用默认容量实例化一个 Bitmap
@@ -30,6 +31,9 @@ func NewBitmap(indexname string, loadFile bool) *Bitmap {
 //根据指定的 size 实例化一个 Bitmap
 //如果size非8的整数倍, 则会进行修正
 func NewBitmapSize(size int, fileName string, loadFile bool) *Bitmap {
+	if size > BitmapMaxMax {
+		panic("No suport bitmap size!!!")
+	}
 	//参数修正
 	if size == 0 || size > BitmapMaxNum {
 		size = BitmapMaxNum
