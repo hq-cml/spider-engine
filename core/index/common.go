@@ -1,7 +1,7 @@
 package index
 
 import (
-	"github.com/hq-cml/spider-engine/utils/spliter"
+	"github.com/hq-cml/spider-engine/utils/splitter"
 	"github.com/hq-cml/spider-engine/basic"
 	"strings"
 )
@@ -23,10 +23,10 @@ const (
 	IDX_ONLYSTORE = 30 //只保存详情，不参与检索
 )
 
-var Spliter spliter.Spliter
+var Splitter splitter.Splitter
 
 func init() {
-	Spliter = spliter.NewSpliter("jieba")
+	Splitter = splitter.NewSplitter("jieba")
 }
 
 //全词分词
@@ -77,7 +77,8 @@ func SplitRuneWords(docId uint32, content string) map[string]basic.DocNode {
 
 //真分词, 利用分词器, 同时, 计算词频TF
 func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
-	terms :=  Spliter.DoSplit(content, false) //TODO true config
+
+	terms :=  Splitter.DoSplit(content, false) //TODO true config
 	totalTerm := len(terms)
 
 	uniqMap := make(map[string]int)

@@ -1,19 +1,19 @@
-package spliter
+package splitter
 
 import (
-	"github.com/hq-cml/spider-engine/utils/spliter/sego"
-	"github.com/hq-cml/spider-engine/utils/spliter/jieba"
+	"github.com/hq-cml/spider-engine/utils/splitter/sego"
+	"github.com/hq-cml/spider-engine/utils/splitter/jieba"
 )
 
 /*
  * 分词器接口
  */
-type Spliter interface {
+type Splitter interface {
 	DoSplit(content string, searchMode bool) []string
 }
 
 //工厂
-func NewSpliter(name string) Spliter {
+func NewSplitter(name string) Splitter {
 	if name == "sego" {
 		return sego.NewSegoWrapper("/tmp/dic.txt")
 	} else {
