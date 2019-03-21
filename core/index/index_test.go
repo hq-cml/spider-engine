@@ -3,7 +3,13 @@ package index
 import (
 	"testing"
 	"encoding/json"
+	"github.com/hq-cml/spider-engine/basic"
 )
+
+func TestGetDocNodeSize(t *testing.T) {
+	t.Log("DocNode Size:", basic.DocSize)
+
+}
 
 func TestSplitWordsRune(t *testing.T) {
 	t.Skip()

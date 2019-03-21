@@ -20,6 +20,10 @@ import (
 	"github.com/hq-cml/spider-engine/utils/log"
 	//"github.com/hq-cml/FalconEngine/src/tree"
 	//"github.com/hq-cml/FalconEngine/src/utils"
+	"fmt"
+	"os"
+	"encoding/binary"
+	"bytes"
 )
 
 /************************************************************************
@@ -40,7 +44,7 @@ type ReverseIndex struct {
 	fieldName string
 	idxMmap   *mmap.Mmap
 	termMap   map[string][]basic.DocNode  //索引的临时索引
-	btree     *btree.Btree
+	btree     btree.Btree
 }
 
 //新建空的字符型倒排索引
@@ -58,7 +62,7 @@ func NewReverseIndex(fieldType uint64, startDocId uint32, fieldname string) *Rev
 
 //TODO ??
 //通过段的名称建立字符型倒排索引
-func newInvertWithLocalFile(btdb *btree.Btree, fieldType uint64, fieldname string, idxMmap *mmap.Mmap) *ReverseIndex {
+func newInvertWithLocalFile(btdb btree.Btree, fieldType uint64, fieldname string, idxMmap *mmap.Mmap) *ReverseIndex {
 
 	this := &ReverseIndex{
 		btree: btdb,
@@ -107,58 +111,48 @@ func (rIdx *ReverseIndex) addDocument(docId uint32, content string) error {
 	return nil
 }
 
+//序列化倒排索引（标准操作）
+func (rIdx *ReverseIndex) serialization(segmentName string, tree btree.Btree) error {
 
-//// serialization function description : 序列化倒排索引（标准操作）
-//// params :
-//// return : error 正确返回Nil，否则返回错误类型
-//func (this *ReverseIndex) serialization(fullsegmentname string, btdb *tree.BTreedb) error {
-//
-//	//打开倒排文件
-//	idxFileName := fmt.Sprintf("%v.idx", fullsegmentname)
-//	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-//	if err != nil {
-//		return err
-//	}
-//	defer idxFd.Close()
-//	fi, _ := idxFd.Stat()
-//	totalOffset := int(fi.Size())
-//
-//	this.btree = btdb
-//
-//	btMap := make(map[string]uint64)
-//
-//	for key, value := range this.tempMap {
-//		lens := len(value)
-//		//offset := len(value)*DOCNODE_SIZE + totalOffset
-//		lenBufer := make([]byte, 8)
-//		binary.LittleEndian.PutUint64(lenBufer, uint64(lens))
-//
-//		idxFd.Write(lenBufer)
-//		buffer := new(bytes.Buffer)
-//		err = binary.Write(buffer, binary.LittleEndian, value)
-//		if err != nil {
-//			this.Logger.Error("[ERROR] invert --> Serialization :: Error %v", err)
-//			return err
-//		}
-//		idxFd.Write(buffer.Bytes())
-//		//this.Logger.Info("[INFO] key :%v totalOffset: %v len:%v value:%v",key,totalOffset,lens,value)
-//
-//		btMap[key] = uint64(totalOffset)
-//
-//		this.btree.Set(this.fieldName, key, uint64(totalOffset))
-//		totalOffset = totalOffset + 8 + lens*utils.DOCNODE_SIZE
-//
-//	}
-//
-//	//this.btree.SetBatch(this.fieldName,btMap)
-//
-//	this.tempMap = nil
-//	this.isMomery = false
-//	this.Logger.Trace("[TRACE] invert --> Serialization :: Writing to File : [%v.bt] ", fullsegmentname)
-//	this.Logger.Trace("[TRACE] invert --> Serialization :: Writing to File : [%v.idx] ", fullsegmentname)
-//	return nil
-//
-//}
+	//打开倒排文件
+	idxFileName := fmt.Sprintf("%v.idx", segmentName)
+	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer idxFd.Close()
+	fi, _ := idxFd.Stat()
+	totalOffset := int(fi.Size())
+
+	rIdx.btree = tree
+
+	for key, value := range rIdx.termMap {
+		lens := len(value)
+		//offset := len(value)*DOCNODE_SIZE + totalOffset
+		lenBufer := make([]byte, 8)
+		binary.LittleEndian.PutUint64(lenBufer, uint64(lens))
+
+		idxFd.Write(lenBufer)
+		buffer := new(bytes.Buffer)
+		err = binary.Write(buffer, binary.LittleEndian, value)
+		if err != nil {
+			log.Errf("[ERROR] invert --> Serialization :: Error %v", err)
+			return err
+		}
+		idxFd.Write(buffer.Bytes())
+
+		rIdx.btree.Set(rIdx.fieldName, key, uint64(totalOffset))
+		totalOffset = totalOffset + 8 + lens * DOCNODE_SIZE
+
+	}
+
+	rIdx.termMap = nil    //TODO ??直接置为 nil?
+	rIdx.isMomery = false //TODO ??isMemry用法
+
+	log.Debugf("[TRACE] invert --> Serialization :: Writing to File : [%v.idx] ", segmentName)
+	return nil
+}
+
 //
 //// Query function description : 给定一个查询词query，找出doc的列表（标准操作）
 //// params : key string 查询的key值
