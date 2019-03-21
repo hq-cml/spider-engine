@@ -1,6 +1,10 @@
 package index
 
-import "github.com/hq-cml/spider-engine/utils/spliter"
+import (
+	"github.com/hq-cml/spider-engine/utils/spliter"
+	"github.com/hq-cml/spider-engine/basic"
+	"strings"
+)
 
 // 索引类型说明
 const (
@@ -25,16 +29,72 @@ func init() {
 	Spliter = spliter.NewSpliter("jieba")
 }
 
-//单个词模式分词, 将一个string分解成为一个个的rune (去重)
-func SplitWordsSingle(content string) []string{
+//全词分词
+func SplitWholeWords(docId uint32, content string) map[string]basic.DocNode {
+
+	m := map[string]basic.DocNode {
+		content: basic.DocNode {
+			Docid: docId,
+		},
+	}
+
+	return m
+}
+
+//分号分词
+func SplitSemicolonWords(docId uint32, content string) map[string]basic.DocNode {
+	terms := strings.Split(content, ";")
+
+	m := map[string]basic.DocNode {}
+	for _, term := range terms {
+		node := basic.DocNode {
+			Docid: docId,
+		}
+		m[term] = node
+	}
+
+	return m
+}
+
+//单个词模式分词, 将一个string分解成为一个个的rune (去重), 计算词频TF=0
+func SplitRuneWords(docId uint32, content string) map[string]basic.DocNode {
 	rstr := []rune(content)
-	tempMap := make(map[rune]bool)
-	for _, r := range rstr {
-		tempMap[r] = true
+	uniqMap := make(map[rune]bool)
+	for _, r := range rstr {   //去重
+		uniqMap[r] = true
 	}
-	result := []string{}
-	for k := range tempMap {
-		result = append(result, string(k))
+
+	m := map[string]basic.DocNode {}
+	for term := range uniqMap {
+		node := basic.DocNode {
+			Docid: docId,
+			Weight: 0,
+		}
+		m[string(term)] = node
 	}
-	return result
+	return m
+}
+
+//真分词, 利用分词器, 同时, 计算词频TF
+func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
+	terms :=  Spliter.DoSplit(content, false) //TODO true config
+	totalTerm := len(terms)
+
+	uniqMap := make(map[string]int)
+	for _, term := range terms {
+		if _, ok := uniqMap[term]; !ok {
+			uniqMap[term] = 1
+		} else {
+			uniqMap[term] ++
+		}
+	}
+	m := map[string]basic.DocNode {}
+	for term, tf := range uniqMap {
+		node := basic.DocNode {
+			Docid: docId,
+			Weight: uint32((float32(tf)/float32(totalTerm)) * 10000),
+		}
+		m[term] = node
+	}
+	return m
 }

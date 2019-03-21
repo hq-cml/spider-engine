@@ -10,14 +10,14 @@ package index
 import (
 	//"bytes"
 	//"encoding/binary"
-	//"errors"
+	"errors"
 	//"fmt"
 	//"os"
 	//"strings"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/btree"
-	//"github.com/hq-cml/spider-engine/utils/log"
+	"github.com/hq-cml/spider-engine/utils/log"
 	//"github.com/hq-cml/FalconEngine/src/tree"
 	//"github.com/hq-cml/FalconEngine/src/utils"
 )
@@ -32,13 +32,14 @@ import (
 
 ************************************************************************/
 //倒排索引
+//每个字段, 拥有一个倒排索引
 type ReverseIndex struct {
 	curDocId  uint32
 	isMomery  bool
 	fieldType uint64
 	fieldName string
 	idxMmap   *mmap.Mmap
-	tempMap   map[string][]basic.DocNode
+	termMap   map[string][]basic.DocNode  //索引的临时索引
 	btree     *btree.Btree
 }
 
@@ -49,7 +50,7 @@ func NewReverseIndex(fieldType uint64, startDocId uint32, fieldname string) *Rev
 		curDocId: startDocId,
 		fieldName: fieldname,
 		fieldType: fieldType,
-		tempMap: make(map[string][]basic.DocNode),
+		termMap: make(map[string][]basic.DocNode),
 		isMomery: true,
 	}
 	return this
@@ -71,78 +72,40 @@ func newInvertWithLocalFile(btdb *btree.Btree, fieldType uint64, fieldname strin
 }
 
 //增加一个doc文档
-//func (rIdx *ReverseIndex) addDocument(docid uint32, content string) error {
-//
-//	if docid != rIdx.curDocId {
-//		return errors.New("invert --> AddDocument :: Wrong DocId Number")
-//	}
-//	log.Debug("invert --> AddDocument :: docid %v content %v", docid, content)
-//
-//	//根据type进行分词
-//	var terms []string
-//	switch rIdx.fieldType {
-//	case IDX_TYPE_STRING, GATHER_TYPE: //全词匹配模式
-//		terms = append(terms, content)
-//	case IDX_TYPE_STRING_LIST: //分号切割模式
-//		terms = strings.Split(content, ";")
-//	case IDX_TYPE_STRING_SINGLE: //单个词模式
-//
-//		terminfos, _ := utils.GSegmenter.SegmentWithSingle(content)
-//
-//		for _, terminfo := range terminfos {
-//			docidNode := utils.DocIdNode{Docid: docid, Weight: uint32(terminfo.Tf)}
-//			if _, inTmp := rIdx.tempMap[terminfo.Term]; !inTmp {
-//				var docidNodes []utils.DocIdNode
-//				docidNodes = append(docidNodes, docidNode)
-//				rIdx.tempMap[terminfo.Term] = docidNodes
-//			} else {
-//				rIdx.tempMap[terminfo.Term] = append(rIdx.tempMap[terminfo.Term], docidNode)
-//			}
-//
-//		}
-//
-//		rIdx.curDocId++
-//		return nil
-//
-//	case IDX_TYPE_STRING_SEG: //分词模式
-//		terminfos, termcount := utils.GSegmenter.SegmentWithTf(content, true)
-//		//this.Logger.Info("[INFO] SegmentWithTf >>>>>>>>>>>>>>>>>>>>>>>> ")
-//		for _, terminfo := range terminfos {
-//			//this.Logger.Info("[INFO] terminfo.Term %v",terminfo.Term)
-//			docidNode := utils.DocIdNode{Docid: docid, Weight: uint32((float64(terminfo.Tf) / float64(termcount)) * 10000)}
-//			if _, inTmp := rIdx.tempMap[terminfo.Term]; !inTmp {
-//				var docidNodes []utils.DocIdNode
-//				docidNodes = append(docidNodes, docidNode)
-//				rIdx.tempMap[terminfo.Term] = docidNodes
-//			} else {
-//				rIdx.tempMap[terminfo.Term] = append(rIdx.tempMap[terminfo.Term], docidNode)
-//			}
-//			/// delete by wuyinghao,不用使用字典了
-//			//if err:=this.dict.IncValue(this.fieldName,terminfo.Term);err!=nil{
-//			//    return err
-//			//}
-//		}
-//		//this.Logger.Info("[INFO] SegmentWithTf <<<<<<<<<<<<<<<<<<<<< ")
-//
-//		rIdx.curDocId++
-//		return nil
-//
-//	}
-//
-//	for _, term := range terms {
-//		docidNode := utils.DocIdNode{Docid: docid}
-//		if _, inTmp := rIdx.tempMap[term]; !inTmp {
-//			var docidNodes []utils.DocIdNode
-//			docidNodes = append(docidNodes, docidNode)
-//			rIdx.tempMap[term] = docidNodes
-//		} else {
-//			rIdx.tempMap[term] = append(rIdx.tempMap[term], docidNode)
-//		}
-//	}
-//
-//	rIdx.curDocId++
-//	return nil
-//}
+func (rIdx *ReverseIndex) addDocument(docId uint32, content string) error {
+
+	//docId校验
+	if docId != rIdx.curDocId {
+		return errors.New("invert --> AddDocument :: Wrong DocId Number")
+	}
+
+	//根据type进行分词
+	var nodes map[string]basic.DocNode
+	switch rIdx.fieldType {
+	case IDX_TYPE_STRING, GATHER_TYPE: //全词匹配模式
+		nodes = SplitWholeWords(docId, content)
+	case IDX_TYPE_STRING_LIST: //分号切割模式
+		nodes = SplitSemicolonWords(docId, content)
+	case IDX_TYPE_STRING_SINGLE: //单个词模式
+		nodes = SplitRuneWords(docId, content)
+	case IDX_TYPE_STRING_SEG: //分词模式
+		nodes = SplitTrueWords(docId, content)
+	}
+
+	//分词结果填入索引的临时存储
+	for term, node := range nodes {
+		if _, exist := rIdx.termMap[term]; !exist {
+			rIdx.termMap[term] = []basic.DocNode{}
+		}
+		rIdx.termMap[term] = append(rIdx.termMap[term], node)
+	}
+
+	//docId自增
+	rIdx.curDocId++
+
+	log.Debugf("AddDocument --> Docid: %v ,Content: %v\n", docId, content)
+	return nil
+}
 
 
 //// serialization function description : 序列化倒排索引（标准操作）
