@@ -7,8 +7,8 @@ type DocNode struct {
 	Weight uint32
 }
 
-var DocSize uint32
+var DOC_NODE_SIZE int
 
 func init() {
-	DocSize = uint32(unsafe.Sizeof(DocNode{}))
+	DOC_NODE_SIZE = int(unsafe.Sizeof(DocNode{}))
 }

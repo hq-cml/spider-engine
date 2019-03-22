@@ -24,6 +24,8 @@ import (
 	"os"
 	"encoding/binary"
 	"bytes"
+	"unsafe"
+	"reflect"
 )
 
 /************************************************************************
@@ -46,6 +48,8 @@ type ReverseIndex struct {
 	termMap   map[string][]basic.DocNode  //索引的临时索引
 	btree     btree.Btree
 }
+
+const NODE_CNT_BYTE int = 8
 
 //新建空的字符型倒排索引
 func NewReverseIndex(fieldType uint64, startDocId uint32, fieldname string) *ReverseIndex {
@@ -111,81 +115,92 @@ func (rIdx *ReverseIndex) addDocument(docId uint32, content string) error {
 	return nil
 }
 
-//序列化倒排索引（标准操作）
-func (rIdx *ReverseIndex) serialization(segmentName string, tree btree.Btree) error {
+//持久化倒排索引
+//落地 termMap落地到倒排文件; term进入B+tree
+//倒排文件格式: 顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
+//B+树: key是term, val则是term在倒排文件中的offset
+func (rIdx *ReverseIndex) persist(segmentName string, tree btree.Btree) error {
 
-	//打开倒排文件
+	//打开倒排文件, 获取文件大小作为初始偏移
+	//TODO 此处为何是直接写文件,而不是mmap??
 	idxFileName := fmt.Sprintf("%v.idx", segmentName)
-	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644) //追加打开file
 	if err != nil {
 		return err
 	}
 	defer idxFd.Close()
-	fi, _ := idxFd.Stat()
-	totalOffset := int(fi.Size())
+	fi, err := idxFd.Stat()
+	if err != nil {
+		return err
+	}
+	offset := int(fi.Size()) //当前偏移量, 即文件最后位置
 
-	rIdx.btree = tree
-
-	for key, value := range rIdx.termMap {
-		lens := len(value)
-		//offset := len(value)*DOCNODE_SIZE + totalOffset
-		lenBufer := make([]byte, 8)
-		binary.LittleEndian.PutUint64(lenBufer, uint64(lens))
-
+	//开始文件写入
+	rIdx.btree = tree //TODO 移出去
+	for term, docNodeList := range rIdx.termMap {
+		//先写入长度, 占8个字节
+		nodeCnt := len(docNodeList)
+		lenBufer := make([]byte, NODE_CNT_BYTE)
+		binary.LittleEndian.PutUint64(lenBufer, uint64(nodeCnt))
 		idxFd.Write(lenBufer)
+
+		//在写入node list
 		buffer := new(bytes.Buffer)
-		err = binary.Write(buffer, binary.LittleEndian, value)
+		err = binary.Write(buffer, binary.LittleEndian, docNodeList)
 		if err != nil {
-			log.Errf("[ERROR] invert --> Serialization :: Error %v", err)
+			log.Errf("Persist :: Error %v", err)
 			return err
 		}
 		idxFd.Write(buffer.Bytes())
 
-		rIdx.btree.Set(rIdx.fieldName, key, uint64(totalOffset))
-		totalOffset = totalOffset + 8 + lens * DOCNODE_SIZE
-
+		//B+树录入
+		rIdx.btree.Set(rIdx.fieldName, term, uint64(offset))
+		offset = offset + NODE_CNT_BYTE + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
 	rIdx.termMap = nil    //TODO ??直接置为 nil?
-	rIdx.isMomery = false //TODO ??isMemry用法
+	rIdx.isMomery = false //TODO ??isMemry用法,用途
 
-	log.Debugf("[TRACE] invert --> Serialization :: Writing to File : [%v.idx] ", segmentName)
+	log.Debugf("Persist :: Writing to File : [%v.idx] ", segmentName)
 	return nil
 }
 
-//
-//// Query function description : 给定一个查询词query，找出doc的列表（标准操作）
-//// params : key string 查询的key值
-//// return : docid结构体列表  bool 是否找到相应结果
-//func (this *ReverseIndex) queryTerm(keystr string) ([]utils.DocIdNode, bool) {
-//
-//	//this.Logger.Info("[INFO] QueryTerm %v",keystr)
-//	if this.isMomery == true {
-//		// this.Logger.Info("[INFO] ismemory is  %v",this.isMomery)
-//		docids, ok := this.tempMap[keystr]
-//		if ok {
-//			return docids, true
-//		}
-//
-//	} else if this.idxMmap != nil {
-//
-//		ok, offset := this.btree.Search(this.fieldName, keystr)
-//		//this.Logger.Info("[INFO] found  %v this.FullName %v offset %v",keystr,this.fieldName,offset)
-//		if !ok {
-//			return nil, false
-//		}
-//		lens := this.idxMmap.ReadInt64(int64(offset))
-//		//this.Logger.Info("[INFO] found  %v offset %v lens %v",keystr,offset,int(lens))
-//		res := this.idxMmap.ReadDocIdsArry(uint64(offset+8), uint64(lens))
-//		//this.Logger.Info("[INFO] KEY[%v] RES ::::: %v",keystr,res)
-//		return res, true
-//
-//	}
-//
-//	return nil, false
-//
-//}
-//
+// Query function description : 给定一个查询词query，找出doc的列表（标准操作）
+// params : key string 查询的key值
+// return : docid结构体列表  bool 是否找到相应结果
+func (rIdx *ReverseIndex) queryTerm(term string) ([]basic.DocNode, bool) {
+
+	//this.Logger.Info("[INFO] QueryTerm %v",keystr)
+	if rIdx.isMomery == true {
+		// this.Logger.Info("[INFO] ismemory is  %v",this.isMomery)
+		docNodes, ok := rIdx.termMap[term]
+		if ok {
+			return docNodes, true
+		}
+	} else if rIdx.idxMmap != nil {
+		offset, ok := rIdx.btree.GetInt(rIdx.fieldName, term)
+		//this.Logger.Info("[INFO] found  %v this.FullName %v offset %v",keystr,this.fieldName,offset)
+		if !ok {
+			return nil, false
+		}
+		count := rIdx.idxMmap.ReadInt64(offset)
+		docNodes := readDocNodes(uint64(offset) + uint64(NODE_CNT_BYTE), uint64(count), rIdx.idxMmap)
+		return docNodes, true
+	}
+
+	return nil, false
+}
+
+//从mmap中读取出
+func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
+	nodeList := *(*[]basic.DocNode)(unsafe.Pointer(&reflect.SliceHeader {
+		Data: uintptr(unsafe.Pointer(&mmp.DataBytes[start])),
+		Len:  int(count),
+		Cap:  int(count),
+	}))
+	return nodeList
+}
+
 //func (this *ReverseIndex) query(key interface{}) ([]utils.DocIdNode, bool) {
 //
 //	//this.Logger.Info("[DEBUG] invert Query %v", key)
@@ -238,7 +253,7 @@ func (rIdx *ReverseIndex) serialization(segmentName string, tree btree.Btree) er
 //	return fDocids, true
 //
 //}
-//
+
 //// Destroy function description : 销毁段
 //// params :
 //// return :
@@ -246,15 +261,15 @@ func (rIdx *ReverseIndex) serialization(segmentName string, tree btree.Btree) er
 //	this.tempMap = nil
 //	return nil
 //}
-//
+
 //func (this *ReverseIndex) setIdxMmap(mmap *utils.Mmap) {
 //	this.idxMmap = mmap
 //}
-//
+
 //func (this *ReverseIndex) setBtree(btdb *tree.BTreedb) {
 //	this.btree = btdb
 //}
-//
+
 //func (this *ReverseIndex) mergeInvert(ivtlist []*ReverseIndex, fullsegmentname string, btdb *tree.BTreedb) error {
 //
 //	idxFileName := fmt.Sprintf("%v.idx", fullsegmentname)
@@ -379,7 +394,7 @@ func (rIdx *ReverseIndex) serialization(segmentName string, tree btree.Btree) er
 //
 //	return nil
 //}
-//
+
 //func (this *ReverseIndex) GetFristKV() (string, uint32, uint32, int, bool) {
 //
 //	if this.btree == nil {
@@ -390,7 +405,7 @@ func (rIdx *ReverseIndex) serialization(segmentName string, tree btree.Btree) er
 //	return this.btree.GetFristKV(this.fieldName)
 //
 //}
-//
+
 //func (this *ReverseIndex) GetNextKV( /*pgnum uint32,idx int*/ key string) (string, uint32, uint32, int, bool) {
 //
 //	if this.btree == nil {

@@ -95,7 +95,7 @@ func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 	for term, tf := range uniqMap {
 		node := basic.DocNode {
 			Docid: docId,
-			Weight: uint32((float32(tf)/float32(totalTerm)) * 10000),
+			Weight: uint32((float32(tf)/float32(totalTerm)) * 10000), //TODO 这个10000是个魔幻数字
 		}
 		m[term] = node
 	}

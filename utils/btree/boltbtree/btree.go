@@ -17,10 +17,12 @@ func NewBoltBTree(filename string) *BoltBTree {
 		filename: filename,
 	}
 	var err error
-	bt.wrapper, err = NewBoltWrapper(filename, 0666, time.Duration(3) * time.Second)
+	log.Info("Begin to Open: filename")
+	bt.wrapper, err = NewBoltWrapper(filename, 0666, 5 * time.Second)
 	if err != nil {
 		log.Fatal("NewBoltBTree Error:", err)
 	}
+	log.Info("End Open: filename")
 
 	return bt
 

@@ -35,8 +35,8 @@ const (
 
 //创建文件, 并建立mmap映射
 //load参数:
-// true-加载已有文件(文件不存在则报错)
-// false-创建新文件(如果存在旧文件会被清空)
+// true-加载已有文件(文件不存在则报错), 此时size无效
+// false-创建新文件(如果存在旧文件会被清空), 此时若size=0则会安排默认大小
 func NewMmap(filePath string, load bool, size int64) (*Mmap, error) {
 
 	mmp := &Mmap {

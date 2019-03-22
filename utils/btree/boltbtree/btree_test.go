@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+
 func TestNewBoltTree(t *testing.T) {
 	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
 	t.Log(gBoltWrapper.Tables)
@@ -66,4 +67,15 @@ func TestNextKV(t *testing.T) {
 	k, v, e := gBoltWrapper.GetNextKV("first", "ee")
 	t.Log(k, v, e )
 }
+
+/*
+
+func TestNewBoltTree(t *testing.T) {
+	InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)
+	t.Log(gBoltWrapper.Tables)
+	t.Log("ok")
+}
+
+*/
+
 

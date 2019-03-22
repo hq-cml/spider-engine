@@ -4,14 +4,14 @@ package boltbtree
  * bolt封装
  */
 import (
-	"github.com/boltdb/bolt"
-	"encoding/json"
 	"fmt"
-	"github.com/hq-cml/spider-engine/utils/log"
 	"os"
 	"time"
 	"sync"
 	"errors"
+	"encoding/json"
+	"github.com/boltdb/bolt"
+	"github.com/hq-cml/spider-engine/utils/log"
 )
 
 //BoltWrapper
@@ -25,7 +25,17 @@ type BoltWrapper struct {
 //单例
 var gBoltWrapper *BoltWrapper = nil
 
-//惯例New
+//初始化单例Btree
+func InitBoltWrapper(dbname string, mode os.FileMode, timeout time.Duration) error {
+	var err error
+	gBoltWrapper, err = NewBoltWrapper(dbname, mode, timeout)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//New
 func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*BoltWrapper, error) {
 	var err error
 	wrapper := &BoltWrapper {
@@ -34,7 +44,7 @@ func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*
 	}
 	wrapper.db, err = bolt.Open(fineName, mode, &bolt.Options{Timeout: timeout})
 	if err != nil {
-		log.Errln("Open Dbname Error %v", err)
+		log.Errf("Open Dbname Error: %v. Filename: %s\n", err, fineName)
 		return nil, err
 	}
 
@@ -48,16 +58,6 @@ func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*
 	})
 
 	return wrapper, nil
-}
-
-//初始化单例
-func InitBoltWrapper(dbname string, mode os.FileMode, timeout time.Duration) error {
-	var err error
-	gBoltWrapper, err = NewBoltWrapper(dbname, mode, timeout)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 //获取单例
