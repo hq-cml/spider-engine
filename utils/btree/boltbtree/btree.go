@@ -69,7 +69,7 @@ func (bt *BoltBTree) Inc(treeName, key string) error {
 	return bt.wrapper.Set(treeName, key, fmt.Sprintf("%v", v))
 }
 
-//
+//TODO 重构, 返回值太多
 func (bt *BoltBTree) GetFristKV(treeName string) (string, uint32, uint32, int, bool) {
 	key, vstr, err := bt.wrapper.GetFristKV(treeName)
 	if err != nil {

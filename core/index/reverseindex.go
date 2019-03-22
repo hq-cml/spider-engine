@@ -201,74 +201,42 @@ func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
 	return nodeList
 }
 
-//func (this *ReverseIndex) query(key interface{}) ([]utils.DocIdNode, bool) {
-//
-//	//this.Logger.Info("[DEBUG] invert Query %v", key)
-//	keystr, ok := key.(string)
-//	if !ok {
-//		return nil, false
-//	}
-//
-//	//全词匹配模式
-//	if this.fieldType == utils.IDX_TYPE_STRING || this.fieldType == utils.GATHER_TYPE {
-//		return this.queryTerm(keystr)
-//	}
-//
-//	var queryterms []string
-//	switch this.fieldType {
-//	case utils.IDX_TYPE_STRING_LIST: //分号切割模式
-//		queryterms = strings.Split(keystr, ";")
-//	case utils.IDX_TYPE_STRING_SINGLE: //单字模式
-//		queryterms = utils.GSegmenter.SegmentSingle(keystr)
-//	case utils.IDX_TYPE_STRING_SEG: //分词模式
-//		queryterms = utils.GSegmenter.Segment(keystr, false)
-//	default:
-//		return this.queryTerm(keystr)
-//	}
-//	if len(queryterms) == 1 {
-//		return this.queryTerm(queryterms[0])
-//	}
-//	var fDocids []utils.DocIdNode
-//	// var sDocids []utils.DocIdNode
-//	var hasRes bool
-//	var match bool
-//	fDocids, match = this.queryTerm(queryterms[0])
-//	//fDocids=append(fDocids,sDocids...)
-//	if match {
-//		for _, term := range queryterms[1:] {
-//			subDocids, ok := this.queryTerm(term)
-//			if !ok {
-//				return nil, false
-//			}
-//			fDocids, hasRes = utils.Interaction(fDocids, subDocids)
-//			if !hasRes {
-//				return nil, false
-//			}
-//		}
-//	}
-//
-//	if len(fDocids) == 0 {
-//		return nil, false
-//	}
-//	return fDocids, true
-//
-//}
+//索引销毁
+func (rIdx *ReverseIndex) destroy() error {
+	rIdx.termMap = nil
+	return nil
+}
 
-//// Destroy function description : 销毁段
-//// params :
-//// return :
-//func (this *ReverseIndex) destroy() error {
-//	this.tempMap = nil
-//	return nil
-//}
+//设置mmap
+func (rIdx *ReverseIndex) setIdxMmap(mmap *mmap.Mmap) {
+	rIdx.idxMmap = mmap
+}
 
-//func (this *ReverseIndex) setIdxMmap(mmap *utils.Mmap) {
-//	this.idxMmap = mmap
-//}
+//设置btree
+func (rIdx *ReverseIndex) setBtree(tree btree.Btree) {
+	rIdx.btree = tree
+}
 
-//func (this *ReverseIndex) setBtree(btdb *tree.BTreedb) {
-//	this.btree = btdb
-//}
+//btree操作,
+//TODO 返回值太多, 只有第1,2和最后一个返回值有用
+func (rIdx *ReverseIndex) GetFristKV() (string, uint32, uint32, int, bool) {
+	if rIdx.btree == nil {
+		log.Err("Btree is null")
+		return "", 0, 0, 0, false
+	}
+	return rIdx.btree.GetFristKV(rIdx.fieldName)
+}
+
+//btree操作
+func (this *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
+
+	if this.btree == nil {
+		return "", 0, 0, 0, false
+	}
+
+	return this.btree.GetNextKV(this.fieldName, key)
+}
+
 
 //func (this *ReverseIndex) mergeInvert(ivtlist []*ReverseIndex, fullsegmentname string, btdb *tree.BTreedb) error {
 //
@@ -393,25 +361,4 @@ func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
 //	this.isMomery = false
 //
 //	return nil
-//}
-
-//func (this *ReverseIndex) GetFristKV() (string, uint32, uint32, int, bool) {
-//
-//	if this.btree == nil {
-//		this.Logger.Info("[INFO] btree is null")
-//		return "", 0, 0, 0, false
-//	}
-//	//this.Logger.Info("[INFO] this.fieldName %v",this.fieldName)
-//	return this.btree.GetFristKV(this.fieldName)
-//
-//}
-
-//func (this *ReverseIndex) GetNextKV( /*pgnum uint32,idx int*/ key string) (string, uint32, uint32, int, bool) {
-//
-//	if this.btree == nil {
-//		return "", 0, 0, 0, false
-//	}
-//
-//	return this.btree.GetNextKV(this.fieldName /*pgnum,idx*/, key)
-//
 //}
