@@ -8,24 +8,19 @@ package index
  * 倒排索引val部分基于mmap, 便于快速存取并同步disk
  */
 import (
-	//"bytes"
-	//"encoding/binary"
+	"bytes"
 	"errors"
-	//"fmt"
-	//"os"
-	//"strings"
+	"fmt"
+	"os"
+	"unsafe"
+	"reflect"
+	"encoding/binary"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
 	//"github.com/hq-cml/FalconEngine/src/tree"
 	//"github.com/hq-cml/FalconEngine/src/utils"
-	"fmt"
-	"os"
-	"encoding/binary"
-	"bytes"
-	"unsafe"
-	"reflect"
 )
 
 /************************************************************************
@@ -47,6 +42,14 @@ type ReverseIndex struct {
 	idxMmap   *mmap.Mmap
 	termMap   map[string][]basic.DocNode  //索引的临时索引
 	btree     btree.Btree
+}
+
+type reverseMerge struct {
+	idx   *ReverseIndex
+	key   string
+	nodes []basic.DocNode
+	pgnum uint32
+	index int
 }
 
 const NODE_CNT_BYTE int = 8
@@ -228,137 +231,109 @@ func (rIdx *ReverseIndex) GetFristKV() (string, uint32, uint32, int, bool) {
 }
 
 //btree操作
-func (this *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
-
-	if this.btree == nil {
+func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
+	if rIdx.btree == nil {
 		return "", 0, 0, 0, false
 	}
 
-	return this.btree.GetNextKV(this.fieldName, key)
+	return rIdx.btree.GetNextKV(rIdx.fieldName, key)
 }
 
+//归并
 
-//func (this *ReverseIndex) mergeInvert(ivtlist []*ReverseIndex, fullsegmentname string, btdb *tree.BTreedb) error {
-//
-//	idxFileName := fmt.Sprintf("%v.idx", fullsegmentname)
-//	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-//	if err != nil {
-//		return err
-//	}
-//	defer idxFd.Close()
-//	fi, _ := idxFd.Stat()
-//	totalOffset := int(fi.Size())
-//
-//	this.btree = btdb
-//	type ivtmerge struct {
-//		ivt    *ReverseIndex
-//		key    string
-//		docids []utils.DocIdNode
-//		pgnum  uint32
-//		index  int
-//	}
-//	ivts := make([]ivtmerge, 0)
-//
-//	for _, ivt := range ivtlist {
-//
-//		if ivt.btree == nil {
-//			continue
-//		}
-//
-//		key, _, pgnum, index, ok := ivt.GetFristKV()
-//		if !ok {
-//			//this.Logger.Info("[INFO] No Frist KV %v",key)
-//			continue
-//		}
-//
-//		docids, _ := ivt.queryTerm(key)
-//		//this.Logger.Info("[INFO] Frist DocIDs %v",docids)
-//
-//		ivts = append(ivts, ivtmerge{ivt: ivt, key: key, docids: docids, pgnum: pgnum, index: index})
-//
-//	}
-//
-//	resflag := 0
-//	for i := range ivts {
-//		resflag = resflag | (1 << uint(i))
-//	}
-//	flag := 0
-//	for flag != resflag {
-//		maxkey := ""
-//		for idx, v := range ivts {
-//			if ((flag >> uint(idx)) & 0x1) == 0 {
-//				maxkey = v.key
-//			}
-//		}
-//
-//		for idx, v := range ivts {
-//			if ((flag>>uint(idx))&0x1) == 0 && maxkey > v.key {
-//				maxkey = v.key
-//			}
-//		}
-//
-//		//maxkey = ""
-//		meridxs := make([]int, 0)
-//		for idx, ivt := range ivts {
-//
-//			//if (flag>>uint(idx)&0x1) == 0 && maxkey < ivt.key {
-//			//	maxkey = ivt.key
-//			//	meridxs = make([]int, 0)
-//			//	meridxs = append(meridxs, idx)
-//			//	continue
-//			//}
-//
-//			if (flag>>uint(idx)&0x1) == 0 && maxkey == ivt.key {
-//				//this.Logger.Info("[INFO] MaxKey [%v]", maxkey)
-//				meridxs = append(meridxs, idx)
-//				continue
-//			}
-//
-//		}
-//
-//		value := make([]utils.DocIdNode, 0)
-//
-//		for _, idx := range meridxs {
-//			//this.Logger.Info("[INFO] Key:%v Docids:%v",maxkey,ivts[idx].docids)
-//			value = append(value, ivts[idx].docids...)
-//			//this.Logger.Info("[INFO] maxkey : %v idx[%v] Key %v \t value:%v", maxkey, idx, ivts[idx].key, ivts[idx].docids)
-//			key, _, pgnum, index, ok := ivts[idx].ivt.GetNextKV( /*ivts[idx].pgnum,ivts[idx].index*/ ivts[idx].key)
-//			if !ok {
-//				flag = flag | (1 << uint(idx))
-//				//this.Logger.Info("[INFO] FLAG %x RESFLAG %x idx %v meridxs len:%v", flag, resflag, idx, len(meridxs))
-//				continue
-//			}
-//			//this.Logger.Info("[INFO] pgnum : %v index : %v ok:%v Key:%v Docids:%v",pgnum,index,ok,key,ivts[idx].docids)
-//
-//			ivts[idx].key = key
-//			ivts[idx].pgnum = pgnum
-//			ivts[idx].index = index
-//			ivts[idx].docids, ok = ivts[idx].ivt.queryTerm(key)
-//			//if !ok {
-//			//    this.Logger.Info("[INFO] not found %v",key)
-//			//}
-//
-//		}
-//
-//		lens := len(value)
-//		lenBufer := make([]byte, 8)
-//		binary.LittleEndian.PutUint64(lenBufer, uint64(lens))
-//		idxFd.Write(lenBufer)
-//		buffer := new(bytes.Buffer)
-//		err = binary.Write(buffer, binary.LittleEndian, value)
-//		if err != nil {
-//			this.Logger.Error("[ERROR] invert --> Merge :: Error %v", err)
-//			return err
-//		}
-//		idxFd.Write(buffer.Bytes())
-//		//this.Logger.Info("[INFO] key :%v totalOffset: %v len:%v value:%v", maxkey, totalOffset, lens, value)
-//		this.btree.Set(this.fieldName, maxkey, uint64(totalOffset))
-//		totalOffset = totalOffset + 8 + lens*utils.DOCNODE_SIZE
-//
-//	}
-//
-//	this.tempMap = nil
-//	this.isMomery = false
-//
-//	return nil
-//}
+func (this *ReverseIndex) mergeIndex(ivtlist []*ReverseIndex, fullsegmentname string, tree btree.Btree) error {
+
+	idxFileName := fmt.Sprintf("%v.idx", fullsegmentname)
+	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer idxFd.Close()
+	fi, _ := idxFd.Stat()
+	totalOffset := int(fi.Size())
+
+	this.btree = tree
+
+	ivts := make([]reverseMerge, 0)
+
+	for _, ivt := range ivtlist {
+
+		if ivt.btree == nil {
+			continue
+		}
+
+		key, _, pgnum, index, ok := ivt.GetFristKV()
+		if !ok {
+			continue
+		}
+
+		docids, _ := ivt.queryTerm(key)
+		ivts = append(ivts, reverseMerge{idx: ivt, key: key, nodes: docids, pgnum: pgnum, index: index})
+	}
+
+	resflag := 0
+	for i := range ivts {
+		resflag = resflag | (1 << uint(i))
+	}
+	flag := 0
+	for flag != resflag {
+		maxkey := ""
+		for idx, v := range ivts {
+			if ((flag >> uint(idx)) & 0x1) == 0 {
+				maxkey = v.key
+			}
+		}
+
+		for idx, v := range ivts {
+			if ((flag>>uint(idx))&0x1) == 0 && maxkey > v.key {
+				maxkey = v.key
+			}
+		}
+
+		//maxkey = ""
+		meridxs := make([]int, 0)
+		for idx, ivt := range ivts {
+
+			if (flag>>uint(idx)&0x1) == 0 && maxkey == ivt.key {
+				meridxs = append(meridxs, idx)
+				continue
+			}
+
+		}
+
+		value := make([]basic.DocNode, 0)
+
+		for _, idx := range meridxs {
+			value = append(value, ivts[idx].nodes...)
+			key, _, pgnum, index, ok := ivts[idx].idx.GetNextKV( /*ivts[idx].pgnum,ivts[idx].index*/ ivts[idx].key)
+			if !ok {
+				flag = flag | (1 << uint(idx))
+				continue
+			}
+
+			ivts[idx].key = key
+			ivts[idx].pgnum = pgnum
+			ivts[idx].index = index
+			ivts[idx].nodes, ok = ivts[idx].idx.queryTerm(key)
+		}
+
+		lens := len(value)
+		lenBufer := make([]byte, 8)
+		binary.LittleEndian.PutUint64(lenBufer, uint64(lens))
+		idxFd.Write(lenBufer)
+		buffer := new(bytes.Buffer)
+		err = binary.Write(buffer, binary.LittleEndian, value)
+		if err != nil {
+			log.Err("[ERROR] invert --> Merge :: Error %v", err)
+			return err
+		}
+		idxFd.Write(buffer.Bytes())
+		this.btree.Set(this.fieldName, maxkey, uint64(totalOffset))
+		totalOffset = totalOffset + 8 + lens*basic.DOC_NODE_SIZE
+	}
+
+	this.termMap = nil
+	this.isMomery = false
+
+	return nil
+}
