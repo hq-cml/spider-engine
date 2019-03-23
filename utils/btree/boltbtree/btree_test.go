@@ -74,6 +74,20 @@ func TestGetFirst(t *testing.T) {
 		t.Fatal(e)
 	}
 	t.Log(k, v, e)
+
+	//多次调用first，得到的值相同，不会帮你自动后移cursor ~
+	k, v, e = tree.GetFristKV("first")
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Log(k, v, e)
+
+	k, v, e = tree.GetFristKV("first")
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Log(k, v, e)
+
 	t.Log("\n\n")
 }
 
@@ -84,6 +98,19 @@ func TestNextKV(t *testing.T) {
 		t.Fatal(e)
 	}
 	t.Log(k, v, e )
+
+	//测试不存在
+	k, v, e = tree.GetNextKV("first", "haha")
+	t.Log(k, v, e )
+
+	//测试最后一个
+	var ee error
+	k, v, ee = tree.GetNextKV("first", "xx")
+	t.Log(k, v, ee )
+	v, ok := tree.Get("first", "xx")
+	t.Log("Get: ",v, ok)
+
+
 	t.Log("\n\n")
 }
 

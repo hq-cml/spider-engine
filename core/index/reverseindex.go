@@ -44,12 +44,6 @@ type ReverseIndex struct {
 	btree     btree.Btree
 }
 
-type reverseMerge struct {
-	idx   *ReverseIndex
-	term   string
-	nodes []basic.DocNode
-}
-
 const NODE_CNT_BYTE int = 8
 
 //新建空的字符型倒排索引
@@ -141,9 +135,9 @@ func (rIdx *ReverseIndex) persist(segmentName string, tree btree.Btree) error {
 	for term, docNodeList := range rIdx.termMap {
 		//先写入长度, 占8个字节
 		nodeCnt := len(docNodeList)
-		lenBufer := make([]byte, NODE_CNT_BYTE)
-		binary.LittleEndian.PutUint64(lenBufer, uint64(nodeCnt))
-		idxFd.Write(lenBufer)
+		lenBuffer := make([]byte, NODE_CNT_BYTE)
+		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
+		idxFd.Write(lenBuffer)
 
 		//在写入node list
 		buffer := new(bytes.Buffer)
@@ -237,97 +231,292 @@ func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bo
 	return rIdx.btree.GetNextKV(rIdx.fieldName, key)
 }
 
-//多路归并
+type reverseMerge struct {
+	rIndex *ReverseIndex
+	term   string
+	nodes []basic.DocNode
+}
+
+//多路归并, 将多个反向索引进行合并成为一个大的反向索引
+//比较烧脑，下面提供了一个简化版便于调试说明问题
 func (rIdx *ReverseIndex) mergeIndex(rIndexes []*ReverseIndex, fullSetmentName string, tree btree.Btree) error {
-	//打开文件
+	//打开文件，获取长度，作为offset
 	idxFileName := fmt.Sprintf("%v.idx", fullSetmentName)
-	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
+	fd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
 	if err != nil {
 		return err
 	}
-	defer idxFd.Close()
-	fi, _ := idxFd.Stat()
+	defer fd.Close()
+	fi, _ := fd.Stat()
 	offset := int(fi.Size())
 
-	//数据准备，开始多虑归并
+	//数据准备，开始多路归并
 	rIdx.btree = tree
 	ivts := make([]reverseMerge, 0)
 	for _, ivt := range rIndexes {
-
 		if ivt.btree == nil {
 			continue
 		}
-
 		term, _, _, _, ok := ivt.GetFristKV()
 		if !ok {
 			continue
 		}
-
 		nodes, _ := ivt.queryTerm(term)
-		ivts = append(ivts, reverseMerge{
-			idx:   ivt,
+		ivts = append(ivts, reverseMerge {
+			rIndex: ivt,
 			term:  term,
 			nodes: nodes,
 		})
 	}
 
-	resflag := 0
+	//开始进行归并
+	//flag是子索引完毕标志，哪个子索引完毕，则对应位置1
+	//quitFlag是结束标志，当所有的子索引都结束了，则flag==quitFlag
+	quitFlag := 0
 	for i := range ivts {
-		resflag = resflag | (1 << uint(i))
+		quitFlag = quitFlag | (1 << uint(i))
 	}
 	flag := 0
-	for flag != resflag {
-		maxTerm := ""
-		for i, v := range ivts {
+	for flag != quitFlag {
+		minTerm := ""
+		for i, v := range ivts { //随便找一个还未完的索引的头term
 			if ((flag >> uint(i)) & 0x1) == 0 {
-				maxTerm = v.term
+				minTerm = v.term
+				break
 			}
 		}
 
-		for idx, v := range ivts {
-			if ((flag>>uint(idx))&0x1) == 0 && maxTerm > v.term {
-				maxTerm = v.term
+		for i, v := range ivts { //找到所有还未完结的索引中最小那个头term
+			if ((flag>>uint(i))&0x1) == 0 && minTerm > v.term {
+				minTerm = v.term
 			}
 		}
 
-		meridxs := make([]int, 0)
-		for idx, ivt := range ivts {
-			if (flag>>uint(idx)&0x1) == 0 && maxTerm == ivt.term {
-				meridxs = append(meridxs, idx)
-				continue
+		minIds := make([]int, 0) //可能多个索引都包含这个最小头term，统统取出来
+		for i, ivt := range ivts {
+			if (flag>>uint(i)&0x1) == 0 && minTerm == ivt.term {
+				minIds = append(minIds, i)
 			}
 		}
 
-		value := make([]basic.DocNode, 0)
-		for _, idx := range meridxs {
-			value = append(value, ivts[idx].nodes...)
-			key, _, _, _, ok := ivts[idx].idx.GetNextKV(ivts[idx].term)
+		value := make([]basic.DocNode, 0) //合并这这些个头term, 他们各自的后继者需要顶上来
+		for _, i := range minIds {
+			value = append(value, ivts[i].nodes...)
+
+			//找到后继者，顶上去
+			next, _, _, _, ok := ivts[i].rIndex.GetNextKV(ivts[i].term)
 			if !ok {
-				flag = flag | (1 << uint(idx))
+				//如果没有后继者了，那么该索引位置标记为无效
+				flag = flag | (1 << uint(i))
 				continue
 			}
-
-			ivts[idx].term = key
-			ivts[idx].nodes, ok = ivts[idx].idx.queryTerm(key)
+			ivts[i].term = next
+			ivts[i].nodes, ok = ivts[i].rIndex.queryTerm(next)
+			if !ok {
+				panic("Index wrong!")
+			}
 		}
 
-		lens := len(value)
-		lenBufer := make([]byte, 8)
-		binary.LittleEndian.PutUint64(lenBufer, uint64(lens))
-		idxFd.Write(lenBufer)
+		//写倒排文件 & 写B+树
+		nodeCnt := len(value)
+		lenBuffer := make([]byte, 8)
+		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
+		fd.Write(lenBuffer)
 		buffer := new(bytes.Buffer)
 		err = binary.Write(buffer, binary.LittleEndian, value)
 		if err != nil {
 			log.Err("[ERROR] invert --> Merge :: Error %v", err)
 			return err
 		}
-		idxFd.Write(buffer.Bytes())
-		rIdx.btree.Set(rIdx.fieldName, maxTerm, uint64(offset))
-		offset = offset + 8 + lens*basic.DOC_NODE_SIZE
+		fd.Write(buffer.Bytes())
+		rIdx.btree.Set(rIdx.fieldName, minTerm, uint64(offset))
+		offset = offset + NODE_CNT_BYTE + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
-	rIdx.termMap = nil
+	rIdx.termMap = nil     //TODO 存在和上面persist同样的疑问
 	rIdx.isMomery = false
 
 	return nil
 }
+
+
+//多路归并这块比较抽象， 写了一个简化版便于调试
+/*
+import (
+	"fmt"
+	"encoding/json"
+)
+
+//mock Btree
+type myIndex struct {
+	List []KV
+}
+
+type KV struct {
+	Term  string
+	Nodes []int
+}
+
+type reverseMerge struct {
+	RIndex *ReverseIndex
+	Term   string
+	Nodes  []int
+}
+
+type ReverseIndex struct {
+	//。。。省略
+	Btree myIndex
+}
+
+func (rIdx *ReverseIndex)GetFristKV() (string, uint32, uint32, int, bool){
+	tmp := rIdx.Btree.List[0]
+	return tmp.Term, 0, 0, 0, true
+}
+
+func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
+	length := len(rIdx.Btree.List)
+	for i, v := range rIdx.Btree.List {
+		if v.Term == key && i < (length-1) {
+			return rIdx.Btree.List[i+1].Term, 0, 0, 0, true
+		}
+	}
+
+	return "", 0, 0, 0, false
+}
+
+func (rIdx *ReverseIndex) queryTerm(key string) ([]int, bool) {
+	for i, v := range rIdx.Btree.List {
+		if v.Term == key {
+			return rIdx.Btree.List[i].Nodes, true
+		}
+	}
+
+	return nil, false
+}
+
+var idx1 ReverseIndex
+var idx2 ReverseIndex
+var idx3 ReverseIndex
+
+func init() {
+	idx1 = ReverseIndex {
+		Btree:myIndex{
+			List: []KV {
+				KV{Term:"a", Nodes:[]int{2,3}},
+				KV{Term:"c", Nodes:[]int{1,2}},
+				KV{Term:"f", Nodes:[]int{1,3}},
+			},
+		}}
+
+	idx2 = ReverseIndex {
+		Btree:myIndex{
+			List: []KV {
+				KV{Term:"b", Nodes:[]int{4,6}},
+				KV{Term:"c", Nodes:[]int{5,6}},
+				KV{Term:"d", Nodes:[]int{4,5}},
+			},
+		}}
+
+	idx3 = ReverseIndex {
+		Btree:myIndex{
+			List: []KV {
+				KV{Term:"a", Nodes:[]int{8,9}},
+				KV{Term:"c", Nodes:[]int{7,9}},
+				KV{Term:"e", Nodes:[]int{7,8}},
+			},
+		}}
+}
+
+func main() {
+	rIndexes := []*ReverseIndex{&idx1, &idx2, &idx3}
+	ivts := make([]reverseMerge, 0)
+	for _, ivt := range rIndexes {
+		//if ivt.Btree == nil {
+		//	continue
+		//}
+
+		term, _, _, _, ok := ivt.GetFristKV()
+		//fmt.Println(term)
+		if !ok {
+			continue
+		}
+
+		nodes, _ := ivt.queryTerm(term)
+		//fmt.Println(nodes)
+		ivts = append(ivts, reverseMerge {
+			RIndex: ivt,
+			Term:   term,
+			Nodes:  nodes,
+		})
+	}
+
+	resflag := 0
+	for i := range rIndexes {
+		resflag = resflag | (1 << uint(i))
+	}
+
+	fmt.Println("Resflag: ", resflag) //7
+	b, err := json.Marshal(ivts)
+	fmt.Println(string(b), err)
+
+	flag := 0
+	TURN := 1
+	for flag != resflag {
+		fmt.Println("AAAAAAAA-----------[",  TURN ,"] Flag:", flag)
+		minTerm := ""
+		for i, v := range ivts {
+			if ((flag >> uint(i)) & 0x1) == 0 {
+				fmt.Println("XXXXXXXXXXX-----------", i)
+				minTerm = v.Term
+				break
+			}
+		}
+		fmt.Println("XXXXXXXXXXX-----------", minTerm)
+
+		for i, v := range ivts {
+			if ((flag>>uint(i))&0x1) == 0 && minTerm > v.Term {
+				fmt.Println("YYYYYYYYYYY-----------", i)
+				minTerm = v.Term
+			}
+		}
+		fmt.Println("YYYYYYYYYYY-----------", minTerm)
+
+		meridxs := make([]int, 0)
+		for i, ivt := range ivts {
+			if (flag>>uint(i)&0x1) == 0 && minTerm == ivt.Term {
+				fmt.Println("ZZZZZZZZZZZZ-----------", i)
+				meridxs = append(meridxs, i)
+			}
+		}
+		fmt.Println("ZZZZZZZZZZZZ-----------", meridxs, ",Term:", minTerm)
+
+		value := make([]int, 0)
+		for _, i := range meridxs {
+			value = append(value, ivts[i].Nodes...)
+			key, _, _, _, ok := ivts[i].RIndex.GetNextKV(ivts[i].Term)
+			if !ok {
+				fmt.Println("SSSSSSSSSSSSSS-------结束位：", i)
+				flag = flag | (1 << uint(i))
+				continue
+			}
+
+			ivts[i].Term = key
+			ivts[i].Nodes, ok = ivts[i].RIndex.queryTerm(key)
+		}
+
+		//写倒排文件 & 写B+树 省略
+		//。。。。
+
+		fmt.Println("AAAAAAAA-----------[",  TURN ,"], Value: ", value, "Flag:", flag, ",Term:", minTerm)
+
+		//if TURN == 5 {
+		//	return
+		//}
+
+		fmt.Println()
+		fmt.Println()
+		fmt.Println()
+		TURN++
+	}
+}
+*/
