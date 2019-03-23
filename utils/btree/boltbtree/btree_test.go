@@ -2,70 +2,89 @@ package boltbtree
 
 import (
 	"testing"
-	"time"
 )
 
 
 func TestNewBoltTree(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	t.Log(gBoltWrapper.Tables)
-	t.Log("ok")
+	tree := GetBoltWrapperInstance()
+	t.Log(tree.Tables)
+	t.Log("\n\n")
 }
 
 func TestCreateTable(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	gBoltWrapper.CreateTable("second")
-	t.Log("ok")
+	tree := GetBoltWrapperInstance()
+	tree.CreateTable("second")
+	t.Log("\n\n")
 }
 
 func TestDeleteTable(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	gBoltWrapper.DeleteTable("second")
-	t.Log("ok")
+	tree := GetBoltWrapperInstance()
+	tree.DeleteTable("second")
+	t.Log("\n\n")
 }
 
 func TestSetGet(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	gBoltWrapper.Set("first", "aa", "hello")
-	v, ok := gBoltWrapper.Get("first", "aa")
+	tree := GetBoltWrapperInstance()
+	if _, exist := tree.Tables["first"]; !exist {
+		err := tree.CreateTable("first")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tree.Set("first", "aa", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	v, ok := tree.Get("first", "aa")
 	t.Log("Get: ",v, ok)
-	t.Log("ok")
+	t.Log("\n\n")
 }
 
 func TestSetNoExist(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	t.Log(gBoltWrapper.Set("not exist", "aa", "hello"))
+	tree := GetBoltWrapperInstance()
+	t.Log(tree.Set("not exist", "aa", "hello"))
+	t.Log("\n\n")
 }
 
 func TestMultiSet(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	gBoltWrapper.MutiSet("first", map[string]string {
+	tree := GetBoltWrapperInstance()
+	err := tree.MutiSet("first", map[string]string {
 		"aa": "hello",
 		"xx": "2",
 		"ee": "3",
 		"bb": "4",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	t.Log("ok")
+	t.Log("\n\n")
 }
 
 func TestDisplayTable(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	gBoltWrapper.DisplayTable("first")
+	tree := GetBoltWrapperInstance()
+	tree.DisplayTable("first")
 
-	t.Log("ok")
+	t.Log("\n\n")
 }
 
 func TestGetFirst(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	k, v, e := gBoltWrapper.GetFristKV("first")
-	t.Log(k, v, e )
+	tree := GetBoltWrapperInstance()
+	k, v, e := tree.GetFristKV("first")
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Log(k, v, e)
+	t.Log("\n\n")
 }
 
 func TestNextKV(t *testing.T) {
-	InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
-	k, v, e := gBoltWrapper.GetNextKV("first", "ee")
+	tree := GetBoltWrapperInstance()
+	k, v, e := tree.GetNextKV("first", "ee")
+	if e != nil {
+		t.Fatal(e)
+	}
 	t.Log(k, v, e )
+	t.Log("\n\n")
 }
 
 /*

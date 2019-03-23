@@ -46,10 +46,8 @@ type ReverseIndex struct {
 
 type reverseMerge struct {
 	idx   *ReverseIndex
-	key   string
+	term   string
 	nodes []basic.DocNode
-	pgnum uint32
-	index int
 }
 
 const NODE_CNT_BYTE int = 8
@@ -121,7 +119,7 @@ func (rIdx *ReverseIndex) addDocument(docId uint32, content string) error {
 //持久化倒排索引
 //落地 termMap落地到倒排文件; term进入B+tree
 //倒排文件格式: 顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
-//B+树: key是term, val则是term在倒排文件中的offset
+//B+树: key是term, val则是term在倒排文件中的offsetduolv
 func (rIdx *ReverseIndex) persist(segmentName string, tree btree.Btree) error {
 
 	//打开倒排文件, 获取文件大小作为初始偏移
@@ -239,36 +237,38 @@ func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bo
 	return rIdx.btree.GetNextKV(rIdx.fieldName, key)
 }
 
-//归并
-
-func (this *ReverseIndex) mergeIndex(ivtlist []*ReverseIndex, fullsegmentname string, tree btree.Btree) error {
-
-	idxFileName := fmt.Sprintf("%v.idx", fullsegmentname)
-	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+//多路归并
+func (rIdx *ReverseIndex) mergeIndex(rIndexes []*ReverseIndex, fullSetmentName string, tree btree.Btree) error {
+	//打开文件
+	idxFileName := fmt.Sprintf("%v.idx", fullSetmentName)
+	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
 	if err != nil {
 		return err
 	}
 	defer idxFd.Close()
 	fi, _ := idxFd.Stat()
-	totalOffset := int(fi.Size())
+	offset := int(fi.Size())
 
-	this.btree = tree
-
+	//数据准备，开始多虑归并
+	rIdx.btree = tree
 	ivts := make([]reverseMerge, 0)
-
-	for _, ivt := range ivtlist {
+	for _, ivt := range rIndexes {
 
 		if ivt.btree == nil {
 			continue
 		}
 
-		key, _, pgnum, index, ok := ivt.GetFristKV()
+		term, _, _, _, ok := ivt.GetFristKV()
 		if !ok {
 			continue
 		}
 
-		docids, _ := ivt.queryTerm(key)
-		ivts = append(ivts, reverseMerge{idx: ivt, key: key, nodes: docids, pgnum: pgnum, index: index})
+		nodes, _ := ivt.queryTerm(term)
+		ivts = append(ivts, reverseMerge{
+			idx:   ivt,
+			term:  term,
+			nodes: nodes,
+		})
 	}
 
 	resflag := 0
@@ -277,43 +277,37 @@ func (this *ReverseIndex) mergeIndex(ivtlist []*ReverseIndex, fullsegmentname st
 	}
 	flag := 0
 	for flag != resflag {
-		maxkey := ""
-		for idx, v := range ivts {
-			if ((flag >> uint(idx)) & 0x1) == 0 {
-				maxkey = v.key
+		maxTerm := ""
+		for i, v := range ivts {
+			if ((flag >> uint(i)) & 0x1) == 0 {
+				maxTerm = v.term
 			}
 		}
 
 		for idx, v := range ivts {
-			if ((flag>>uint(idx))&0x1) == 0 && maxkey > v.key {
-				maxkey = v.key
+			if ((flag>>uint(idx))&0x1) == 0 && maxTerm > v.term {
+				maxTerm = v.term
 			}
 		}
 
-		//maxkey = ""
 		meridxs := make([]int, 0)
 		for idx, ivt := range ivts {
-
-			if (flag>>uint(idx)&0x1) == 0 && maxkey == ivt.key {
+			if (flag>>uint(idx)&0x1) == 0 && maxTerm == ivt.term {
 				meridxs = append(meridxs, idx)
 				continue
 			}
-
 		}
 
 		value := make([]basic.DocNode, 0)
-
 		for _, idx := range meridxs {
 			value = append(value, ivts[idx].nodes...)
-			key, _, pgnum, index, ok := ivts[idx].idx.GetNextKV( /*ivts[idx].pgnum,ivts[idx].index*/ ivts[idx].key)
+			key, _, _, _, ok := ivts[idx].idx.GetNextKV(ivts[idx].term)
 			if !ok {
 				flag = flag | (1 << uint(idx))
 				continue
 			}
 
-			ivts[idx].key = key
-			ivts[idx].pgnum = pgnum
-			ivts[idx].index = index
+			ivts[idx].term = key
 			ivts[idx].nodes, ok = ivts[idx].idx.queryTerm(key)
 		}
 
@@ -328,12 +322,12 @@ func (this *ReverseIndex) mergeIndex(ivtlist []*ReverseIndex, fullsegmentname st
 			return err
 		}
 		idxFd.Write(buffer.Bytes())
-		this.btree.Set(this.fieldName, maxkey, uint64(totalOffset))
-		totalOffset = totalOffset + 8 + lens*basic.DOC_NODE_SIZE
+		rIdx.btree.Set(rIdx.fieldName, maxTerm, uint64(offset))
+		offset = offset + 8 + lens*basic.DOC_NODE_SIZE
 	}
 
-	this.termMap = nil
-	this.isMomery = false
+	rIdx.termMap = nil
+	rIdx.isMomery = false
 
 	return nil
 }

@@ -62,6 +62,9 @@ func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*
 
 //获取单例
 func GetBoltWrapperInstance() *BoltWrapper {
+	if gBoltWrapper == nil {
+		InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
+	}
 	return gBoltWrapper
 }
 
