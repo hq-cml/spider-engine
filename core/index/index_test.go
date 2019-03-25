@@ -27,7 +27,6 @@ func TestGetDocNodeSize(t *testing.T) {
 }
 
 func TestSplitWordsRune(t *testing.T) {
-	t.Skip()
 	ret := SplitRuneWords(0, "我爱北京天安门, Hello world!")
 	r, _ := json.Marshal(ret)
 	t.Log(string(r))
@@ -109,4 +108,86 @@ func TestQureyTermInFile(t *testing.T) {
 	t.Log("从磁盘访问 太阳: ", string(n))
 
 	t.Log("\n\n")
+}
+
+func TestMergeIndex(t *testing.T) {
+	//清空目录
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	//建一颗B+树 => 建立索引1 => 落地索引1 => 再加载索引1
+	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1.db")
+	defer tree1.Close()
+	tree1.AddBTree(TEST_TREE)
+	rIdx1 := NewReverseIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
+	rIdx1.addDocument(1, "c;f")
+	rIdx1.addDocument(2, "a;c")
+	rIdx1.addDocument(3, "f;a")
+	r, _ := json.Marshal(rIdx1.termMap)
+	rIdx1.persist("/tmp/spider/Segment_1", tree1) //落地
+	t.Log(string(r))
+	rIdx1.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_1.idx", true, 0) //加载
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//建一颗B+树 => 建立索引2 => 落地索引2 => 再加载索引2
+	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2.db")
+	defer tree2.Close()
+	tree2.AddBTree(TEST_TREE)
+	rIdx2 := NewReverseIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
+	rIdx2.addDocument(4, "b;d")
+	rIdx2.addDocument(5, "d;c")
+	rIdx2.addDocument(6, "b;c")
+	r, _ = json.Marshal(rIdx2.termMap)
+	rIdx2.persist("/tmp/spider/Segment_2", tree2) //落地
+	t.Log(string(r))
+	rIdx2.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_2.idx", true, 0) //加载
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//建一颗B+树 => 建立索引3 => 落地索引3 => 再加载索引3
+	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3.db")
+	defer tree3.Close()
+	tree3.AddBTree(TEST_TREE)
+	rIdx3 := NewReverseIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
+	rIdx3.addDocument(7, "c;e")
+	rIdx3.addDocument(8, "a;e")
+	rIdx3.addDocument(9, "c;a")
+	r, _ = json.Marshal(rIdx3.termMap)
+	rIdx3.persist("/tmp/spider/Segment_3", tree3) //落地
+	t.Log(string(r))
+	rIdx3.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_3.idx", true, 0) //加载
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//合并 => 加载回来 => 读一下试一下
+	tree := btree.NewBtree("xx", "/tmp/spider/spider.db")
+	defer tree.Close()
+	tree.AddBTree(TEST_TREE)
+	rIdx := NewReverseIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
+	rIdx.mergeIndex(
+		[]*ReverseIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Segment", tree)
+
+	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment.idx", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	term, _, _, _, ok := rIdx.btree.GetFristKV(TEST_TREE)
+	for ok {
+		nodes, exist := rIdx.queryTerm(term)
+		if !exist {
+			t.Fatal("Wrong exist")
+		}
+		n, _ := json.Marshal(nodes)
+		t.Log("从磁盘访问 ", term ,": ", string(n))
+
+		term, _, _, _, ok = rIdx.btree.GetNextKV(TEST_TREE, term)
+	}
 }

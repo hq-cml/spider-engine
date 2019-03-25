@@ -19,8 +19,8 @@ import (
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
-	//"github.com/hq-cml/FalconEngine/src/tree"
-	//"github.com/hq-cml/FalconEngine/src/utils"
+
+
 )
 
 /************************************************************************
@@ -239,6 +239,7 @@ type reverseMerge struct {
 
 //多路归并, 将多个反向索引进行合并成为一个大的反向索引
 //比较烧脑，下面提供了一个简化版便于调试说明问题
+//TODO 是否需要设置rIdx的curId???
 func (rIdx *ReverseIndex) mergeIndex(rIndexes []*ReverseIndex, fullSetmentName string, tree btree.Btree) error {
 	//打开文件，获取长度，作为offset
 	idxFileName := fmt.Sprintf("%v.idx", fullSetmentName)
