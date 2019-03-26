@@ -4,6 +4,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/splitter"
 	"github.com/hq-cml/spider-engine/basic"
 	"strings"
+	"time"
 )
 
 // 索引类型说明
@@ -100,4 +101,38 @@ func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 		m[term] = node
 	}
 	return m
+}
+
+// IsDateTime function description : 判断是否是日期时间格式
+// params : 字符串
+// return : 是否是日期时间格式
+func IsDateTime(datetime string) (int64, error) {
+
+	var timestamp time.Time
+	var err error
+
+	if len(datetime) > 10 {
+		timestamp, err = time.ParseInLocation("2006-01-02 15:04:05", datetime, time.Local)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		timestamp, err = time.ParseInLocation("2006-01-02", datetime, time.Local)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return timestamp.Unix(), nil
+
+}
+
+func FormatDateTime(timestamp int64) (string, bool) {
+
+	if timestamp == 0 {
+		return "", false
+	}
+	tm := time.Unix(timestamp, 0)
+	return tm.Format("2006-01-02 15:04:05"), true
+
 }
