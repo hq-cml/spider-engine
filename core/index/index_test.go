@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/btree"
-	//"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/mmap"
+	"fmt"
 )
 
 const TEST_TREE = "user_name"
@@ -190,4 +190,71 @@ func TestMergeIndex(t *testing.T) {
 
 		term, _, _, _, ok = rIdx.btree.GetNextKV(TEST_TREE, term)
 	}
+
+	t.Log("\n\n")
+}
+
+
+//********************* 正排索引 *********************
+
+func TestNewAndAddDoc(t *testing.T) {
+	idx1 := newEmptyProfile(IDX_TYPE_NUMBER, 0)  //数字型存入数字
+	idx1.addDocument(0, 100)
+	idx1.addDocument(1, 200)
+	idx1.addDocument(2, 300)
+
+	iv, b := idx1.getInt(0)
+	if !b || iv != 100 {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("0: ", iv)
+
+	iv, b = idx1.getInt(2)
+	if !b || iv != 300 {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("2: ", iv)
+
+	iv, b = idx1.getInt(3) //不存在
+	if b {
+		t.Fatal("Sth wrong")
+	}
+
+	idx2 := newEmptyProfile(IDX_TYPE_NUMBER, 0) //数字型存入字符
+	idx2.addDocument(0, "123")
+	idx2.addDocument(1, "456")
+	iv, b = idx2.getInt(0)
+	if !b || iv != 123 {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("0: ", iv)
+
+	var sv string
+	sv, b = idx2.getString(1)
+	if !b || sv != "456" {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("2: ", sv)
+
+
+	idx3 := newEmptyProfile(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx3.addDocument(0, "abc")
+	idx3.addDocument(1, "efg")
+
+	sv, b = idx3.getString(0)
+	fmt.Println(sv)
+	fmt.Println(b)
+	if !b || sv != "abc" {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("0: ", sv)
+
+
+	sv, b = idx3.getString(1)
+	if !b || sv != "efg" {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("2: ", sv)
+
+	t.Log("\n\n")
 }
