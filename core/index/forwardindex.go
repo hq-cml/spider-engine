@@ -76,7 +76,7 @@ func newProfileWithLocalFile(fieldType uint64, pflMmap, dtlMmap *mmap.Mmap, offs
 }
 
 //增加一个doc文档(仅增加在内存中)
-//TODO 仅支持内存模式
+//TODO 仅支持内存模式 ??
 func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error {
 
 	if docid != fwdIdx.curDocId || fwdIdx.isMomery == false {
@@ -109,22 +109,18 @@ func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error
 			if ok != nil {
 				value = 0xFFFFFFFF
 			}
-			//this.Logger.Info("[INFO] value %v", value)
 			fwdIdx.pflNumber = append(fwdIdx.pflNumber, value)
-			//this.pflString = append(this.pflString, fmt.Sprintf("%v", content))
 		} else if fwdIdx.fieldType == IDX_TYPE_DATE {
-
-			value, _ = IsDateTime(fmt.Sprintf("%v", content))
+			value, _ = String2Timestamp(fmt.Sprintf("%v", content))
 			fwdIdx.pflNumber = append(fwdIdx.pflNumber, value)
-
 		} else {
-			fmt.Println("A---------", content)
 			fwdIdx.pflString = append(fwdIdx.pflString, fmt.Sprintf("%v", content))
 		}
 	default:
 		fwdIdx.pflString = append(fwdIdx.pflString, fmt.Sprintf("%v", content))
 	}
 	fwdIdx.curDocId++
+	fwdIdx.docLen ++ //TODO 原版么有,为什么能够运行
 	return nil
 }
 
@@ -143,7 +139,7 @@ func (fwdIdx *ForwardIndex) updateDocument(docId uint32, content interface{}) er
 	case "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
 		var ok error
 		if fwdIdx.fieldType == IDX_TYPE_DATE {
-			value, _ = IsDateTime(fmt.Sprintf("%v", content))
+			value, _ = String2Timestamp(fmt.Sprintf("%v", content))
 		} else {
 			value, ok = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
 			if ok != nil {
@@ -235,55 +231,60 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 	fwdIdx.pflNumber = nil
 	return offset, cnt, err
 
-	//TOOD ?? fwdIdx.pflOffset需要设置吗
+	//TODO ?? fwdIdx.pflOffset需要设置吗
 }
 
 //获取值 (以字符串形式)
-func (fwxIdx *ForwardIndex) getString(pos uint32) (string, bool) {
+func (fwdIdx *ForwardIndex) getString(pos uint32) (string, bool) {
 
-	if fwxIdx.fake {  //TODO 为毛??
+	if fwdIdx.fake {  //TODO 为毛??
 		return "", true
 	}
-
 	//先尝试从内存获取
-	fmt.Println("PPP------", fwxIdx.isMomery)
-	fmt.Println("PPP------", uint32(len(fwxIdx.pflNumber)))
-	if fwxIdx.isMomery && pos < uint32(len(fwxIdx.pflNumber)) {
-		if fwxIdx.fieldType == IDX_TYPE_NUMBER {
-			return fmt.Sprintf("%v", fwxIdx.pflNumber[pos]), true
-		} else if fwxIdx.fieldType == IDX_TYPE_DATE {
-			return FormatDateTime(fwxIdx.pflNumber[pos])
+	if fwdIdx.isMomery && (pos < uint32(len(fwdIdx.pflNumber)) || pos < uint32(len(fwdIdx.pflString))) {
+		if fwdIdx.fieldType == IDX_TYPE_NUMBER {
+			return fmt.Sprintf("%v", fwdIdx.pflNumber[pos]), true
+		} else if fwdIdx.fieldType == IDX_TYPE_DATE {
+			return Timestamp2String(fwdIdx.pflNumber[pos])
 		}
-		fmt.Println("PPP---------")
-		return fwxIdx.pflString[pos], true
+		return fwdIdx.pflString[pos], true
 
 	}
 
 	//再从disk获取(其实是利用mmap, 速度会有所提升)
-	if fwxIdx.pflMmap == nil {
+	if fwdIdx.pflMmap == nil {
 		return "", false
 	}
 
 	//数字或者日期类型, 直接从索引文件读取
-	offset := fwxIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
-	if fwxIdx.fieldType == IDX_TYPE_NUMBER {
-		return fmt.Sprintf("%v", fwxIdx.pflMmap.ReadInt64(offset)), true
-	} else if fwxIdx.fieldType == IDX_TYPE_DATE {
-		return FormatDateTime(fwxIdx.pflMmap.ReadInt64(offset))
-
+	offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
+	if fwdIdx.fieldType == IDX_TYPE_NUMBER {
+		if (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
+			return "", false
+		}
+		return fmt.Sprintf("%v", fwdIdx.pflMmap.ReadInt64(offset)), true
+	} else if fwdIdx.fieldType == IDX_TYPE_DATE {
+		if (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
+			return "", false
+		}
+		return Timestamp2String(fwdIdx.pflMmap.ReadInt64(offset))
 	}
 
 	//string类型则间接从文件获取
-	if fwxIdx.extMmap == nil {
+	if fwdIdx.extMmap == nil || (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
 		return "", false
 	}
-	dtloffset := fwxIdx.pflMmap.ReadInt64(offset)
-	strLen := fwxIdx.extMmap.ReadInt64(dtloffset)
-	return fwxIdx.extMmap.ReadString(dtloffset + int64(DATA_LEN_BYTE), strLen), true
+	dtloffset := fwdIdx.pflMmap.ReadInt64(offset)
+	if (int(dtloffset) >= len(fwdIdx.extMmap.DataBytes)) {
+		return "", false
+	}
+	strLen := fwdIdx.extMmap.ReadInt64(dtloffset)
+	return fwdIdx.extMmap.ReadString(dtloffset + int64(DATA_LEN_BYTE), strLen), true
 
 }
 
 //获取值 (以数值形式)
+//TODO 不支持从字符型中读取数字??
 func (fwdIdx *ForwardIndex) getInt(pos uint32) (int64, bool) {
 
 	if fwdIdx.fake {//TODO 为毛??
@@ -305,6 +306,9 @@ func (fwdIdx *ForwardIndex) getInt(pos uint32) (int64, bool) {
 	}
 	offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE {
+		if (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
+			return 0xFFFFFFFF, false
+		}
 		return fwdIdx.pflMmap.ReadInt64(offset), true
 	}
 
@@ -389,7 +393,7 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 		default:
 			return false
 		}
-	} else if fwdIdx.fieldType == IDX_TYPE_STRING_SINGLE {
+	} else if fwdIdx.fieldType == IDX_TYPE_STRING_SINGLE || fwdIdx.fieldType == IDX_TYPE_STRING{
 		vl := strings.Split(str, ",")  //TODO 为何是逗号 ??
 		switch filtertype {
 
@@ -455,6 +459,7 @@ func (fwdIdx *ForwardIndex) setDtlMmap(mmap *mmap.Mmap) {
 
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
+//TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
 func (fwdIdx *ForwardIndex) mergeForwardIndex(idxList []*ForwardIndex, fullSegmentName string) (int64, int, error) {
 	//打开正排文件
 	pflFileName := fmt.Sprintf("%v.pfl", fullSegmentName)
@@ -475,6 +480,7 @@ func (fwdIdx *ForwardIndex) mergeForwardIndex(idxList []*ForwardIndex, fullSegme
 		buffer := make([]byte, DATA_LEN_BYTE)
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docLen); i++ {
+				//TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
 				val, _ := idx.getInt(i)
 				binary.LittleEndian.PutUint64(buffer, uint64(val))
 				_, err = fwdFd.Write(buffer)

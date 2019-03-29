@@ -8,7 +8,6 @@ import (
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/mmap"
-	"fmt"
 )
 
 const TEST_TREE = "user_name"
@@ -196,7 +195,6 @@ func TestMergeIndex(t *testing.T) {
 
 
 //********************* 正排索引 *********************
-
 func TestNewAndAddDoc(t *testing.T) {
 	idx1 := newEmptyProfile(IDX_TYPE_NUMBER, 0)  //数字型存入数字
 	idx1.addDocument(0, 100)
@@ -238,17 +236,19 @@ func TestNewAndAddDoc(t *testing.T) {
 
 
 	idx3 := newEmptyProfile(IDX_TYPE_STRING, 0) //数字型存入字符
-	idx3.addDocument(0, "abc")
+	err := idx3.addDocument(0, "abc")
+	if err != nil {
+		t.Fatal("addDocument Error:", err)
+	}
 	idx3.addDocument(1, "efg")
-
+	if err != nil {
+		t.Fatal("addDocument Error:", err)
+	}
 	sv, b = idx3.getString(0)
-	fmt.Println(sv)
-	fmt.Println(b)
 	if !b || sv != "abc" {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("0: ", sv)
-
 
 	sv, b = idx3.getString(1)
 	if !b || sv != "efg" {
@@ -257,4 +257,168 @@ func TestNewAndAddDoc(t *testing.T) {
 	t.Log("2: ", sv)
 
 	t.Log("\n\n")
+}
+
+func TestPersist(t *testing.T) {
+	idx1 := newEmptyProfile(IDX_TYPE_NUMBER, 0)  //数字型存入数字
+	idx1.addDocument(0, 100)
+	idx1.addDocument(1, 200)
+	idx1.addDocument(2, 300)
+	offset, cnt, err := idx1.persist("/tmp/spider/Segment.int.fwd")
+	if err != nil {
+		t.Fatal("Persist Error:", err)
+	}
+	t.Log("Persist ", "/tmp/spider/Segment.int.fwd. Offset:", offset, ". Cnt:", cnt)
+
+	idx3 := newEmptyProfile(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx3.addDocument(0, "abc")
+	idx3.addDocument(1, "efg")
+	offset, cnt, err = idx3.persist("/tmp/spider/Segment.string.fwd")
+	if err != nil {
+		t.Fatal("Persist Error:", err)
+	}
+	t.Log("Persist ", "/tmp/spider/Segment.string.fwd. Offset:", offset, ". Cnt:", cnt)
+}
+
+func TestLoadFwdIndex(t *testing.T) {
+	mmp, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.pfl", true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	idx1 := newProfileWithLocalFile(IDX_TYPE_NUMBER,
+		mmp, nil, 0, 0, false)
+	iv, b := idx1.getInt(0)
+	if !b || iv != 100 {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("0: ", iv)
+
+	iv, b = idx1.getInt(2)
+	if !b || iv != 300 {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("2: ", iv)
+
+	iv, b = idx1.getInt(3) //不存在
+	if b {
+		t.Fatal("Sth wrong")
+	}
+
+	mmp1, err := mmap.NewMmap("/tmp/spider/Segment.string.fwd.pfl", true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	mmp2, err := mmap.NewMmap("/tmp/spider/Segment.string.fwd.dtl", true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	idx2 := newProfileWithLocalFile(IDX_TYPE_STRING,
+		mmp1, mmp2, 0, 0, false)
+
+	sv, b := idx2.getString(0)
+	if !b || sv != "abc" {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("0: ", sv)
+
+	sv, b = idx2.getString(1)
+	if !b || sv != "efg" {
+		t.Fatal("Sth wrong")
+	}
+	t.Log("1: ", sv)
+}
+
+func TestMergeFwdIndex(t *testing.T) {
+	idx1 := newEmptyProfile(IDX_TYPE_NUMBER, 0)  //数字型存入数字
+	if err := idx1.addDocument(0, 100); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.addDocument(1, 200); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.addDocument(2, 300); err != nil {t.Fatal("add Error:", err) }
+
+	idx2 := newEmptyProfile(IDX_TYPE_NUMBER, 0) //数字型存入字符
+	if err := idx2.addDocument(0, "123"); err != nil {t.Fatal("add Error:", err) }
+	if err := idx2.addDocument(1, "456"); err != nil {t.Fatal("add Error:", err) }
+
+	idx := newEmptyProfile(IDX_TYPE_NUMBER, 0)
+	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
+	offset, cnt, err := idx.mergeForwardIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Segment.int.fwd.merge")
+	if err != nil {
+		t.Fatal("Merge Error:", err)
+	}
+	t.Log("Merge ", "/tmp/spider/Segment.int.fwd.merge Offset:", offset, ". Cnt:", cnt)
+
+	//Load回来验证
+	mmp, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.pfl", true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	idx = newProfileWithLocalFile(IDX_TYPE_NUMBER,
+		mmp, nil, 0, 0, false)
+	iv, b := idx.getInt(0)
+	if !b || iv != 100 {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("0: ", iv)
+
+	iv, b = idx.getInt(3)
+	if !b || iv != 123 {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("3: ", iv)
+}
+
+func TestMergeFwdIndexString(t *testing.T) {
+	idx1 := newEmptyProfile(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx1.addDocument(0, "abc")
+	idx1.addDocument(1, "def")
+
+	idx2 := newEmptyProfile(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx2.addDocument(0, "ghi")
+	idx2.addDocument(1, "jkl")
+
+	idx := newEmptyProfile(IDX_TYPE_STRING, 0)
+	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
+	offset, cnt, err := idx.mergeForwardIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Segment.int.fwd.merge.string")
+	if err != nil {
+		t.Fatal("Merge Error:", err)
+	}
+	t.Log("Merge ", "/tmp/spider/Segment.int.fwd.merge.string Offset:", offset, ". Cnt:", cnt)
+
+	//Load回来验证
+	mmp1, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.string.pfl", true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	mmp2, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.string.dtl", true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	idx = newProfileWithLocalFile(IDX_TYPE_STRING,
+		mmp1, mmp2, 0, 0, false)
+	iv, b := idx.getString(0)
+	if !b || iv != "abc" {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("0: ", iv)
+
+	iv, b = idx.getString(3)
+	if !b || iv != "jkl" {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("3: ", iv)
+}
+
+func TestFilterNums(t *testing.T) {
+	idx1 := newEmptyProfile(IDX_TYPE_NUMBER, 0)  //数字型存入数字
+	if err := idx1.addDocument(0, 100); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.addDocument(1, 200); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.addDocument(2, 300); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.addDocument(3, 400); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.addDocument(4, 500); err != nil {t.Fatal("add Error:", err) }
+
+	if !idx1.filterNums(1, basic.FILT_EQ, []int64{300, 200}) {
+		t.Fatal("Sth wrong")
+	}
+	if idx1.filterNums(1, basic.FILT_EQ, []int64{300, 400}) {
+		t.Fatal("Sth wrong")
+	}
 }

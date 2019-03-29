@@ -103,11 +103,8 @@ func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 	return m
 }
 
-// IsDateTime function description : 判断是否是日期时间格式
-// params : 字符串
-// return : 是否是日期时间格式
-func IsDateTime(datetime string) (int64, error) {
-
+//字符串转时间戳
+func String2Timestamp(datetime string) (int64, error) {
 	var timestamp time.Time
 	var err error
 
@@ -127,8 +124,8 @@ func IsDateTime(datetime string) (int64, error) {
 
 }
 
-func FormatDateTime(timestamp int64) (string, bool) {
-
+//字符串转时间戳
+func Timestamp2String(timestamp int64) (string, bool) {
 	if timestamp == 0 {
 		return "", false
 	}
