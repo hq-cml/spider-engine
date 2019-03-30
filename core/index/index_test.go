@@ -80,7 +80,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 func TestQureyTermInFile(t *testing.T) {
 	//新建索引
 	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
-	rIdx.isMomery = false //写死, 强制走磁盘
+	rIdx.isMemory = false //写死, 强制走磁盘
 
 	//从磁盘加载btree
 	//InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)

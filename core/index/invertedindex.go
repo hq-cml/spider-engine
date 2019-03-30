@@ -3,9 +3,14 @@ package index
 /**
  * 倒排索引实现
  *
- * 按照搜索引擎的原理, 每一个字段(列)都拥有一个倒排索引
- * 倒排索引Key用B+树实现, 便于搜索和范围过滤
- * 倒排索引val部分基于mmap, 便于快速存取并同步disk
+ * 根据搜索引擎的原理, 每一个字段(列)都拥有一个倒排索引
+ * 倒排索引由一颗B+树和一个倒排文件搭配，宏观上可以看成一个Map
+ * 其中Key的部分基于B+树实现, 便于搜索和范围过滤；val的部分是倒排文件，基于mmap, 便于快速存取并同步disk
+ *
+ * B+树（由bolt实现）: key是term, val则是term在倒排文件中的offset
+ * 倒排文件: 由mmap实现，顺序的数据块, 每块数据长这个个样子
+ * [nodeCnt(8Byte)|nodeStruct1|nodeStruct2|....][nodeCnt(8Byte)|nodeStruct1|nodeStruct3|....]....
+ * nodeStuct:{docId: xx, weight: xx}
  */
 import (
 	"bytes"
@@ -21,20 +26,11 @@ import (
 	"github.com/hq-cml/spider-engine/utils/log"
 )
 
-/************************************************************************
-
-字符型倒排索引，操作文件
-
-[fullname].dic 该字段的字典文件，格式 | termlen | term | termId(uint32) | DF(uint32) |  ......
-[segmentname].pos 该段的位置信息
-[segmentname].idx 该段的倒排文件
-
-************************************************************************/
 //倒排索引
 //每个字段, 拥有一个倒排索引
 type InvertedIndex struct {
 	curDocId  uint32
-	isMomery  bool
+	isMemory  bool
 	fieldType uint64
 	fieldName string
 	idxMmap   *mmap.Mmap
@@ -47,12 +43,12 @@ const NODE_CNT_BYTE int = 8
 //新建空的字符型倒排索引
 func NewInvertedIndex(fieldType uint64, startDocId uint32, fieldname string) *InvertedIndex {
 	this := &InvertedIndex{
-		btree: nil,
-		curDocId: startDocId,
+		btree:     nil,
+		curDocId:  startDocId,
 		fieldName: fieldname,
 		fieldType: fieldType,
-		termMap: make(map[string][]basic.DocNode),
-		isMomery: true,
+		termMap:   make(map[string][]basic.DocNode),
+		isMemory:  true,
 	}
 	return this
 }
@@ -61,11 +57,11 @@ func NewInvertedIndex(fieldType uint64, startDocId uint32, fieldname string) *In
 //通过段的名称建立字符型倒排索引
 func newInvertedWithLocalFile(btdb btree.Btree, fieldType uint64, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
 	this := &InvertedIndex{
-		btree: btdb,
+		btree:     btdb,
 		fieldType: fieldType,
 		fieldName: fieldname,
-		isMomery: false,
-		idxMmap: idxMmap,
+		isMemory:  false,
+		idxMmap:   idxMmap,
 	}
 	return this
 }
@@ -150,7 +146,7 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 	}
 
 	rIdx.termMap = nil    //TODO ??直接置为 nil?
-	rIdx.isMomery = false //TODO ??isMemry用法,用途
+	rIdx.isMemory = false //TODO ??isMemry用法,用途
 
 	log.Debugf("Persist :: Writing to File : [%v.idx] ", segmentName)
 	return nil
@@ -162,8 +158,8 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 func (rIdx *InvertedIndex) queryTerm(term string) ([]basic.DocNode, bool) {
 
 	//this.Logger.Info("[INFO] QueryTerm %v",keystr)
-	if rIdx.isMomery == true {
-		// this.Logger.Info("[INFO] ismemory is  %v",this.isMomery)
+	if rIdx.isMemory == true {
+		// this.Logger.Info("[INFO] ismemory is  %v",this.isMemory)
 		docNodes, ok := rIdx.termMap[term]
 		if ok {
 			return docNodes, true
@@ -331,7 +327,7 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 	}
 
 	rIdx.termMap = nil     //TODO 存在和上面persist同样的疑问
-	rIdx.isMomery = false
+	rIdx.isMemory = false
 
 	return nil
 }

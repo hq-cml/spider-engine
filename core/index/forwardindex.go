@@ -1,9 +1,16 @@
 package index
 /*
- *  正排索引类
- *
+ * 正排索引类
+ * 用一个数组（slice），来实现正排索引，数组的Id和docId正好一一对应
+ * 索引有两种状态：
+ * 一种是内存态，此时索引存在于memoryNum或者memoryStr中，另一种是落盘态，此时分区分索引类型
+ *   数字型：
+ *          baseMmap当做一个[]int64数组来引用（每个元素占8个Byte）
+ *   字符型：
+ *          需要baseMmap和extMmap配合使用
+ *          baseMmap当做一个[]int64数组来引用（每个元素占8个Byte），表示其在extMmap中的offset
+ *          extMmap实际存string的内容，格式如： [len|content][len|content][len|content]...
  **/
-
 import (
 	"encoding/binary"
 	"errors"
@@ -19,59 +26,59 @@ import (
 
 //profile 正排索引，detail也是保存在这里
 type ForwardIndex struct {
-	startDocId uint32                   //估计整体是从0开始
+	startDocId uint32                   //估计整体是从0开始 //TODO 疑问，如果是多个子索引，这里应该是多少？
 	curDocId   uint32
-	isMomery   bool                     //是否在内存中
+	isMemory   bool                     //该索引是否在内存中
 	fieldType  uint64
 	fileOffset int64                    //在文件中的偏移
-	docLen     uint64                   //TODO 存疑, 为何不自增
+	docCnt     uint64                   //TODO 存疑, 为何不自增
 	fake       bool
-	pflNumber  []int64       `json:"-"` //内存版本正排索引(数字)
-	pflString  []string      `json:"-"` //内存版本正排索引(字符串)
-	pflMmap    *mmap.Mmap    `json:"-"` //底层mmap文件, 用于存储正排索引
-	extMmap    *mmap.Mmap    `json:"-"` //用于补充性的mmap, 主要存string的实际内容 [len|content][][]...
+	memoryNum  []int64    `json:"-"`    //内存版本正排索引(数字)
+	memoryStr  []string   `json:"-"`    //内存版本正排索引(字符串)
+	baseMmap   *mmap.Mmap `json:"-"`    //底层mmap文件, 用于存储正排索引
+	extMmap    *mmap.Mmap `json:"-"`    //用于补充性的mmap, 主要存string的实际内容 [len|content][][]...
 }
 
 const DATA_LEN_BYTE int = 8
 
 func newEmptyFakeProfile(fieldType uint64, start uint32, docLen uint64,) *ForwardIndex {
 	return &ForwardIndex{
-		docLen: docLen,
+		docCnt:     docLen,
 		fileOffset: 0,
-		isMomery: true,
-		fieldType: fieldType,
+		isMemory:   true,
+		fieldType:  fieldType,
 		startDocId: start,
-		curDocId: start,
-		pflNumber: make([]int64, 0),
-		pflString: make([]string, 0),
-		fake:true,   //here is the point!
+		curDocId:   start,
+		memoryNum:  make([]int64, 0),
+		memoryStr:  make([]string, 0),
+		fake:       true,   //here is the point!
 	}
 }
 
 //新建正排索引
 func newEmptyProfile(fieldType uint64, start uint32) *ForwardIndex {
 	return &ForwardIndex{
-		fake: false,
+		fake:       false,
 		fileOffset: 0,
-		isMomery: true,
-		fieldType: fieldType,
+		isMemory:   true,
+		fieldType:  fieldType,
 		startDocId: start,
-		curDocId: start,
-		pflNumber: make([]int64, 0),
-		pflString: make([]string, 0),
+		curDocId:   start,
+		memoryNum:  make([]int64, 0),
+		memoryStr:  make([]string, 0),
 	}
 }
 
 //新建空的字符型正排索引
 func newProfileWithLocalFile(fieldType uint64, pflMmap, dtlMmap *mmap.Mmap, offset int64, docLen uint64, isMomery bool) *ForwardIndex {
 	return &ForwardIndex{
-		fake: false,
-		docLen: docLen,
+		fake:       false,
+		docCnt:     docLen,
 		fileOffset: offset,
-		isMomery: isMomery,
-		fieldType: fieldType,
-		pflMmap: pflMmap,
-		extMmap: dtlMmap,
+		isMemory:   isMomery,
+		fieldType:  fieldType,
+		baseMmap:   pflMmap,
+		extMmap:    dtlMmap,
 	}
 }
 
@@ -79,7 +86,7 @@ func newProfileWithLocalFile(fieldType uint64, pflMmap, dtlMmap *mmap.Mmap, offs
 //TODO 仅支持内存模式 ??
 func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error {
 
-	if docid != fwdIdx.curDocId || fwdIdx.isMomery == false {
+	if docid != fwdIdx.curDocId || fwdIdx.isMemory == false {
 		return errors.New("profile --> AddDocument :: Wrong DocId Number")
 	}
 	log.Debugf("[TRACE] docid %v content %v", docid, content)
@@ -94,33 +101,33 @@ func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error
 		if ok != nil {
 			value = 0xFFFFFFFF
 		}
-		fwdIdx.pflNumber = append(fwdIdx.pflNumber, value)
+		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 	case "float32":
 		v, _ := content.(float32) //TODO 为毛*100??
 		value = int64(v * 100)
-		fwdIdx.pflNumber = append(fwdIdx.pflNumber, value)
+		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 	case "float64":
 		v, _ := content.(float64)
 		value = int64(v * 100)
-		fwdIdx.pflNumber = append(fwdIdx.pflNumber, value)
+		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 	case "string":
 		if fwdIdx.fieldType == IDX_TYPE_NUMBER {
 			value, ok = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
 			if ok != nil {
 				value = 0xFFFFFFFF
 			}
-			fwdIdx.pflNumber = append(fwdIdx.pflNumber, value)
+			fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 		} else if fwdIdx.fieldType == IDX_TYPE_DATE {
 			value, _ = String2Timestamp(fmt.Sprintf("%v", content))
-			fwdIdx.pflNumber = append(fwdIdx.pflNumber, value)
+			fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 		} else {
-			fwdIdx.pflString = append(fwdIdx.pflString, fmt.Sprintf("%v", content))
+			fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
 		}
 	default:
-		fwdIdx.pflString = append(fwdIdx.pflString, fmt.Sprintf("%v", content))
+		fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
 	}
 	fwdIdx.curDocId++
-	fwdIdx.docLen ++ //TODO 原版么有,为什么能够运行
+	fwdIdx.docCnt ++ //TODO 原版么有,为什么能够运行
 	return nil
 }
 
@@ -128,7 +135,7 @@ func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error
 //TODO 支持内存和文件两种模式
 func (fwdIdx *ForwardIndex) updateDocument(docId uint32, content interface{}) error {
 	//TODO 为什么add的时候没有这个验证
-	//TODO 貌似没有string类型的
+	//TODO 貌似没有string类型的，猜测是因为extMmap不好放置，因为string类型索引的特殊性
 
 	if fwdIdx.fieldType != IDX_TYPE_NUMBER && fwdIdx.fieldType != IDX_TYPE_DATE {
 		return errors.New("not support")
@@ -156,11 +163,11 @@ func (fwdIdx *ForwardIndex) updateDocument(docId uint32, content interface{}) er
 	default:
 		value = 0xFFFFFFFF
 	}
-	if fwdIdx.isMomery == true {
-		fwdIdx.pflNumber[docId - fwdIdx.startDocId] = value
+	if fwdIdx.isMemory == true {
+		fwdIdx.memoryNum[docId - fwdIdx.startDocId] = value
 	} else {
 		offset := fwdIdx.fileOffset + int64(int64(docId - fwdIdx.startDocId) * int64(DATA_LEN_BYTE))
-		fwdIdx.pflMmap.WriteInt64(offset, value)
+		fwdIdx.baseMmap.WriteInt64(offset, value)
 	}
 	return nil
 }
@@ -183,7 +190,7 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 	var cnt int
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE {
 		buffer := make([]byte, DATA_LEN_BYTE)
-		for _, info := range fwdIdx.pflNumber {
+		for _, info := range fwdIdx.memoryNum {
 			binary.LittleEndian.PutUint64(buffer, uint64(info))
 			_, err = idxFd.Write(buffer)
 			if err != nil {
@@ -191,7 +198,7 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 			}
 		}
 
-		cnt = len(fwdIdx.pflNumber)
+		cnt = len(fwdIdx.memoryNum)
 	} else {
 		//字符型,单开一个文件存string内容
 		//打开dtl文件
@@ -205,7 +212,7 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 		dtloffset := fi.Size()
 
 		buffer := make([]byte, DATA_LEN_BYTE)
-		for _, str := range fwdIdx.pflString {
+		for _, str := range fwdIdx.memoryStr {
 			strLen := len(str)
 			binary.LittleEndian.PutUint64(buffer, uint64(strLen))
 			_, err := dtlFd.Write(buffer)
@@ -222,14 +229,14 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 			dtloffset = dtloffset + int64(DATA_LEN_BYTE) + int64(strLen)
 
 		}
-		cnt = len(fwdIdx.pflString)
+		cnt = len(fwdIdx.memoryStr)
 
 	}
 
 	//TODO ??
-	fwdIdx.isMomery = false
-	fwdIdx.pflString = nil
-	fwdIdx.pflNumber = nil
+	fwdIdx.isMemory = false
+	fwdIdx.memoryStr = nil
+	fwdIdx.memoryNum = nil
 	return offset, cnt, err
 
 	//TODO ?? fwdIdx.pflOffset需要设置吗
@@ -242,40 +249,40 @@ func (fwdIdx *ForwardIndex) getString(pos uint32) (string, bool) {
 		return "", true
 	}
 	//先尝试从内存获取
-	if fwdIdx.isMomery && (pos < uint32(len(fwdIdx.pflNumber)) || pos < uint32(len(fwdIdx.pflString))) {
+	if fwdIdx.isMemory && (pos < uint32(len(fwdIdx.memoryNum)) || pos < uint32(len(fwdIdx.memoryStr))) {
 		if fwdIdx.fieldType == IDX_TYPE_NUMBER {
-			return fmt.Sprintf("%v", fwdIdx.pflNumber[pos]), true
+			return fmt.Sprintf("%v", fwdIdx.memoryNum[pos]), true
 		} else if fwdIdx.fieldType == IDX_TYPE_DATE {
-			return Timestamp2String(fwdIdx.pflNumber[pos])
+			return Timestamp2String(fwdIdx.memoryNum[pos])
 		}
-		return fwdIdx.pflString[pos], true
+		return fwdIdx.memoryStr[pos], true
 
 	}
 
 	//再从disk获取(其实是利用mmap, 速度会有所提升)
-	if fwdIdx.pflMmap == nil {
+	if fwdIdx.baseMmap == nil {
 		return "", false
 	}
 
 	//数字或者日期类型, 直接从索引文件读取
 	offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER {
-		if (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
+		if (int(offset) >= len(fwdIdx.baseMmap.DataBytes)) {
 			return "", false
 		}
-		return fmt.Sprintf("%v", fwdIdx.pflMmap.ReadInt64(offset)), true
+		return fmt.Sprintf("%v", fwdIdx.baseMmap.ReadInt64(offset)), true
 	} else if fwdIdx.fieldType == IDX_TYPE_DATE {
-		if (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
+		if (int(offset) >= len(fwdIdx.baseMmap.DataBytes)) {
 			return "", false
 		}
-		return Timestamp2String(fwdIdx.pflMmap.ReadInt64(offset))
+		return Timestamp2String(fwdIdx.baseMmap.ReadInt64(offset))
 	}
 
 	//string类型则间接从文件获取
-	if fwdIdx.extMmap == nil || (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
+	if fwdIdx.extMmap == nil || (int(offset) >= len(fwdIdx.baseMmap.DataBytes)) {
 		return "", false
 	}
-	dtloffset := fwdIdx.pflMmap.ReadInt64(offset)
+	dtloffset := fwdIdx.baseMmap.ReadInt64(offset)
 	if (int(dtloffset) >= len(fwdIdx.extMmap.DataBytes)) {
 		return "", false
 	}
@@ -293,24 +300,24 @@ func (fwdIdx *ForwardIndex) getInt(pos uint32) (int64, bool) {
 	}
 
 	//从内存读取
-	if fwdIdx.isMomery {
+	if fwdIdx.isMemory {
 		if (fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE) &&
-			pos < uint32(len(fwdIdx.pflNumber)) {
-			return fwdIdx.pflNumber[pos], true
+			pos < uint32(len(fwdIdx.memoryNum)) {
+			return fwdIdx.memoryNum[pos], true
 		}
 		return 0xFFFFFFFF, false
 	}
 
 	//从disk读取
-	if fwdIdx.pflMmap == nil {
+	if fwdIdx.baseMmap == nil {
 		return 0xFFFFFFFF, true //TODO false??
 	}
 	offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE {
-		if (int(offset) >= len(fwdIdx.pflMmap.DataBytes)) {
+		if (int(offset) >= len(fwdIdx.baseMmap.DataBytes)) {
 			return 0xFFFFFFFF, false
 		}
-		return fwdIdx.pflMmap.ReadInt64(offset), true
+		return fwdIdx.baseMmap.ReadInt64(offset), true
 	}
 
 	return 0xFFFFFFFF, false
@@ -329,15 +336,15 @@ func (fwdIdx *ForwardIndex) filterNums(pos uint32, filtertype uint64, numbers []
 		return false
 	}
 
-	if fwdIdx.isMomery {
-		value = fwdIdx.pflNumber[pos]
+	if fwdIdx.isMemory {
+		value = fwdIdx.memoryNum[pos]
 	} else {
-		if fwdIdx.pflMmap == nil {
+		if fwdIdx.baseMmap == nil {
 			return false
 		}
 
 		offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
-		value = fwdIdx.pflMmap.ReadInt64(offset)
+		value = fwdIdx.baseMmap.ReadInt64(offset)
 	}
 
 	switch filtertype {
@@ -370,14 +377,14 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 	}
 
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER {
-		if fwdIdx.isMomery {
-			value = fwdIdx.pflNumber[pos]
+		if fwdIdx.isMemory {
+			value = fwdIdx.memoryNum[pos]
 		} else {
-			if fwdIdx.pflMmap == nil {
+			if fwdIdx.baseMmap == nil {
 				return false
 			}
 			offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
-			value = fwdIdx.pflMmap.ReadInt64(offset)
+			value = fwdIdx.baseMmap.ReadInt64(offset)
 		}
 
 		switch filtertype {
@@ -445,13 +452,13 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 
 //销毁
 func (fwdIdx *ForwardIndex) destroy() error {
-	fwdIdx.pflNumber = nil
-	fwdIdx.pflString = nil
+	fwdIdx.memoryNum = nil
+	fwdIdx.memoryStr = nil
 	return nil
 }
 
 func (fwdIdx *ForwardIndex) setPflMmap(mmap *mmap.Mmap) {
-	fwdIdx.pflMmap = mmap
+	fwdIdx.baseMmap = mmap
 }
 
 func (fwdIdx *ForwardIndex) setDtlMmap(mmap *mmap.Mmap) {
@@ -480,7 +487,7 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE {
 		buffer := make([]byte, DATA_LEN_BYTE)
 		for _, idx := range idxList {
-			for i := uint32(0); i < uint32(idx.docLen); i++ {
+			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				//TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
 				val, _ := idx.getInt(i)
 				binary.LittleEndian.PutUint64(buffer, uint64(val))
@@ -506,7 +513,7 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 
 		buffer := make([]byte, DATA_LEN_BYTE)
 		for _, idx := range idxList {
-			for i := uint32(0); i < uint32(idx.docLen); i++ {
+			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				strContent, _ := idx.getString(i)
 				strLen := len(strContent)
 				binary.LittleEndian.PutUint64(buffer, uint64(strLen))
@@ -528,8 +535,8 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 		}
 		cnt = int(fwdIdx.curDocId - fwdIdx.startDocId)
 	}
-	fwdIdx.isMomery = false
-	fwdIdx.pflString = nil
-	fwdIdx.pflNumber = nil
+	fwdIdx.isMemory = false
+	fwdIdx.memoryStr = nil
+	fwdIdx.memoryNum = nil
 	return offset, cnt, nil
 }
