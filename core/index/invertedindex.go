@@ -38,7 +38,7 @@ type InvertedIndex struct {
 	btree     btree.Btree
 }
 
-const NODE_BYTE_CNT = 8
+const DOCNODE_BYTE_CNT = 8
 
 //新建空的字符型倒排索引
 func NewInvertedIndex(fieldType uint8, startDocId uint32, fieldname string) *InvertedIndex {
@@ -127,7 +127,7 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 	for term, docNodeList := range rIdx.termMap {
 		//先写入长度, 占8个字节
 		nodeCnt := len(docNodeList)
-		lenBuffer := make([]byte, NODE_BYTE_CNT)
+		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
 		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
 		idxFd.Write(lenBuffer)
 
@@ -142,7 +142,7 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 
 		//B+树录入
 		rIdx.btree.Set(rIdx.fieldName, term, uint64(offset))
-		offset = offset + NODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
+		offset = offset + DOCNODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
 	rIdx.termMap = nil    //TODO ??直接置为 nil?
@@ -171,7 +171,7 @@ func (rIdx *InvertedIndex) queryTerm(term string) ([]basic.DocNode, bool) {
 			return nil, false
 		}
 		count := rIdx.idxMmap.ReadUInt64(uint64(offset))
-		docNodes := readDocNodes(uint64(offset) + NODE_BYTE_CNT, count, rIdx.idxMmap)
+		docNodes := readDocNodes(uint64(offset) +DOCNODE_BYTE_CNT, count, rIdx.idxMmap)
 		return docNodes, true
 	}
 
@@ -312,7 +312,7 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 
 		//写倒排文件 & 写B+树
 		nodeCnt := len(value)
-		lenBuffer := make([]byte, 8)
+		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
 		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
 		fd.Write(lenBuffer)
 		buffer := new(bytes.Buffer)
@@ -323,7 +323,7 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 		}
 		fd.Write(buffer.Bytes())
 		rIdx.btree.Set(rIdx.fieldName, minTerm, uint64(offset))
-		offset = offset + NODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
+		offset = offset + DOCNODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
 	rIdx.termMap = nil     //TODO 存在和上面persist同样的疑问
@@ -332,8 +332,7 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 	return nil
 }
 
-
-//多路归并这块比较抽象， 写了一个简化版便于调试
+//多路归并这块比较抽象， 一个对等简化版便于调试
 /*
 import (
 	"fmt"

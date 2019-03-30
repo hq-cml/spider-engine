@@ -231,7 +231,6 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 
 		}
 		cnt = len(fwdIdx.memoryStr)
-
 	}
 
 	//TODO ??
@@ -245,7 +244,6 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 
 //获取值 (以字符串形式)
 func (fwdIdx *ForwardIndex) getString(pos uint32) (string, bool) {
-
 	if fwdIdx.fake {  //TODO 为毛??
 		return "", true
 	}

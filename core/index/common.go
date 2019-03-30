@@ -13,17 +13,14 @@ const (
 	IDX_TYPE_STRING_SEG    = 2 //字符型索引[切词匹配，全文索引,hash存储倒排]
 	IDX_TYPE_STRING_LIST   = 3 //字符型索引[列表类型，分号切词，直接切分,hash存储倒排]
 	IDX_TYPE_STRING_SINGLE = 4 //字符型索引[单字切词]
-
-	IDX_TYPE_NUMBER = 11 //数字型索引，只支持整数，数字型索引只建立正排
-
-	IDX_TYPE_DATE = 15 //日期型索引 '2015-11-11 00:11:12'，日期型只建立正排，转成时间戳存储
-
-	IDX_TYPE_PK = 21 //主键类型，倒排正排都需要，倒排使用B树存储
-	GATHER_TYPE = 22 //汇总类型，倒排正排都需要[后续使用]
-
-	IDX_ONLYSTORE = 30 //只保存详情，不参与检索
+	IDX_TYPE_NUMBER        = 11 //数字型索引，只支持整数，数字型索引只建立正排
+	IDX_TYPE_DATE          = 15 //日期型索引 '2015-11-11 00:11:12'，日期型只建立正排，转成时间戳存储
+	IDX_TYPE_PK            = 21 //主键类型，倒排正排都需要，倒排使用B树存储
+	GATHER_TYPE            = 22 //汇总类型，倒排正排都需要[后续使用]
+	IDX_ONLYSTORE          = 30 //只保存详情，不参与检索
 )
 
+//全局分词器
 var Splitter splitter.Splitter
 
 func init() {
@@ -38,14 +35,12 @@ func SplitWholeWords(docId uint32, content string) map[string]basic.DocNode {
 			Docid: docId,
 		},
 	}
-
 	return m
 }
 
 //分号分词
 func SplitSemicolonWords(docId uint32, content string) map[string]basic.DocNode {
 	terms := strings.Split(content, ";")
-
 	m := map[string]basic.DocNode {}
 	for _, term := range terms {
 		node := basic.DocNode {
@@ -53,7 +48,6 @@ func SplitSemicolonWords(docId uint32, content string) map[string]basic.DocNode 
 		}
 		m[term] = node
 	}
-
 	return m
 }
 
@@ -117,17 +111,14 @@ func String2Timestamp(datetime string) (int64, error) {
 			return 0, err
 		}
 	}
-
 	return timestamp.Unix(), nil
-
 }
 
-//字符串转时间戳
+//时间戳转字符串
 func Timestamp2String(timestamp int64) (string, bool) {
 	if timestamp == 0 {
 		return "", false
 	}
 	tm := time.Unix(timestamp, 0)
 	return tm.Format("2006-01-02 15:04:05"), true
-
 }
