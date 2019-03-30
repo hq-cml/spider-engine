@@ -39,8 +39,9 @@ func TestSplitWords(t *testing.T) {
 	t.Log("\n\n")
 }
 
+//********************* 倒排索引 *********************
 func TestAddDoc(t *testing.T) {
-	rIdx := NewReverseIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
 	rIdx.addDocument(0, "我爱北京天安门")
 	rIdx.addDocument(1, "天安门上太阳升")
 	rIdx.addDocument(2, "火红的太阳")
@@ -50,7 +51,7 @@ func TestAddDoc(t *testing.T) {
 }
 
 func TestQureyTermInMemAndPersist(t *testing.T) {
-	rIdx := NewReverseIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
 	rIdx.addDocument(0, "我爱北京天安门")
 	rIdx.addDocument(1, "天安门上太阳升")
 	rIdx.addDocument(2, "火红的太阳")
@@ -78,7 +79,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 
 func TestQureyTermInFile(t *testing.T) {
 	//新建索引
-	rIdx := NewReverseIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
 	rIdx.isMomery = false //写死, 强制走磁盘
 
 	//从磁盘加载btree
@@ -121,7 +122,7 @@ func TestMergeIndex(t *testing.T) {
 	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1.db")
 	defer tree1.Close()
 	tree1.AddBTree(TEST_TREE)
-	rIdx1 := NewReverseIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
+	rIdx1 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
 	rIdx1.addDocument(1, "c;f")
 	rIdx1.addDocument(2, "a;c")
 	rIdx1.addDocument(3, "f;a")
@@ -137,7 +138,7 @@ func TestMergeIndex(t *testing.T) {
 	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2.db")
 	defer tree2.Close()
 	tree2.AddBTree(TEST_TREE)
-	rIdx2 := NewReverseIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
+	rIdx2 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
 	rIdx2.addDocument(4, "b;d")
 	rIdx2.addDocument(5, "d;c")
 	rIdx2.addDocument(6, "b;c")
@@ -153,7 +154,7 @@ func TestMergeIndex(t *testing.T) {
 	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3.db")
 	defer tree3.Close()
 	tree3.AddBTree(TEST_TREE)
-	rIdx3 := NewReverseIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
+	rIdx3 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
 	rIdx3.addDocument(7, "c;e")
 	rIdx3.addDocument(8, "a;e")
 	rIdx3.addDocument(9, "c;a")
@@ -169,9 +170,9 @@ func TestMergeIndex(t *testing.T) {
 	tree := btree.NewBtree("xx", "/tmp/spider/spider.db")
 	defer tree.Close()
 	tree.AddBTree(TEST_TREE)
-	rIdx := NewReverseIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
+	rIdx := NewInvertedIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
 	rIdx.mergeIndex(
-		[]*ReverseIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Segment", tree)
+		[]*InvertedIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Segment", tree)
 
 	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment.idx", true, 0)
 	if err != nil {
@@ -340,7 +341,7 @@ func TestMergeFwdIndex(t *testing.T) {
 
 	idx := newEmptyProfile(IDX_TYPE_NUMBER, 0)
 	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
-	offset, cnt, err := idx.mergeForwardIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Segment.int.fwd.merge")
+	offset, cnt, err := idx.mergeIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Segment.int.fwd.merge")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
@@ -377,7 +378,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 
 	idx := newEmptyProfile(IDX_TYPE_STRING, 0)
 	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
-	offset, cnt, err := idx.mergeForwardIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Segment.int.fwd.merge.string")
+	offset, cnt, err := idx.mergeIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Segment.int.fwd.merge.string")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}

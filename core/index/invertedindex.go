@@ -19,8 +19,6 @@ import (
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
-
-
 )
 
 /************************************************************************
@@ -34,7 +32,7 @@ import (
 ************************************************************************/
 //倒排索引
 //每个字段, 拥有一个倒排索引
-type ReverseIndex struct {
+type InvertedIndex struct {
 	curDocId  uint32
 	isMomery  bool
 	fieldType uint64
@@ -47,8 +45,8 @@ type ReverseIndex struct {
 const NODE_CNT_BYTE int = 8
 
 //新建空的字符型倒排索引
-func NewReverseIndex(fieldType uint64, startDocId uint32, fieldname string) *ReverseIndex {
-	this := &ReverseIndex{
+func NewInvertedIndex(fieldType uint64, startDocId uint32, fieldname string) *InvertedIndex {
+	this := &InvertedIndex{
 		btree: nil,
 		curDocId: startDocId,
 		fieldName: fieldname,
@@ -61,9 +59,8 @@ func NewReverseIndex(fieldType uint64, startDocId uint32, fieldname string) *Rev
 
 //TODO ??
 //通过段的名称建立字符型倒排索引
-func newInvertWithLocalFile(btdb btree.Btree, fieldType uint64, fieldname string, idxMmap *mmap.Mmap) *ReverseIndex {
-
-	this := &ReverseIndex{
+func newInvertedWithLocalFile(btdb btree.Btree, fieldType uint64, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
+	this := &InvertedIndex{
 		btree: btdb,
 		fieldType: fieldType,
 		fieldName: fieldname,
@@ -71,11 +68,10 @@ func newInvertWithLocalFile(btdb btree.Btree, fieldType uint64, fieldname string
 		idxMmap: idxMmap,
 	}
 	return this
-
 }
 
 //增加一个doc文档
-func (rIdx *ReverseIndex) addDocument(docId uint32, content string) error {
+func (rIdx *InvertedIndex) addDocument(docId uint32, content string) error {
 
 	//docId校验
 	if docId != rIdx.curDocId {
@@ -106,7 +102,7 @@ func (rIdx *ReverseIndex) addDocument(docId uint32, content string) error {
 	//docId自增
 	rIdx.curDocId++
 
-	log.Debugf("AddDocument --> Docid: %v ,Content: %v\n", docId, content)
+	log.Debugf("InvertedIndex AddDocument --> DocId: %v ,Content: %v\n", docId, content)
 	return nil
 }
 
@@ -114,7 +110,7 @@ func (rIdx *ReverseIndex) addDocument(docId uint32, content string) error {
 //落地 termMap落地到倒排文件; term进入B+tree
 //倒排文件格式: 顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
 //B+树: key是term, val则是term在倒排文件中的offsetduolv
-func (rIdx *ReverseIndex) persist(segmentName string, tree btree.Btree) error {
+func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 
 	//打开倒排文件, 获取文件大小作为初始偏移
 	//TODO 此处为何是直接写文件,而不是mmap??
@@ -163,7 +159,7 @@ func (rIdx *ReverseIndex) persist(segmentName string, tree btree.Btree) error {
 // Query function description : 给定一个查询词query，找出doc的列表（标准操作）
 // params : key string 查询的key值
 // return : docid结构体列表  bool 是否找到相应结果
-func (rIdx *ReverseIndex) queryTerm(term string) ([]basic.DocNode, bool) {
+func (rIdx *InvertedIndex) queryTerm(term string) ([]basic.DocNode, bool) {
 
 	//this.Logger.Info("[INFO] QueryTerm %v",keystr)
 	if rIdx.isMomery == true {
@@ -197,24 +193,24 @@ func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
 }
 
 //索引销毁
-func (rIdx *ReverseIndex) destroy() error {
+func (rIdx *InvertedIndex) destroy() error {
 	rIdx.termMap = nil
 	return nil
 }
 
 //设置mmap
-func (rIdx *ReverseIndex) setIdxMmap(mmap *mmap.Mmap) {
+func (rIdx *InvertedIndex) setIdxMmap(mmap *mmap.Mmap) {
 	rIdx.idxMmap = mmap
 }
 
 //设置btree
-func (rIdx *ReverseIndex) setBtree(tree btree.Btree) {
+func (rIdx *InvertedIndex) setBtree(tree btree.Btree) {
 	rIdx.btree = tree
 }
 
 //btree操作,
 //TODO 返回值太多, 只有第1,2和最后一个返回值有用
-func (rIdx *ReverseIndex) GetFristKV() (string, uint32, uint32, int, bool) {
+func (rIdx *InvertedIndex) GetFristKV() (string, uint32, uint32, int, bool) {
 	if rIdx.btree == nil {
 		log.Err("Btree is null")
 		return "", 0, 0, 0, false
@@ -223,7 +219,7 @@ func (rIdx *ReverseIndex) GetFristKV() (string, uint32, uint32, int, bool) {
 }
 
 //btree操作
-func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
+func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
 	if rIdx.btree == nil {
 		return "", 0, 0, 0, false
 	}
@@ -231,8 +227,8 @@ func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bo
 	return rIdx.btree.GetNextKV(rIdx.fieldName, key)
 }
 
-type reverseMerge struct {
-	rIndex *ReverseIndex
+type tmpMerge struct {
+	rIndex *InvertedIndex
 	term   string
 	nodes []basic.DocNode
 }
@@ -240,7 +236,7 @@ type reverseMerge struct {
 //多路归并, 将多个反向索引进行合并成为一个大的反向索引
 //比较烧脑，下面提供了一个简化版便于调试说明问题
 //TODO 是否需要设置rIdx的curId???
-func (rIdx *ReverseIndex) mergeIndex(rIndexes []*ReverseIndex, fullSetmentName string, tree btree.Btree) error {
+func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName string, tree btree.Btree) error {
 	//打开文件，获取长度，作为offset
 	idxFileName := fmt.Sprintf("%v.idx", fullSetmentName)
 	fd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
@@ -253,7 +249,7 @@ func (rIdx *ReverseIndex) mergeIndex(rIndexes []*ReverseIndex, fullSetmentName s
 
 	//数据准备，开始多路归并
 	rIdx.btree = tree
-	ivts := make([]reverseMerge, 0)
+	ivts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
 		if ivt.btree == nil {
 			continue
@@ -263,7 +259,7 @@ func (rIdx *ReverseIndex) mergeIndex(rIndexes []*ReverseIndex, fullSetmentName s
 			continue
 		}
 		nodes, _ := ivt.queryTerm(term)
-		ivts = append(ivts, reverseMerge {
+		ivts = append(ivts, tmpMerge{
 			rIndex: ivt,
 			term:  term,
 			nodes: nodes,
@@ -358,23 +354,23 @@ type KV struct {
 	Nodes []int
 }
 
-type reverseMerge struct {
-	RIndex *ReverseIndex
+type tmpMerge struct {
+	RIndex *InvertedIndex
 	Term   string
 	Nodes  []int
 }
 
-type ReverseIndex struct {
+type InvertedIndex struct {
 	//。。。省略
 	Btree myIndex
 }
 
-func (rIdx *ReverseIndex)GetFristKV() (string, uint32, uint32, int, bool){
+func (rIdx *InvertedIndex)GetFristKV() (string, uint32, uint32, int, bool){
 	tmp := rIdx.Btree.List[0]
 	return tmp.Term, 0, 0, 0, true
 }
 
-func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
+func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
 	length := len(rIdx.Btree.List)
 	for i, v := range rIdx.Btree.List {
 		if v.Term == key && i < (length-1) {
@@ -385,7 +381,7 @@ func (rIdx *ReverseIndex) GetNextKV(key string) (string, uint32, uint32, int, bo
 	return "", 0, 0, 0, false
 }
 
-func (rIdx *ReverseIndex) queryTerm(key string) ([]int, bool) {
+func (rIdx *InvertedIndex) queryTerm(key string) ([]int, bool) {
 	for i, v := range rIdx.Btree.List {
 		if v.Term == key {
 			return rIdx.Btree.List[i].Nodes, true
@@ -395,12 +391,12 @@ func (rIdx *ReverseIndex) queryTerm(key string) ([]int, bool) {
 	return nil, false
 }
 
-var idx1 ReverseIndex
-var idx2 ReverseIndex
-var idx3 ReverseIndex
+var idx1 InvertedIndex
+var idx2 InvertedIndex
+var idx3 InvertedIndex
 
 func init() {
-	idx1 = ReverseIndex {
+	idx1 = InvertedIndex {
 		Btree:myIndex{
 			List: []KV {
 				KV{Term:"a", Nodes:[]int{2,3}},
@@ -409,7 +405,7 @@ func init() {
 			},
 		}}
 
-	idx2 = ReverseIndex {
+	idx2 = InvertedIndex {
 		Btree:myIndex{
 			List: []KV {
 				KV{Term:"b", Nodes:[]int{4,6}},
@@ -418,7 +414,7 @@ func init() {
 			},
 		}}
 
-	idx3 = ReverseIndex {
+	idx3 = InvertedIndex {
 		Btree:myIndex{
 			List: []KV {
 				KV{Term:"a", Nodes:[]int{8,9}},
@@ -429,8 +425,8 @@ func init() {
 }
 
 func main() {
-	rIndexes := []*ReverseIndex{&idx1, &idx2, &idx3}
-	ivts := make([]reverseMerge, 0)
+	rIndexes := []*InvertedIndex{&idx1, &idx2, &idx3}
+	ivts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
 		//if ivt.Btree == nil {
 		//	continue
@@ -444,7 +440,7 @@ func main() {
 
 		nodes, _ := ivt.queryTerm(term)
 		//fmt.Println(nodes)
-		ivts = append(ivts, reverseMerge {
+		ivts = append(ivts, tmpMerge {
 			RIndex: ivt,
 			Term:   term,
 			Nodes:  nodes,

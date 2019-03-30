@@ -129,7 +129,8 @@ func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error
 func (fwdIdx *ForwardIndex) updateDocument(docId uint32, content interface{}) error {
 	//TODO 为什么add的时候没有这个验证
 	//TODO 貌似没有string类型的
-	if fwdIdx.fieldType != IDX_TYPE_NUMBER || fwdIdx.fieldType != IDX_TYPE_DATE {
+
+	if fwdIdx.fieldType != IDX_TYPE_NUMBER && fwdIdx.fieldType != IDX_TYPE_DATE {
 		return errors.New("not support")
 	}
 
@@ -460,7 +461,7 @@ func (fwdIdx *ForwardIndex) setDtlMmap(mmap *mmap.Mmap) {
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
 //TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
-func (fwdIdx *ForwardIndex) mergeForwardIndex(idxList []*ForwardIndex, fullSegmentName string) (int64, int, error) {
+func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName string) (int64, int, error) {
 	//打开正排文件
 	pflFileName := fmt.Sprintf("%v.pfl", fullSegmentName)
 	var fwdFd *os.File
