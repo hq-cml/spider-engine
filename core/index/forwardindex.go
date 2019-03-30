@@ -31,7 +31,7 @@ type ForwardIndex struct {
 	curDocId   uint32
 	isMemory   bool                     //该索引是否在内存中
 	fieldType  uint8
-	fileOffset uint64                    //在文件中的偏移
+	fileOffset uint64                   //本索引的数据，在文件中的起始偏移
 	docCnt     uint32                   //TODO 存疑, 为何不自增
 	fake       bool
 	memoryNum  []int64    `json:"-"`    //内存版本正排索引(数字)
@@ -42,9 +42,9 @@ type ForwardIndex struct {
 
 const DATA_BYTE_CNT = 8
 
-func newEmptyFakeForwardIndex(fieldType uint8, start uint32, docLen uint32,) *ForwardIndex {
+func NewEmptyFakeForwardIndex(fieldType uint8, start uint32, docCnt uint32) *ForwardIndex {
 	return &ForwardIndex{
-		docCnt:     docLen,
+		docCnt:     docCnt,
 		fileOffset: 0,
 		isMemory:   true,
 		fieldType:  fieldType,
@@ -57,7 +57,7 @@ func newEmptyFakeForwardIndex(fieldType uint8, start uint32, docLen uint32,) *Fo
 }
 
 //新建正排索引
-func newEmptyForwardIndex(fieldType uint8, start uint32) *ForwardIndex {
+func NewEmptyForwardIndex(fieldType uint8, start uint32) *ForwardIndex {
 	return &ForwardIndex{
 		fake:       false,
 		fileOffset: 0,
@@ -71,26 +71,26 @@ func newEmptyForwardIndex(fieldType uint8, start uint32) *ForwardIndex {
 }
 
 //新建空的字符型正排索引
-func loadForwardIndex(fieldType uint8, pflMmap, dtlMmap *mmap.Mmap, offset uint64, docLen uint32, isMomery bool) *ForwardIndex {
+func LoadForwardIndex(fieldType uint8, baseMmap, extMmap *mmap.Mmap, offset uint64, docLen uint32, isMemory bool) *ForwardIndex {
 	return &ForwardIndex{
 		fake:       false,
 		docCnt:     docLen,
 		fileOffset: offset,
-		isMemory:   isMomery,
+		isMemory:   isMemory,
 		fieldType:  fieldType,
-		baseMmap:   pflMmap,
-		extMmap:    dtlMmap,
+		baseMmap:   baseMmap,
+		extMmap:    extMmap,
 	}
 }
 
 //增加一个doc文档(仅增加在内存中)
 //TODO 仅支持内存模式 ??
-func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error {
+func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error {
 
-	if docid != fwdIdx.curDocId || fwdIdx.isMemory == false {
+	if docId != fwdIdx.curDocId || fwdIdx.isMemory == false {
 		return errors.New("profile --> AddDocument :: Wrong DocId Number")
 	}
-	log.Debugf("[TRACE] docid %v content %v", docid, content)
+	log.Debugf("[TRACE] docId %v content %v", docId, content)
 
 	vtype := reflect.TypeOf(content)
 	var value int64 = 0xFFFFFFFF
@@ -134,7 +134,7 @@ func (fwdIdx *ForwardIndex) addDocument(docid uint32, content interface{}) error
 
 //更新文档
 //TODO 支持内存和文件两种模式
-func (fwdIdx *ForwardIndex) updateDocument(docId uint32, content interface{}) error {
+func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) error {
 	//TODO 为什么add的时候没有这个验证
 	//TODO 貌似没有string类型的，猜测是因为extMmap不好放置，因为string类型索引的特殊性
 

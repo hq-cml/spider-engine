@@ -55,7 +55,7 @@ func NewInvertedIndex(fieldType uint8, startDocId uint32, fieldname string) *Inv
 
 //TODO ??
 //通过段的名称建立字符型倒排索引
-func loadInverted(btdb btree.Btree, fieldType uint8, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
+func LoadInvertedIndex(btdb btree.Btree, fieldType uint8, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
 	this := &InvertedIndex{
 		btree:     btdb,
 		fieldType: fieldType,
@@ -67,7 +67,7 @@ func loadInverted(btdb btree.Btree, fieldType uint8, fieldname string, idxMmap *
 }
 
 //增加一个doc文档
-func (rIdx *InvertedIndex) addDocument(docId uint32, content string) error {
+func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 
 	//docId校验
 	if docId != rIdx.curDocId {

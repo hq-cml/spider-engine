@@ -42,9 +42,9 @@ func TestSplitWords(t *testing.T) {
 //********************* 倒排索引 *********************
 func TestAddDoc(t *testing.T) {
 	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
-	rIdx.addDocument(0, "我爱北京天安门")
-	rIdx.addDocument(1, "天安门上太阳升")
-	rIdx.addDocument(2, "火红的太阳")
+	rIdx.AddDocument(0, "我爱北京天安门")
+	rIdx.AddDocument(1, "天安门上太阳升")
+	rIdx.AddDocument(2, "火红的太阳")
 	r, _ := json.Marshal(rIdx.termMap)
 	t.Log(string(r))
 	t.Log("\n\n")
@@ -52,9 +52,9 @@ func TestAddDoc(t *testing.T) {
 
 func TestQureyTermInMemAndPersist(t *testing.T) {
 	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
-	rIdx.addDocument(0, "我爱北京天安门")
-	rIdx.addDocument(1, "天安门上太阳升")
-	rIdx.addDocument(2, "火红的太阳")
+	rIdx.AddDocument(0, "我爱北京天安门")
+	rIdx.AddDocument(1, "天安门上太阳升")
+	rIdx.AddDocument(2, "火红的太阳")
 	r, _ := json.Marshal(rIdx.termMap)
 	t.Log(string(r))
 
@@ -123,9 +123,9 @@ func TestMergeIndex(t *testing.T) {
 	defer tree1.Close()
 	tree1.AddBTree(TEST_TREE)
 	rIdx1 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
-	rIdx1.addDocument(1, "c;f")
-	rIdx1.addDocument(2, "a;c")
-	rIdx1.addDocument(3, "f;a")
+	rIdx1.AddDocument(1, "c;f")
+	rIdx1.AddDocument(2, "a;c")
+	rIdx1.AddDocument(3, "f;a")
 	r, _ := json.Marshal(rIdx1.termMap)
 	rIdx1.persist("/tmp/spider/Segment_1", tree1) //落地
 	t.Log(string(r))
@@ -139,9 +139,9 @@ func TestMergeIndex(t *testing.T) {
 	defer tree2.Close()
 	tree2.AddBTree(TEST_TREE)
 	rIdx2 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
-	rIdx2.addDocument(4, "b;d")
-	rIdx2.addDocument(5, "d;c")
-	rIdx2.addDocument(6, "b;c")
+	rIdx2.AddDocument(4, "b;d")
+	rIdx2.AddDocument(5, "d;c")
+	rIdx2.AddDocument(6, "b;c")
 	r, _ = json.Marshal(rIdx2.termMap)
 	rIdx2.persist("/tmp/spider/Segment_2", tree2) //落地
 	t.Log(string(r))
@@ -155,9 +155,9 @@ func TestMergeIndex(t *testing.T) {
 	defer tree3.Close()
 	tree3.AddBTree(TEST_TREE)
 	rIdx3 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
-	rIdx3.addDocument(7, "c;e")
-	rIdx3.addDocument(8, "a;e")
-	rIdx3.addDocument(9, "c;a")
+	rIdx3.AddDocument(7, "c;e")
+	rIdx3.AddDocument(8, "a;e")
+	rIdx3.AddDocument(9, "c;a")
 	r, _ = json.Marshal(rIdx3.termMap)
 	rIdx3.persist("/tmp/spider/Segment_3", tree3) //落地
 	t.Log(string(r))
@@ -197,10 +197,10 @@ func TestMergeIndex(t *testing.T) {
 
 //********************* 正排索引 *********************
 func TestNewAndAddDoc(t *testing.T) {
-	idx1 := newEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
-	idx1.addDocument(0, 100)
-	idx1.addDocument(1, 200)
-	idx1.addDocument(2, 300)
+	idx1 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
+	idx1.AddDocument(0, 100)
+	idx1.AddDocument(1, 200)
+	idx1.AddDocument(2, 300)
 
 	iv, b := idx1.getInt(0)
 	if !b || iv != 100 {
@@ -219,9 +219,9 @@ func TestNewAndAddDoc(t *testing.T) {
 		t.Fatal("Sth wrong")
 	}
 
-	idx2 := newEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入字符
-	idx2.addDocument(0, "123")
-	idx2.addDocument(1, "456")
+	idx2 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入字符
+	idx2.AddDocument(0, "123")
+	idx2.AddDocument(1, "456")
 	iv, b = idx2.getInt(0)
 	if !b || iv != 123 {
 		t.Fatal("Sth wrong")
@@ -236,14 +236,14 @@ func TestNewAndAddDoc(t *testing.T) {
 	t.Log("2: ", sv)
 
 
-	idx3 := newEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
-	err := idx3.addDocument(0, "abc")
+	idx3 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
+	err := idx3.AddDocument(0, "abc")
 	if err != nil {
-		t.Fatal("addDocument Error:", err)
+		t.Fatal("AddDocument Error:", err)
 	}
-	idx3.addDocument(1, "efg")
+	idx3.AddDocument(1, "efg")
 	if err != nil {
-		t.Fatal("addDocument Error:", err)
+		t.Fatal("AddDocument Error:", err)
 	}
 	sv, b = idx3.getString(0)
 	if !b || sv != "abc" {
@@ -261,19 +261,19 @@ func TestNewAndAddDoc(t *testing.T) {
 }
 
 func TestPersist(t *testing.T) {
-	idx1 := newEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
-	idx1.addDocument(0, 100)
-	idx1.addDocument(1, 200)
-	idx1.addDocument(2, 300)
+	idx1 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
+	idx1.AddDocument(0, 100)
+	idx1.AddDocument(1, 200)
+	idx1.AddDocument(2, 300)
 	offset, cnt, err := idx1.persist("/tmp/spider/Segment.int.fwd")
 	if err != nil {
 		t.Fatal("Persist Error:", err)
 	}
 	t.Log("Persist ", "/tmp/spider/Segment.int.fwd. Offset:", offset, ". Cnt:", cnt)
 
-	idx3 := newEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
-	idx3.addDocument(0, "abc")
-	idx3.addDocument(1, "efg")
+	idx3 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx3.AddDocument(0, "abc")
+	idx3.AddDocument(1, "efg")
 	offset, cnt, err = idx3.persist("/tmp/spider/Segment.string.fwd")
 	if err != nil {
 		t.Fatal("Persist Error:", err)
@@ -286,7 +286,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx1 := loadForwardIndex(IDX_TYPE_NUMBER,
+	idx1 := LoadForwardIndex(IDX_TYPE_NUMBER,
 		mmp, nil, 0, 0, false)
 	iv, b := idx1.getInt(0)
 	if !b || iv != 100 {
@@ -313,7 +313,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx2 := loadForwardIndex(IDX_TYPE_STRING,
+	idx2 := LoadForwardIndex(IDX_TYPE_STRING,
 		mmp1, mmp2, 0, 0, false)
 
 	sv, b := idx2.getString(0)
@@ -330,16 +330,16 @@ func TestLoadFwdIndex(t *testing.T) {
 }
 
 func TestMergeFwdIndex(t *testing.T) {
-	idx1 := newEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
-	if err := idx1.addDocument(0, 100); err != nil {t.Fatal("add Error:", err) }
-	if err := idx1.addDocument(1, 200); err != nil {t.Fatal("add Error:", err) }
-	if err := idx1.addDocument(2, 300); err != nil {t.Fatal("add Error:", err) }
+	idx1 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
+	if err := idx1.AddDocument(0, 100); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.AddDocument(1, 200); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.AddDocument(2, 300); err != nil {t.Fatal("add Error:", err) }
 
-	idx2 := newEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入字符
-	if err := idx2.addDocument(0, "123"); err != nil {t.Fatal("add Error:", err) }
-	if err := idx2.addDocument(1, "456"); err != nil {t.Fatal("add Error:", err) }
+	idx2 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入字符
+	if err := idx2.AddDocument(0, "123"); err != nil {t.Fatal("add Error:", err) }
+	if err := idx2.AddDocument(1, "456"); err != nil {t.Fatal("add Error:", err) }
 
-	idx := newEmptyForwardIndex(IDX_TYPE_NUMBER, 0)
+	idx := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0)
 	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
 	offset, cnt, err := idx.mergeIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Segment.int.fwd.merge")
 	if err != nil {
@@ -352,7 +352,7 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx = loadForwardIndex(IDX_TYPE_NUMBER,
+	idx = LoadForwardIndex(IDX_TYPE_NUMBER,
 		mmp, nil, 0, 0, false)
 	iv, b := idx.getInt(0)
 	if !b || iv != 100 {
@@ -368,15 +368,15 @@ func TestMergeFwdIndex(t *testing.T) {
 }
 
 func TestMergeFwdIndexString(t *testing.T) {
-	idx1 := newEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
-	idx1.addDocument(0, "abc")
-	idx1.addDocument(1, "def")
+	idx1 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx1.AddDocument(0, "abc")
+	idx1.AddDocument(1, "def")
 
-	idx2 := newEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
-	idx2.addDocument(0, "ghi")
-	idx2.addDocument(1, "jkl")
+	idx2 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx2.AddDocument(0, "ghi")
+	idx2.AddDocument(1, "jkl")
 
-	idx := newEmptyForwardIndex(IDX_TYPE_STRING, 0)
+	idx := NewEmptyForwardIndex(IDX_TYPE_STRING, 0)
 	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
 	offset, cnt, err := idx.mergeIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Segment.int.fwd.merge.string")
 	if err != nil {
@@ -393,7 +393,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx = loadForwardIndex(IDX_TYPE_STRING,
+	idx = LoadForwardIndex(IDX_TYPE_STRING,
 		mmp1, mmp2, 0, 0, false)
 	iv, b := idx.getString(0)
 	if !b || iv != "abc" {
@@ -409,12 +409,12 @@ func TestMergeFwdIndexString(t *testing.T) {
 }
 
 func TestFilterNums(t *testing.T) {
-	idx1 := newEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
-	if err := idx1.addDocument(0, 100); err != nil {t.Fatal("add Error:", err) }
-	if err := idx1.addDocument(1, 200); err != nil {t.Fatal("add Error:", err) }
-	if err := idx1.addDocument(2, 300); err != nil {t.Fatal("add Error:", err) }
-	if err := idx1.addDocument(3, 400); err != nil {t.Fatal("add Error:", err) }
-	if err := idx1.addDocument(4, 500); err != nil {t.Fatal("add Error:", err) }
+	idx1 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入数字
+	if err := idx1.AddDocument(0, 100); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.AddDocument(1, 200); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.AddDocument(2, 300); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.AddDocument(3, 400); err != nil {t.Fatal("add Error:", err) }
+	if err := idx1.AddDocument(4, 500); err != nil {t.Fatal("add Error:", err) }
 
 	if !idx1.filterNums(1, basic.FILT_EQ, []int64{300, 200}) {
 		t.Fatal("Sth wrong")
