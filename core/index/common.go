@@ -24,8 +24,6 @@ const (
 	IDX_ONLYSTORE = 30 //只保存详情，不参与检索
 )
 
-const DOCNODE_SIZE int = 8 //12 TODO ??
-
 var Splitter splitter.Splitter
 
 func init() {

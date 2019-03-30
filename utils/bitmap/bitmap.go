@@ -20,7 +20,7 @@ const (
 type Bitmap struct {
 	DataMap     *mmap.Mmap
 	MaxNum      int64 //指示该Bitmap能表示的最大的数
-	FirstOneIdx int64 //Bitmap被设置为1的最大值（方便遍历）
+	FirstOneIdx int64 //Bitmap被设置为1的最大值（方便遍历），初始值是负数！！
 }
 
 // NewBitmap 使用默认容量实例化一个 Bitmap
@@ -31,7 +31,7 @@ func NewBitmap(indexname string, loadFile bool) *Bitmap {
 //根据指定的 size 实例化一个 Bitmap
 //如果size非8的整数倍, 则会进行修正
 func NewBitmapSize(size int, fileName string, loadFile bool) *Bitmap {
-	if size > BitmapMaxMax-1 {
+	if size > BitmapMaxMax {
 		panic("No suport bitmap size!!!")
 	}
 	//参数修正
@@ -66,7 +66,7 @@ func (bm *Bitmap) loadFile(indexName string) error {
 	if err != nil {
 		return err
 	}
-	bm.MaxNum = bm.DataMap.RealCapcity() * BYTE_SIZE - 1
+	bm.MaxNum = int64(bm.DataMap.RealCapcity()) * BYTE_SIZE - 1
 
 	//找到最大的1
 	bm.FindMaxOne()
@@ -90,11 +90,11 @@ func (bm *Bitmap)newFile(indexName string) error {
 
 	//但是, 因为bitmap没有append一说, 设置好了直接使用
 	//所以这里直接生成合适的大小,并且直接设置InternalIdx指向最后
-	bm.DataMap, err = mmap.NewMmap(indexName, false, int64((bm.MaxNum+1)/BYTE_SIZE))
+	bm.DataMap, err = mmap.NewMmap(indexName, false, uint64((bm.MaxNum+1)/BYTE_SIZE))
 	if err != nil {
 		return err
 	}
-	bm.DataMap.SetInternalIdx(int64((bm.MaxNum+1)/BYTE_SIZE) + mmap.HEADER_LEN)
+	bm.DataMap.SetInnerIdx(uint64((bm.MaxNum+1)/BYTE_SIZE) + mmap.HEADER_LEN)
 	return nil
 }
 
@@ -108,7 +108,7 @@ func (bm *Bitmap)FindMaxOne() {
 		}
 		for j:=7; j>=0; j-- {
 			if (v & (0x01<<uint(j))) == 0x01<<uint(j) {
-				bm.FirstOneIdx = i * int64(BYTE_SIZE) + int64(j)
+				bm.FirstOneIdx = int64(i) * int64(BYTE_SIZE) + int64(j)
 				return
 			}
 		}
@@ -134,18 +134,18 @@ func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 	}
 
 	if value == 0 {
-		tmp := bm.DataMap.GetByte(int64(index))
+		tmp := bm.DataMap.GetByte(index)
 		tmp &^= 0x01 << pos   //&^ 清位操作符
-		bm.DataMap.SetByte(int64(index), tmp)
+		bm.DataMap.SetByte(index, tmp)
 
 		//如果idx==FirstOneIdx, 则需要重新找到最大的1
 		if bm.FirstOneIdx == int64(idx) {
 			bm.FindMaxOne()
 		}
 	} else {
-		tmp := bm.DataMap.GetByte(int64(index))
+		tmp := bm.DataMap.GetByte(index)
 		tmp |= 0x01 << pos
-		bm.DataMap.SetByte(int64(index), tmp)
+		bm.DataMap.SetByte(index, tmp)
 
 		//记录曾经设置为 1 的最大位置
 		if bm.FirstOneIdx < int64(idx) {
@@ -165,7 +165,7 @@ func (bm *Bitmap) GetBit(idx uint64) uint8 {
 		return 0
 	}
 
-	return (bm.DataMap.GetByte(int64(index)) >> pos) & 0x01
+	return (bm.DataMap.GetByte(index) >> pos) & 0x01
 }
 
 //Maxpos 获的置为 1 的最大位置

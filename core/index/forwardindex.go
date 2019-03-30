@@ -2,6 +2,7 @@ package index
 /*
  * 正排索引类
  * 用一个数组（slice），来实现正排索引，数组的Id和docId正好一一对应
+ *
  * 索引有两种状态：
  * 一种是内存态，此时索引存在于memoryNum或者memoryStr中，另一种是落盘态，此时分区分索引类型
  *   数字型：
@@ -29,9 +30,9 @@ type ForwardIndex struct {
 	startDocId uint32                   //估计整体是从0开始 //TODO 疑问，如果是多个子索引，这里应该是多少？
 	curDocId   uint32
 	isMemory   bool                     //该索引是否在内存中
-	fieldType  uint64
-	fileOffset int64                    //在文件中的偏移
-	docCnt     uint64                   //TODO 存疑, 为何不自增
+	fieldType  uint8
+	fileOffset uint64                    //在文件中的偏移
+	docCnt     uint32                   //TODO 存疑, 为何不自增
 	fake       bool
 	memoryNum  []int64    `json:"-"`    //内存版本正排索引(数字)
 	memoryStr  []string   `json:"-"`    //内存版本正排索引(字符串)
@@ -39,9 +40,9 @@ type ForwardIndex struct {
 	extMmap    *mmap.Mmap `json:"-"`    //用于补充性的mmap, 主要存string的实际内容 [len|content][][]...
 }
 
-const DATA_LEN_BYTE int = 8
+const DATA_BYTE_CNT = 8
 
-func newEmptyFakeProfile(fieldType uint64, start uint32, docLen uint64,) *ForwardIndex {
+func newEmptyFakeForwardIndex(fieldType uint8, start uint32, docLen uint32,) *ForwardIndex {
 	return &ForwardIndex{
 		docCnt:     docLen,
 		fileOffset: 0,
@@ -56,7 +57,7 @@ func newEmptyFakeProfile(fieldType uint64, start uint32, docLen uint64,) *Forwar
 }
 
 //新建正排索引
-func newEmptyProfile(fieldType uint64, start uint32) *ForwardIndex {
+func newEmptyForwardIndex(fieldType uint8, start uint32) *ForwardIndex {
 	return &ForwardIndex{
 		fake:       false,
 		fileOffset: 0,
@@ -70,7 +71,7 @@ func newEmptyProfile(fieldType uint64, start uint32) *ForwardIndex {
 }
 
 //新建空的字符型正排索引
-func newProfileWithLocalFile(fieldType uint64, pflMmap, dtlMmap *mmap.Mmap, offset int64, docLen uint64, isMomery bool) *ForwardIndex {
+func loadForwardIndex(fieldType uint8, pflMmap, dtlMmap *mmap.Mmap, offset uint64, docLen uint32, isMomery bool) *ForwardIndex {
 	return &ForwardIndex{
 		fake:       false,
 		docCnt:     docLen,
@@ -166,7 +167,7 @@ func (fwdIdx *ForwardIndex) updateDocument(docId uint32, content interface{}) er
 	if fwdIdx.isMemory == true {
 		fwdIdx.memoryNum[docId - fwdIdx.startDocId] = value
 	} else {
-		offset := fwdIdx.fileOffset + int64(int64(docId - fwdIdx.startDocId) * int64(DATA_LEN_BYTE))
+		offset := fwdIdx.fileOffset + uint64(docId - fwdIdx.startDocId) * DATA_BYTE_CNT
 		fwdIdx.baseMmap.WriteInt64(offset, value)
 	}
 	return nil
@@ -185,11 +186,11 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 	defer idxFd.Close()
 	fi, _ := idxFd.Stat()
 	offset := fi.Size()
-	fwdIdx.fileOffset = offset //当前偏移量, 即文件最后位置
+	fwdIdx.fileOffset = uint64(offset) //当前偏移量, 即文件最后位置
 
 	var cnt int
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE {
-		buffer := make([]byte, DATA_LEN_BYTE)
+		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, info := range fwdIdx.memoryNum {
 			binary.LittleEndian.PutUint64(buffer, uint64(info))
 			_, err = idxFd.Write(buffer)
@@ -211,7 +212,7 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 		fi, _ = dtlFd.Stat()
 		dtloffset := fi.Size()
 
-		buffer := make([]byte, DATA_LEN_BYTE)
+		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, str := range fwdIdx.memoryStr {
 			strLen := len(str)
 			binary.LittleEndian.PutUint64(buffer, uint64(strLen))
@@ -226,7 +227,7 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 			if err != nil {
 				log.Errf("StringForward --> Persist --> Serialization :: Write Error %v", err)
 			}
-			dtloffset = dtloffset + int64(DATA_LEN_BYTE) + int64(strLen)
+			dtloffset = dtloffset + DATA_BYTE_CNT + int64(strLen)
 
 		}
 		cnt = len(fwdIdx.memoryStr)
@@ -265,7 +266,7 @@ func (fwdIdx *ForwardIndex) getString(pos uint32) (string, bool) {
 	}
 
 	//数字或者日期类型, 直接从索引文件读取
-	offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
+	offset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER {
 		if (int(offset) >= len(fwdIdx.baseMmap.DataBytes)) {
 			return "", false
@@ -282,12 +283,12 @@ func (fwdIdx *ForwardIndex) getString(pos uint32) (string, bool) {
 	if fwdIdx.extMmap == nil || (int(offset) >= len(fwdIdx.baseMmap.DataBytes)) {
 		return "", false
 	}
-	dtloffset := fwdIdx.baseMmap.ReadInt64(offset)
+	dtloffset := fwdIdx.baseMmap.ReadUInt64(offset)
 	if (int(dtloffset) >= len(fwdIdx.extMmap.DataBytes)) {
 		return "", false
 	}
-	strLen := fwdIdx.extMmap.ReadInt64(dtloffset)
-	return fwdIdx.extMmap.ReadString(dtloffset + int64(DATA_LEN_BYTE), strLen), true
+	strLen := fwdIdx.extMmap.ReadUInt64(dtloffset)
+	return fwdIdx.extMmap.ReadString(dtloffset + DATA_BYTE_CNT, strLen), true
 
 }
 
@@ -312,7 +313,7 @@ func (fwdIdx *ForwardIndex) getInt(pos uint32) (int64, bool) {
 	if fwdIdx.baseMmap == nil {
 		return 0xFFFFFFFF, true //TODO false??
 	}
-	offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
+	offset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE {
 		if (int(offset) >= len(fwdIdx.baseMmap.DataBytes)) {
 			return 0xFFFFFFFF, false
@@ -343,7 +344,7 @@ func (fwdIdx *ForwardIndex) filterNums(pos uint32, filtertype uint64, numbers []
 			return false
 		}
 
-		offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
+		offset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
 		value = fwdIdx.baseMmap.ReadInt64(offset)
 	}
 
@@ -383,7 +384,7 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 			if fwdIdx.baseMmap == nil {
 				return false
 			}
-			offset := fwdIdx.fileOffset + int64(pos) * int64(DATA_LEN_BYTE)
+			offset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
 			value = fwdIdx.baseMmap.ReadInt64(offset)
 		}
 
@@ -480,12 +481,11 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 	defer fwdFd.Close()
 	fi, _ := fwdFd.Stat()
 	offset := fi.Size()
-	fwdIdx.fileOffset = offset
-
+	fwdIdx.fileOffset = uint64(offset)
 
 	var cnt int
 	if fwdIdx.fieldType == IDX_TYPE_NUMBER || fwdIdx.fieldType == IDX_TYPE_DATE {
-		buffer := make([]byte, DATA_LEN_BYTE)
+		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				//TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
@@ -511,7 +511,7 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 		fi, _ = dtlFd.Stat()
 		dtloffset := fi.Size()
 
-		buffer := make([]byte, DATA_LEN_BYTE)
+		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				strContent, _ := idx.getString(i)
@@ -529,7 +529,7 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 				if err != nil {
 					log.Errf("[ERROR] StringProfile --> Serialization :: Write Error %v", err)
 				}
-				dtloffset = dtloffset + int64(DATA_LEN_BYTE) + int64(strLen)
+				dtloffset = dtloffset + DATA_BYTE_CNT + int64(strLen)
 				fwdIdx.curDocId++
 			}
 		}

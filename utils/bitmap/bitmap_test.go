@@ -51,20 +51,35 @@ func TestSetGet(t *testing.T) {
 	bm.Set(15)
 	bm.Set(21)
 	t.Log("After Foreach: ", bm)
+	if(bm.GetBit(21) != 1) {
+		t.Fatal("wrong")
+	}
 
 	bm.Clear(2)
 	bm.Clear(7)
 	bm.Clear(15)
 	bm.Clear(21)
 	t.Log("Clear Foreach: ", bm)
+	if(bm.GetBit(21) == 1) {
+		t.Fatal("wrong")
+	}
+	if(bm.GetBit(3) != 1) {
+		t.Fatal("wrong")
+	}
 
 	bm.Set(31)
 	bm.Set(19)
 	bm.Set(27)
 	t.Log("Final Foreach: ", bm)
+	if(bm.GetBit(31) != 1) {
+		t.Fatal("wrong")
+	}
 
 	bm.Clear(19)
 	t.Log("Clear Foreach: ", bm)
+	if(bm.Maxpos() != 31) {
+		t.Fatal("wrong", bm.Maxpos())
+	}
 
 	t.Log("\n")
 }

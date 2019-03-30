@@ -31,17 +31,17 @@ import (
 type InvertedIndex struct {
 	curDocId  uint32
 	isMemory  bool
-	fieldType uint64
+	fieldType uint8
 	fieldName string
 	idxMmap   *mmap.Mmap
 	termMap   map[string][]basic.DocNode  //索引的临时索引
 	btree     btree.Btree
 }
 
-const NODE_CNT_BYTE int = 8
+const NODE_BYTE_CNT = 8
 
 //新建空的字符型倒排索引
-func NewInvertedIndex(fieldType uint64, startDocId uint32, fieldname string) *InvertedIndex {
+func NewInvertedIndex(fieldType uint8, startDocId uint32, fieldname string) *InvertedIndex {
 	this := &InvertedIndex{
 		btree:     nil,
 		curDocId:  startDocId,
@@ -55,7 +55,7 @@ func NewInvertedIndex(fieldType uint64, startDocId uint32, fieldname string) *In
 
 //TODO ??
 //通过段的名称建立字符型倒排索引
-func newInvertedWithLocalFile(btdb btree.Btree, fieldType uint64, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
+func loadInverted(btdb btree.Btree, fieldType uint8, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
 	this := &InvertedIndex{
 		btree:     btdb,
 		fieldType: fieldType,
@@ -127,7 +127,7 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 	for term, docNodeList := range rIdx.termMap {
 		//先写入长度, 占8个字节
 		nodeCnt := len(docNodeList)
-		lenBuffer := make([]byte, NODE_CNT_BYTE)
+		lenBuffer := make([]byte, NODE_BYTE_CNT)
 		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
 		idxFd.Write(lenBuffer)
 
@@ -142,7 +142,7 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 
 		//B+树录入
 		rIdx.btree.Set(rIdx.fieldName, term, uint64(offset))
-		offset = offset + NODE_CNT_BYTE + nodeCnt * basic.DOC_NODE_SIZE
+		offset = offset + NODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
 	rIdx.termMap = nil    //TODO ??直接置为 nil?
@@ -170,8 +170,8 @@ func (rIdx *InvertedIndex) queryTerm(term string) ([]basic.DocNode, bool) {
 		if !ok {
 			return nil, false
 		}
-		count := rIdx.idxMmap.ReadInt64(offset)
-		docNodes := readDocNodes(uint64(offset) + uint64(NODE_CNT_BYTE), uint64(count), rIdx.idxMmap)
+		count := rIdx.idxMmap.ReadUInt64(uint64(offset))
+		docNodes := readDocNodes(uint64(offset) + NODE_BYTE_CNT, count, rIdx.idxMmap)
 		return docNodes, true
 	}
 
@@ -323,7 +323,7 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 		}
 		fd.Write(buffer.Bytes())
 		rIdx.btree.Set(rIdx.fieldName, minTerm, uint64(offset))
-		offset = offset + NODE_CNT_BYTE + nodeCnt * basic.DOC_NODE_SIZE
+		offset = offset + NODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
 	rIdx.termMap = nil     //TODO 存在和上面persist同样的疑问
