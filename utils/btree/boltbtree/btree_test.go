@@ -117,7 +117,7 @@ func TestNextKV(t *testing.T) {
 /*
 
 func TestNewBoltTree(t *testing.T) {
-	InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)
+	InitBoltWrapper("/tmp/spider/spider.btdb", 0666, 3 * time.Second)
 	t.Log(gBoltWrapper.Buckets)
 	t.Log("ok")
 }

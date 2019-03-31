@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"github.com/boltdb/bolt"
 	"github.com/hq-cml/spider-engine/utils/log"
+	"github.com/hq-cml/spider-engine/basic"
 )
 
 //BoltWrapper
@@ -63,7 +64,7 @@ func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*
 //获取单例
 func GetBoltWrapperInstance() *BoltWrapper {
 	if gBoltWrapper == nil {
-		InitBoltWrapper("/tmp/spider.db", 0666, 3 * time.Second)
+		InitBoltWrapper("/tmp/spider" + basic.IDX_FILENAME_SUFFIX_BTREE, 0666, 3 * time.Second)
 	}
 	return gBoltWrapper
 }

@@ -12,7 +12,7 @@ import (
 
 const TEST_TREE = "user_name"
 
-func TestInit(t *testing.T) {
+func init() {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
@@ -70,7 +70,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 	}
 
 	//测试落地
-	tree := btree.NewBtree("xx", "/tmp/spider/spider.db")
+	tree := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree.Close()
 	if err := rIdx.Persist("/tmp/spider/Segment0", tree); err != nil {
 		t.Fatal("Wrong:", err)
@@ -85,11 +85,11 @@ func TestQureyTermInFile(t *testing.T) {
 
 	//从磁盘加载btree
 	//InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)
-	rIdx.btreeDb = btree.NewBtree("xx", "/tmp/spider/spider.db")
+	rIdx.btreeDb = btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer rIdx.btreeDb.Close()
 	//从磁盘加载mmap
 	var err error
-	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment0.idx", true, 0)
+	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,6 @@ func TestQureyTermInFile(t *testing.T) {
 	}
 	n, _ := json.Marshal(nodes)
 	t.Log("从磁盘访问 天安门: ", string(n))
-
 
 	nodes, exist = rIdx.QueryTerm("太阳")
 	if !exist {
@@ -120,7 +119,7 @@ func TestMergeIndex(t *testing.T) {
 	}
 
 	//建一颗B+树 => 建立索引1 => 落地索引1 => 再加载索引1
-	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1.db")
+	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree1.Close()
 	rIdx1 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
 	rIdx1.AddDocument(1, "c;f")
@@ -129,13 +128,13 @@ func TestMergeIndex(t *testing.T) {
 	r, _ := json.Marshal(rIdx1.termMap)
 	rIdx1.Persist("/tmp/spider/Segment_1", tree1) //落地
 	t.Log(string(r))
-	rIdx1.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_1.idx", true, 0) //加载
+	rIdx1.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_1" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	//建一颗B+树 => 建立索引2 => 落地索引2 => 再加载索引2
-	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2.db")
+	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree2.Close()
 	rIdx2 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
 	rIdx2.AddDocument(4, "b;d")
@@ -144,13 +143,13 @@ func TestMergeIndex(t *testing.T) {
 	r, _ = json.Marshal(rIdx2.termMap)
 	rIdx2.Persist("/tmp/spider/Segment_2", tree2) //落地
 	t.Log(string(r))
-	rIdx2.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_2.idx", true, 0) //加载
+	rIdx2.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_2" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	//建一颗B+树 => 建立索引3 => 落地索引3 => 再加载索引3
-	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3.db")
+	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree3.Close()
 	rIdx3 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
 	rIdx3.AddDocument(7, "c;e")
@@ -159,19 +158,19 @@ func TestMergeIndex(t *testing.T) {
 	r, _ = json.Marshal(rIdx3.termMap)
 	rIdx3.Persist("/tmp/spider/Segment_3", tree3) //落地
 	t.Log(string(r))
-	rIdx3.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_3.idx", true, 0) //加载
+	rIdx3.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_3" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	//合并 => 加载回来 => 读一下试一下
-	tree := btree.NewBtree("xx", "/tmp/spider/spider.db")
+	tree := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree.Close()
 	rIdx := NewInvertedIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
 	rIdx.MergeIndex(
 		[]*InvertedIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Segment", tree)
 
-	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment.idx", true, 0)
+	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +261,7 @@ func TestPersist(t *testing.T) {
 	idx1.AddDocument(0, 100)
 	idx1.AddDocument(1, 200)
 	idx1.AddDocument(2, 300)
-	offset, cnt, err := idx1.Persist("/tmp/spider/Segment.int.fwd")
+	offset, cnt, err := idx1.Persist("/tmp/spider/Segment.int")
 	if err != nil {
 		t.Fatal("Persist Error:", err)
 	}
@@ -271,7 +270,7 @@ func TestPersist(t *testing.T) {
 	idx3 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
 	idx3.AddDocument(0, "abc")
 	idx3.AddDocument(1, "efg")
-	offset, cnt, err = idx3.Persist("/tmp/spider/Segment.string.fwd")
+	offset, cnt, err = idx3.Persist("/tmp/spider/Segment.string")
 	if err != nil {
 		t.Fatal("Persist Error:", err)
 	}
@@ -279,7 +278,7 @@ func TestPersist(t *testing.T) {
 }
 
 func TestLoadFwdIndex(t *testing.T) {
-	mmp, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.pfl", true, 0)
+	mmp, err := mmap.NewMmap("/tmp/spider/Segment.int" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
@@ -302,11 +301,11 @@ func TestLoadFwdIndex(t *testing.T) {
 		t.Fatal("Sth wrong")
 	}
 
-	mmp1, err := mmap.NewMmap("/tmp/spider/Segment.string.fwd.pfl", true, 0)
+	mmp1, err := mmap.NewMmap("/tmp/spider/Segment.string" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	mmp2, err := mmap.NewMmap("/tmp/spider/Segment.string.fwd.dtl", true, 0)
+	mmp2, err := mmap.NewMmap("/tmp/spider/Segment.string" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
@@ -345,7 +344,7 @@ func TestMergeFwdIndex(t *testing.T) {
 	t.Log("Merge ", "/tmp/spider/Segment.int.fwd.merge Offset:", offset, ". Cnt:", cnt)
 
 	//Load回来验证
-	mmp, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.pfl", true, 0)
+	mmp, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge"+basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
@@ -382,11 +381,11 @@ func TestMergeFwdIndexString(t *testing.T) {
 	t.Log("Merge ", "/tmp/spider/Segment.int.fwd.merge.string Offset:", offset, ". Cnt:", cnt)
 
 	//Load回来验证
-	mmp1, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.string.pfl", true, 0)
+	mmp1, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.string" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	mmp2, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.string.dtl", true, 0)
+	mmp2, err := mmap.NewMmap("/tmp/spider/Segment.int.fwd.merge.string" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}

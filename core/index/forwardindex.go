@@ -90,7 +90,7 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 	if docId != fwdIdx.curDocId || fwdIdx.isMemory == false {
 		return errors.New("profile --> AddDocument :: Wrong DocId Number")
 	}
-	log.Debugf("[TRACE] docId %v content %v", docId, content)
+	log.Debugf("ForwardIndex AddDocument --> DocId: %v ,Content: %v", docId, content)
 
 	vtype := reflect.TypeOf(content)
 	var value int64 = 0xFFFFFFFF
@@ -178,7 +178,7 @@ func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) er
 func (fwdIdx *ForwardIndex) Persist(fullsegmentname string) (uint64, uint32, error) {
 
 	//打开正排文件
-	pflFileName := fmt.Sprintf("%s.pfl", fullsegmentname)
+	pflFileName := fmt.Sprintf("%s" + basic.IDX_FILENAME_SUFFIX_FWD, fullsegmentname)
 	idxFd, err := os.OpenFile(pflFileName, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644) //append
 	if err != nil {
 		return 0, 0, err
@@ -203,7 +203,7 @@ func (fwdIdx *ForwardIndex) Persist(fullsegmentname string) (uint64, uint32, err
 	} else {
 		//字符型,单开一个文件存string内容
 		//打开dtl文件
-		dtlFileName := fmt.Sprintf("%v.dtl", fullsegmentname)
+		dtlFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, fullsegmentname)
 		dtlFd, err := os.OpenFile(dtlFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
 			return 0, 0, err
@@ -469,7 +469,7 @@ func (fwdIdx *ForwardIndex) SetExtMmap(mmap *mmap.Mmap) {
 //TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
 func (fwdIdx *ForwardIndex) MergeIndex(idxList []*ForwardIndex, fullSegmentName string) (uint64, uint32, error) {
 	//打开正排文件
-	pflFileName := fmt.Sprintf("%v.pfl", fullSegmentName)
+	pflFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, fullSegmentName)
 	var fwdFd *os.File
 	var err error
 	fwdFd, err = os.OpenFile(pflFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -500,7 +500,7 @@ func (fwdIdx *ForwardIndex) MergeIndex(idxList []*ForwardIndex, fullSegmentName 
 		cnt = int(fwdIdx.curDocId - fwdIdx.startDocId)
 	} else {
 		//打开dtl文件
-		dtlFileName := fmt.Sprintf("%v.dtl", fullSegmentName)
+		dtlFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, fullSegmentName)
 		dtlFd, err := os.OpenFile(dtlFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
 			return 0, 0, err

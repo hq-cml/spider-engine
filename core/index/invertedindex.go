@@ -110,7 +110,7 @@ func (rIdx *InvertedIndex) Persist(segmentName string, tree btree.Btree) error {
 
 	//打开倒排文件, 获取文件大小作为初始偏移
 	//TODO 此处为何是直接写文件,而不是mmap??
-	idxFileName := fmt.Sprintf("%v.idx", segmentName)
+	idxFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_INVERT, segmentName)
 	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644) //追加打开file
 	if err != nil {
 		return err
@@ -155,7 +155,7 @@ func (rIdx *InvertedIndex) Persist(segmentName string, tree btree.Btree) error {
 	rIdx.termMap = nil    //TODO ??直接置为 nil?
 	rIdx.isMemory = false //TODO ??isMemry用法,用途
 
-	log.Debugf("Persist :: Writing to File : [%v.idx] ", segmentName)
+	log.Debugf("Persist :: Writing to File : [%v%v] ", segmentName, basic.IDX_FILENAME_SUFFIX_INVERT)
 	return nil
 }
 
@@ -236,7 +236,7 @@ type tmpMerge struct {
 //TODO 是否需要设置rIdx的curId???
 func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName string, tree btree.Btree) error {
 	//打开文件，获取长度，作为offset
-	idxFileName := fmt.Sprintf("%v.idx", fullSetmentName)
+	idxFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_INVERT, fullSetmentName)
 	fd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
 	if err != nil {
 		return err

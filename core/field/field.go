@@ -7,11 +7,11 @@ package field
 import (
 	"errors"
 	"fmt"
+	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/log"
-	"github.com/hq-cml/spider-engine/basic"
 )
 
 //字段的结构定义
@@ -46,21 +46,21 @@ func NewEmptyFakeField(fieldname string, start uint32, fieldtype uint8, docCnt u
 }
 
 //新建空字段
-func NewEmptyField(fieldname string, start uint32, fieldtype uint8) *Field {
+func NewEmptyField(fieldname string, start uint32, fieldType uint8) *Field {
 	var ivtIdx *index.InvertedIndex
-	if fieldtype == index.IDX_TYPE_STRING ||
-		fieldtype == index.IDX_TYPE_STRING_SEG ||
-		fieldtype == index.IDX_TYPE_STRING_LIST ||
-		fieldtype == index.IDX_TYPE_STRING_SINGLE ||
-		fieldtype == index.GATHER_TYPE {
-		ivtIdx = index.NewInvertedIndex(fieldtype, start, fieldname)
+	if fieldType == index.IDX_TYPE_STRING ||
+		fieldType == index.IDX_TYPE_STRING_SEG ||
+		fieldType == index.IDX_TYPE_STRING_LIST ||
+		fieldType == index.IDX_TYPE_STRING_SINGLE ||
+		fieldType == index.GATHER_TYPE {
+		ivtIdx = index.NewInvertedIndex(fieldType, start, fieldname)
 	}
-	fwdIdx := index.NewEmptyForwardIndex(fieldtype, start)
+	fwdIdx := index.NewEmptyForwardIndex(fieldType, start)
 	return &Field{
 		fieldName:  fieldname,
 		startDocId: start,
 		nextDocId:  start,
-		fieldType:  fieldtype,
+		fieldType:  fieldType,
 		isMemory:   true,
 		ivtIdx:     ivtIdx,
 		fwdIdx:     fwdIdx,
@@ -160,10 +160,6 @@ func (fld *Field) Persist(segmentName string, btree btree.Btree) error {
 
 	if fld.ivtIdx != nil {
 		fld.btree = btree //TODO 为什么是使用传进来的，而不能直接使用自己的额？？
-		//if err := fld.btree.AddTree(fld.fieldName); err != nil {
-		//	log.Errf("invert --> Create BTree Error %v", err)
-		//	return err
-		//}
 		err = fld.ivtIdx.Persist(segmentName, fld.btree)
 		if err != nil {
 			log.Errf("Field --> Serialization :: Serialization Error %v", err)
@@ -172,7 +168,6 @@ func (fld *Field) Persist(segmentName string, btree btree.Btree) error {
 	}
 
 	log.Infof("Field[%v] --> Serialization OK...", fld.fieldName)
-
 	return nil
 }
 

@@ -25,3 +25,10 @@ const (
 	FILT_STR_RANGE   = 13 //之内
 	FILT_STR_ALL     = 14 //全词
 )
+
+const (
+	IDX_FILENAME_SUFFIX_BTREE  = ".btdb"
+	IDX_FILENAME_SUFFIX_FWD    = ".fwd"
+	IDX_FILENAME_SUFFIX_FWDEXT = ".ext"
+	IDX_FILENAME_SUFFIX_INVERT = ".ivt"
+)
