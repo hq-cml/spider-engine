@@ -16,10 +16,10 @@ import (
 
 //BoltWrapper
 type BoltWrapper struct {
-	mutex    sync.RWMutex    //保护Tables
+	mutex    sync.RWMutex    //保护Buckets
 	fileName string
 	db       *bolt.DB
-	Tables   map[string]bool
+	Buckets  map[string]bool
 }
 
 //单例
@@ -39,8 +39,8 @@ func InitBoltWrapper(dbname string, mode os.FileMode, timeout time.Duration) err
 func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*BoltWrapper, error) {
 	var err error
 	wrapper := &BoltWrapper {
-		fileName:    fineName,
-		Tables: map[string]bool{},
+		fileName: fineName,
+		Buckets:  map[string]bool{},
 	}
 	wrapper.db, err = bolt.Open(fineName, mode, &bolt.Options{Timeout: timeout})
 	if err != nil {
@@ -48,10 +48,10 @@ func NewBoltWrapper(fineName string, mode os.FileMode, timeout time.Duration) (*
 		return nil, err
 	}
 
-	//初始化填充Tables
+	//初始化填充Buckets
 	wrapper.db.View(func(tx *bolt.Tx) error {
 		tx.ForEach(func(k []byte, v *bolt.Bucket) error {
-			wrapper.Tables[string(k)] = true
+			wrapper.Buckets[string(k)] = true
 			return nil
 		})
 		return nil
@@ -69,18 +69,18 @@ func GetBoltWrapperInstance() *BoltWrapper {
 }
 
 //新建表 (在Bolt底层其实就是新建一个bucket)
-func (br *BoltWrapper) CreateTable(tableName string) error {
+func (br *BoltWrapper) CreateBucket(bucketName string) error {
 
 	if err := br.db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte(tableName)); err != nil {
+		if _, err := tx.CreateBucketIfNotExists([]byte(bucketName)); err != nil {
 			return err
 		}
 		br.mutex.Lock()
 		defer br.mutex.Unlock()
-		br.Tables[tableName] = true;
+		br.Buckets[bucketName] = true;
 		return nil
 	}); err != nil {
-		log.Fatal("CreateTable Error:", err)
+		log.Fatal("CreateBucket Error:", err)
 		return err
 	}
 
@@ -88,29 +88,29 @@ func (br *BoltWrapper) CreateTable(tableName string) error {
 }
 
 //删除表 (在Bolt底层其实就是新建一个bucket)
-func (br *BoltWrapper) DeleteTable(tableName string) error {
+func (br *BoltWrapper) DeleteBucket(bucketName string) error {
 
 	if err := br.db.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket([]byte(tableName)); err != nil {
+		if err := tx.DeleteBucket([]byte(bucketName)); err != nil {
 			return err
 		}
 		br.mutex.Lock()
 		defer br.mutex.Unlock()
-		delete(br.Tables, tableName);
+		delete(br.Buckets, bucketName);
 		return nil
 	}); err != nil {
-		log.Fatal("DeleteTable Error:", err)
+		log.Fatal("DeleteBucket Error:", err)
 		return err
 	}
 	return nil
 }
 
 //更新
-func (br *BoltWrapper) Set(tableName, key, value string) error {
+func (br *BoltWrapper) Set(bucketName, key, value string) error {
 	if err := br.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		err := b.Put([]byte(key), []byte(value))
 		return err
@@ -123,12 +123,12 @@ func (br *BoltWrapper) Set(tableName, key, value string) error {
 }
 
 //批量更新
-func (br *BoltWrapper) MutiSet(tableName string, kv map[string]string) error {
+func (br *BoltWrapper) MutiSet(bucketName string, kv map[string]string) error {
 
 	if err := br.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		for k, v := range kv {
 			if err := b.Put([]byte(k), []byte(v)); err != nil {
@@ -145,7 +145,7 @@ func (br *BoltWrapper) MutiSet(tableName string, kv map[string]string) error {
 }
 
 //更新一个对象(以 json 形式)
-func (br *BoltWrapper) SetObj(tableName, key string, obj interface{}) error {
+func (br *BoltWrapper) SetObj(bucketName, key string, obj interface{}) error {
 
 	value, err := json.Marshal(obj)
 	if err != nil {
@@ -154,9 +154,9 @@ func (br *BoltWrapper) SetObj(tableName, key string, obj interface{}) error {
 	}
 
 	if err = br.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		err := b.Put([]byte(key), value)
 		return err
@@ -169,13 +169,12 @@ func (br *BoltWrapper) SetObj(tableName, key string, obj interface{}) error {
 }
 
 //Get string
-func (br *BoltWrapper) Get(tableName, key string) (string, bool) {
-
+func (br *BoltWrapper) Get(bucketName, key string) (string, bool) {
 	var value []byte
 	if err := br.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		value = b.Get([]byte(key))
 		return nil
@@ -192,13 +191,13 @@ func (br *BoltWrapper) Get(tableName, key string) (string, bool) {
 }
 
 //Get object
-func (br *BoltWrapper) GetValue(tableName, key string) ([]byte, bool) {
+func (br *BoltWrapper) GetValue(bucketName, key string) ([]byte, bool) {
 
 	var value []byte
 	if err := br.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		value = b.Get([]byte(key))
 		return nil
@@ -215,19 +214,19 @@ func (br *BoltWrapper) GetValue(tableName, key string) ([]byte, bool) {
 }
 
 //HasKey
-func (this *BoltWrapper) HasKey(tableName, key string) bool {
-	_, ok := this.Get(tableName, key)
+func (br *BoltWrapper) HasKey(bucketName, key string) bool {
+	_, ok := br.Get(bucketName, key)
 	return ok
 }
 
 //Next
-func (br *BoltWrapper) GetNextKV(tableName, key string) (string, string, error) {
+func (br *BoltWrapper) GetNextKV(bucketName, key string) (string, string, error) {
 	var k []byte
 	var v []byte
 	if err := br.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		c := b.Cursor()
 		c.Seek([]byte(key))
@@ -247,14 +246,14 @@ func (br *BoltWrapper) GetNextKV(tableName, key string) (string, string, error) 
 }
 
 //First
-func (br *BoltWrapper) GetFristKV(tableName string) (string, string, error) {
+func (br *BoltWrapper) GetFristKV(bucketName string) (string, string, error) {
 
 	var k []byte
 	var v []byte
 	if err := br.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		c := b.Cursor()
 		k, v = c.First()
@@ -277,11 +276,11 @@ func (br *BoltWrapper) CloseDB() error {
 }
 
 //print all k,v
-func (br *BoltWrapper) DisplayTable(tableName string) error {
+func (br *BoltWrapper) DisplayBucket(bucketName string) error {
 	if err := br.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(tableName))
+		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
-			return errors.New(fmt.Sprintf("Tablename[%v] not found", tableName))
+			return errors.New(fmt.Sprintf("Bucketname[%v] not found", bucketName))
 		}
 		b.ForEach(func(k, v []byte) error {
 			fmt.Printf("key=%s, value=%s\n", k, v)
@@ -289,10 +288,17 @@ func (br *BoltWrapper) DisplayTable(tableName string) error {
 		})
 		return nil
 	}); err != nil {
-		log.Errln("DisplayTable Error:", err)
+		log.Errln("DisplayBucket Error:", err)
 		return err
 	}
 
 	return nil
+
+}
+
+//print all k,v
+func (br *BoltWrapper) HasBucket(bucketName string) bool {
+	_, exist := br.Buckets[bucketName]
+	return exist
 
 }

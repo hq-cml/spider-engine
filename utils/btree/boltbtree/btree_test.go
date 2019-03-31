@@ -7,26 +7,26 @@ import (
 
 func TestNewBoltTree(t *testing.T) {
 	tree := GetBoltWrapperInstance()
-	t.Log(tree.Tables)
+	t.Log(tree.Buckets)
 	t.Log("\n\n")
 }
 
-func TestCreateTable(t *testing.T) {
+func TestCreateBucket(t *testing.T) {
 	tree := GetBoltWrapperInstance()
-	tree.CreateTable("second")
+	tree.CreateBucket("second")
 	t.Log("\n\n")
 }
 
-func TestDeleteTable(t *testing.T) {
+func TestDeleteBucket(t *testing.T) {
 	tree := GetBoltWrapperInstance()
-	tree.DeleteTable("second")
+	tree.DeleteBucket("second")
 	t.Log("\n\n")
 }
 
 func TestSetGet(t *testing.T) {
 	tree := GetBoltWrapperInstance()
-	if _, exist := tree.Tables["first"]; !exist {
-		err := tree.CreateTable("first")
+	if _, exist := tree.Buckets["first"]; !exist {
+		err := tree.CreateBucket("first")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,9 +60,9 @@ func TestMultiSet(t *testing.T) {
 	t.Log("\n\n")
 }
 
-func TestDisplayTable(t *testing.T) {
+func TestDisplayBucket(t *testing.T) {
 	tree := GetBoltWrapperInstance()
-	tree.DisplayTable("first")
+	tree.DisplayBucket("first")
 
 	t.Log("\n\n")
 }
@@ -118,7 +118,7 @@ func TestNextKV(t *testing.T) {
 
 func TestNewBoltTree(t *testing.T) {
 	InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)
-	t.Log(gBoltWrapper.Tables)
+	t.Log(gBoltWrapper.Buckets)
 	t.Log("ok")
 }
 

@@ -59,7 +59,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 	t.Log(string(r))
 
 	//从内存读取
-	nodes, exist := rIdx.queryTerm("天安门")
+	nodes, exist := rIdx.QueryTerm("天安门")
 	if !exist {
 		t.Fatal("Wrong exist")
 	}
@@ -72,8 +72,9 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 	//测试落地
 	tree := btree.NewBtree("xx", "/tmp/spider/spider.db")
 	defer tree.Close()
-	tree.AddBTree(TEST_TREE)
-	rIdx.persist("/tmp/spider/Segment0", tree)
+	if err := rIdx.Persist("/tmp/spider/Segment0", tree); err != nil {
+		t.Fatal("Wrong:", err)
+	}
 	t.Log("\n\n")
 }
 
@@ -84,15 +85,15 @@ func TestQureyTermInFile(t *testing.T) {
 
 	//从磁盘加载btree
 	//InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)
-	rIdx.btree = btree.NewBtree("xx", "/tmp/spider/spider.db")
-	defer rIdx.btree.Close()
+	rIdx.btreeDb = btree.NewBtree("xx", "/tmp/spider/spider.db")
+	defer rIdx.btreeDb.Close()
 	//从磁盘加载mmap
 	var err error
 	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment0.idx", true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	nodes, exist := rIdx.queryTerm("天安门")
+	nodes, exist := rIdx.QueryTerm("天安门")
 	if !exist {
 		t.Fatal("Wrong exist")
 	}
@@ -100,7 +101,7 @@ func TestQureyTermInFile(t *testing.T) {
 	t.Log("从磁盘访问 天安门: ", string(n))
 
 
-	nodes, exist = rIdx.queryTerm("太阳")
+	nodes, exist = rIdx.QueryTerm("太阳")
 	if !exist {
 		t.Fatal("Wrong exist")
 	}
@@ -121,13 +122,12 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引1 => 落地索引1 => 再加载索引1
 	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1.db")
 	defer tree1.Close()
-	tree1.AddBTree(TEST_TREE)
 	rIdx1 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
 	rIdx1.AddDocument(1, "c;f")
 	rIdx1.AddDocument(2, "a;c")
 	rIdx1.AddDocument(3, "f;a")
 	r, _ := json.Marshal(rIdx1.termMap)
-	rIdx1.persist("/tmp/spider/Segment_1", tree1) //落地
+	rIdx1.Persist("/tmp/spider/Segment_1", tree1) //落地
 	t.Log(string(r))
 	rIdx1.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_1.idx", true, 0) //加载
 	if err != nil {
@@ -137,13 +137,12 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引2 => 落地索引2 => 再加载索引2
 	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2.db")
 	defer tree2.Close()
-	tree2.AddBTree(TEST_TREE)
 	rIdx2 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
 	rIdx2.AddDocument(4, "b;d")
 	rIdx2.AddDocument(5, "d;c")
 	rIdx2.AddDocument(6, "b;c")
 	r, _ = json.Marshal(rIdx2.termMap)
-	rIdx2.persist("/tmp/spider/Segment_2", tree2) //落地
+	rIdx2.Persist("/tmp/spider/Segment_2", tree2) //落地
 	t.Log(string(r))
 	rIdx2.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_2.idx", true, 0) //加载
 	if err != nil {
@@ -153,13 +152,12 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引3 => 落地索引3 => 再加载索引3
 	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3.db")
 	defer tree3.Close()
-	tree3.AddBTree(TEST_TREE)
 	rIdx3 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
 	rIdx3.AddDocument(7, "c;e")
 	rIdx3.AddDocument(8, "a;e")
 	rIdx3.AddDocument(9, "c;a")
 	r, _ = json.Marshal(rIdx3.termMap)
-	rIdx3.persist("/tmp/spider/Segment_3", tree3) //落地
+	rIdx3.Persist("/tmp/spider/Segment_3", tree3) //落地
 	t.Log(string(r))
 	rIdx3.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_3.idx", true, 0) //加载
 	if err != nil {
@@ -169,9 +167,8 @@ func TestMergeIndex(t *testing.T) {
 	//合并 => 加载回来 => 读一下试一下
 	tree := btree.NewBtree("xx", "/tmp/spider/spider.db")
 	defer tree.Close()
-	tree.AddBTree(TEST_TREE)
 	rIdx := NewInvertedIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
-	rIdx.mergeIndex(
+	rIdx.MergeIndex(
 		[]*InvertedIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Segment", tree)
 
 	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment.idx", true, 0)
@@ -179,16 +176,16 @@ func TestMergeIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	term, _, _, _, ok := rIdx.btree.GetFristKV(TEST_TREE)
+	term, _, _, _, ok := rIdx.btreeDb.GetFristKV(TEST_TREE)
 	for ok {
-		nodes, exist := rIdx.queryTerm(term)
+		nodes, exist := rIdx.QueryTerm(term)
 		if !exist {
 			t.Fatal("Wrong exist")
 		}
 		n, _ := json.Marshal(nodes)
 		t.Log("从磁盘访问 ", term ,": ", string(n))
 
-		term, _, _, _, ok = rIdx.btree.GetNextKV(TEST_TREE, term)
+		term, _, _, _, ok = rIdx.btreeDb.GetNextKV(TEST_TREE, term)
 	}
 
 	t.Log("\n\n")
@@ -202,19 +199,19 @@ func TestNewAndAddDoc(t *testing.T) {
 	idx1.AddDocument(1, 200)
 	idx1.AddDocument(2, 300)
 
-	iv, b := idx1.getInt(0)
+	iv, b := idx1.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("0: ", iv)
 
-	iv, b = idx1.getInt(2)
+	iv, b = idx1.GetInt(2)
 	if !b || iv != 300 {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("2: ", iv)
 
-	iv, b = idx1.getInt(3) //不存在
+	iv, b = idx1.GetInt(3) //不存在
 	if b {
 		t.Fatal("Sth wrong")
 	}
@@ -222,14 +219,14 @@ func TestNewAndAddDoc(t *testing.T) {
 	idx2 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入字符
 	idx2.AddDocument(0, "123")
 	idx2.AddDocument(1, "456")
-	iv, b = idx2.getInt(0)
+	iv, b = idx2.GetInt(0)
 	if !b || iv != 123 {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("0: ", iv)
 
 	var sv string
-	sv, b = idx2.getString(1)
+	sv, b = idx2.GetString(1)
 	if !b || sv != "456" {
 		t.Fatal("Sth wrong")
 	}
@@ -245,13 +242,13 @@ func TestNewAndAddDoc(t *testing.T) {
 	if err != nil {
 		t.Fatal("AddDocument Error:", err)
 	}
-	sv, b = idx3.getString(0)
+	sv, b = idx3.GetString(0)
 	if !b || sv != "abc" {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("0: ", sv)
 
-	sv, b = idx3.getString(1)
+	sv, b = idx3.GetString(1)
 	if !b || sv != "efg" {
 		t.Fatal("Sth wrong")
 	}
@@ -265,7 +262,7 @@ func TestPersist(t *testing.T) {
 	idx1.AddDocument(0, 100)
 	idx1.AddDocument(1, 200)
 	idx1.AddDocument(2, 300)
-	offset, cnt, err := idx1.persist("/tmp/spider/Segment.int.fwd")
+	offset, cnt, err := idx1.Persist("/tmp/spider/Segment.int.fwd")
 	if err != nil {
 		t.Fatal("Persist Error:", err)
 	}
@@ -274,7 +271,7 @@ func TestPersist(t *testing.T) {
 	idx3 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
 	idx3.AddDocument(0, "abc")
 	idx3.AddDocument(1, "efg")
-	offset, cnt, err = idx3.persist("/tmp/spider/Segment.string.fwd")
+	offset, cnt, err = idx3.Persist("/tmp/spider/Segment.string.fwd")
 	if err != nil {
 		t.Fatal("Persist Error:", err)
 	}
@@ -288,19 +285,19 @@ func TestLoadFwdIndex(t *testing.T) {
 	}
 	idx1 := LoadForwardIndex(IDX_TYPE_NUMBER,
 		mmp, nil, 0, 0, false)
-	iv, b := idx1.getInt(0)
+	iv, b := idx1.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("0: ", iv)
 
-	iv, b = idx1.getInt(2)
+	iv, b = idx1.GetInt(2)
 	if !b || iv != 300 {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("2: ", iv)
 
-	iv, b = idx1.getInt(3) //不存在
+	iv, b = idx1.GetInt(3) //不存在
 	if b {
 		t.Fatal("Sth wrong")
 	}
@@ -316,13 +313,13 @@ func TestLoadFwdIndex(t *testing.T) {
 	idx2 := LoadForwardIndex(IDX_TYPE_STRING,
 		mmp1, mmp2, 0, 0, false)
 
-	sv, b := idx2.getString(0)
+	sv, b := idx2.GetString(0)
 	if !b || sv != "abc" {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("0: ", sv)
 
-	sv, b = idx2.getString(1)
+	sv, b = idx2.GetString(1)
 	if !b || sv != "efg" {
 		t.Fatal("Sth wrong")
 	}
@@ -341,7 +338,7 @@ func TestMergeFwdIndex(t *testing.T) {
 
 	idx := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0)
 	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
-	offset, cnt, err := idx.mergeIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Segment.int.fwd.merge")
+	offset, cnt, err := idx.MergeIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Segment.int.fwd.merge")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
@@ -354,13 +351,13 @@ func TestMergeFwdIndex(t *testing.T) {
 	}
 	idx = LoadForwardIndex(IDX_TYPE_NUMBER,
 		mmp, nil, 0, 0, false)
-	iv, b := idx.getInt(0)
+	iv, b := idx.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong", iv)
 	}
 	t.Log("0: ", iv)
 
-	iv, b = idx.getInt(3)
+	iv, b = idx.GetInt(3)
 	if !b || iv != 123 {
 		t.Fatal("Sth wrong", iv)
 	}
@@ -378,7 +375,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 
 	idx := NewEmptyForwardIndex(IDX_TYPE_STRING, 0)
 	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
-	offset, cnt, err := idx.mergeIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Segment.int.fwd.merge.string")
+	offset, cnt, err := idx.MergeIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Segment.int.fwd.merge.string")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
@@ -395,13 +392,13 @@ func TestMergeFwdIndexString(t *testing.T) {
 	}
 	idx = LoadForwardIndex(IDX_TYPE_STRING,
 		mmp1, mmp2, 0, 0, false)
-	iv, b := idx.getString(0)
+	iv, b := idx.GetString(0)
 	if !b || iv != "abc" {
 		t.Fatal("Sth wrong", iv)
 	}
 	t.Log("0: ", iv)
 
-	iv, b = idx.getString(3)
+	iv, b = idx.GetString(3)
 	if !b || iv != "jkl" {
 		t.Fatal("Sth wrong", iv)
 	}
@@ -416,10 +413,10 @@ func TestFilterNums(t *testing.T) {
 	if err := idx1.AddDocument(3, 400); err != nil {t.Fatal("add Error:", err) }
 	if err := idx1.AddDocument(4, 500); err != nil {t.Fatal("add Error:", err) }
 
-	if !idx1.filterNums(1, basic.FILT_EQ, []int64{300, 200}) {
+	if !idx1.FilterNums(1, basic.FILT_EQ, []int64{300, 200}) {
 		t.Fatal("Sth wrong")
 	}
-	if idx1.filterNums(1, basic.FILT_EQ, []int64{300, 400}) {
+	if idx1.FilterNums(1, basic.FILT_EQ, []int64{300, 400}) {
 		t.Fatal("Sth wrong")
 	}
 }

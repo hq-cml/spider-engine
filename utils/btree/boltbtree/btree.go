@@ -1,5 +1,8 @@
 package boltbtree
-
+/*
+ * 基于bolt封装的B+树的实现
+ * 这里的一个tree，就对应底层bolt的一个bucket！！
+ */
 import (
 	"fmt"
 	"strconv"
@@ -29,8 +32,8 @@ func NewBoltBTree(filename string) *BoltBTree {
 }
 
 //增加一棵树, 底层对应 => 一个wrapper.Table => 一个bolt.bucket
-func (bt *BoltBTree) AddBTree(treeName string) error {
-	return bt.wrapper.CreateTable(treeName)
+func (bt *BoltBTree) AddTree(treeName string) error {
+	return bt.wrapper.CreateBucket(treeName)
 }
 
 //Set
@@ -97,6 +100,10 @@ func (db *BoltBTree) GetNextKV(treeName, key string) (string, uint32, uint32, in
 	}
 	return vkey, uint32(u), 0, 0, true
 
+}
+
+func (db *BoltBTree) HasTree(treeName string) bool {
+	return db.wrapper.HasBucket(treeName)
 }
 
 //close

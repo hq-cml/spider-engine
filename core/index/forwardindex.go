@@ -175,7 +175,7 @@ func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) er
 
 //落地正排索引
 //返回值: ???
-func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) {
+func (fwdIdx *ForwardIndex) Persist(fullsegmentname string) (uint64, uint32, error) {
 
 	//打开正排文件
 	pflFileName := fmt.Sprintf("%s.pfl", fullsegmentname)
@@ -237,13 +237,13 @@ func (fwdIdx *ForwardIndex) persist(fullsegmentname string) (int64, int, error) 
 	fwdIdx.isMemory = false
 	fwdIdx.memoryStr = nil
 	fwdIdx.memoryNum = nil
-	return offset, cnt, err
+	return uint64(offset), uint32(cnt), err
 
 	//TODO ?? fwdIdx.pflOffset需要设置吗
 }
 
 //获取值 (以字符串形式)
-func (fwdIdx *ForwardIndex) getString(pos uint32) (string, bool) {
+func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 	if fwdIdx.fake {  //TODO 为毛??
 		return "", true
 	}
@@ -292,7 +292,7 @@ func (fwdIdx *ForwardIndex) getString(pos uint32) (string, bool) {
 
 //获取值 (以数值形式)
 //TODO 不支持从字符型中读取数字??
-func (fwdIdx *ForwardIndex) getInt(pos uint32) (int64, bool) {
+func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 
 	if fwdIdx.fake {//TODO 为毛??
 		return 0xFFFFFFFF, true
@@ -323,7 +323,7 @@ func (fwdIdx *ForwardIndex) getInt(pos uint32) (int64, bool) {
 }
 
 //过滤从numbers切片中找出是否有=或!=于pos数
-func (fwdIdx *ForwardIndex) filterNums(pos uint32, filtertype uint64, numbers []int64) bool {
+func (fwdIdx *ForwardIndex) FilterNums(pos uint32, filterType uint8, numbers []int64) bool {
 	var value int64
 	if fwdIdx.fake {
 		//TODO ??
@@ -346,7 +346,7 @@ func (fwdIdx *ForwardIndex) filterNums(pos uint32, filtertype uint64, numbers []
 		value = fwdIdx.baseMmap.ReadInt64(offset)
 	}
 
-	switch filtertype {
+	switch filterType {
 	case basic.FILT_EQ:
 		for _, num := range numbers {
 			if (0xFFFFFFFF&value != 0xFFFFFFFF) && (value == num) {
@@ -368,7 +368,7 @@ func (fwdIdx *ForwardIndex) filterNums(pos uint32, filtertype uint64, numbers []
 }
 
 //过滤
-func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int64, str string) bool {
+func (fwdIdx *ForwardIndex) Filter(pos uint32, filterRype uint8, start, end int64, str string) bool {
 
 	var value int64
 	if fwdIdx.fake {
@@ -386,7 +386,7 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 			value = fwdIdx.baseMmap.ReadInt64(offset)
 		}
 
-		switch filtertype {
+		switch filterRype {
 		case basic.FILT_EQ:
 			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value == start)
 		case basic.FILT_OVER:
@@ -402,10 +402,10 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 		}
 	} else if fwdIdx.fieldType == IDX_TYPE_STRING_SINGLE || fwdIdx.fieldType == IDX_TYPE_STRING{
 		vl := strings.Split(str, ",")  //TODO 为何是逗号 ??
-		switch filtertype {
+		switch filterRype {
 
 		case basic.FILT_STR_PREFIX:
-			if vstr, ok := fwdIdx.getString(pos); ok {
+			if vstr, ok := fwdIdx.GetString(pos); ok {
 				for _, v := range vl {
 					if strings.HasPrefix(vstr, v) {
 						return true
@@ -414,7 +414,7 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 			}
 			return false
 		case basic.FILT_STR_SUFFIX:
-			if vstr, ok := fwdIdx.getString(pos); ok {
+			if vstr, ok := fwdIdx.GetString(pos); ok {
 				for _, v := range vl {
 					if strings.HasSuffix(vstr, v) {
 						return true
@@ -423,7 +423,7 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 			}
 			return false
 		case basic.FILT_STR_RANGE:
-			if vstr, ok := fwdIdx.getString(pos); ok {
+			if vstr, ok := fwdIdx.GetString(pos); ok {
 				for _, v := range vl {
 					if !strings.Contains(vstr, v) {
 						return false
@@ -433,7 +433,7 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 			}
 			return false
 		case basic.FILT_STR_ALL:
-			if vstr, ok := fwdIdx.getString(pos); ok {
+			if vstr, ok := fwdIdx.GetString(pos); ok {
 				for _, v := range vl {
 					if vstr == v {
 						return true
@@ -445,29 +445,29 @@ func (fwdIdx *ForwardIndex) filter(pos uint32, filtertype uint64, start, end int
 			return false
 		}
 	}
-
 	return false
 }
 
 //销毁
-func (fwdIdx *ForwardIndex) destroy() error {
+//TODO 过于简单？？
+func (fwdIdx *ForwardIndex) Destroy() error {
 	fwdIdx.memoryNum = nil
 	fwdIdx.memoryStr = nil
 	return nil
 }
 
-func (fwdIdx *ForwardIndex) setPflMmap(mmap *mmap.Mmap) {
+func (fwdIdx *ForwardIndex) SetBaseMmap(mmap *mmap.Mmap) {
 	fwdIdx.baseMmap = mmap
 }
 
-func (fwdIdx *ForwardIndex) setDtlMmap(mmap *mmap.Mmap) {
+func (fwdIdx *ForwardIndex) SetExtMmap(mmap *mmap.Mmap) {
 	fwdIdx.extMmap = mmap
 }
 
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
 //TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
-func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName string) (int64, int, error) {
+func (fwdIdx *ForwardIndex) MergeIndex(idxList []*ForwardIndex, fullSegmentName string) (uint64, uint32, error) {
 	//打开正排文件
 	pflFileName := fmt.Sprintf("%v.pfl", fullSegmentName)
 	var fwdFd *os.File
@@ -487,7 +487,7 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				//TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
-				val, _ := idx.getInt(i)
+				val, _ := idx.GetInt(i)
 				binary.LittleEndian.PutUint64(buffer, uint64(val))
 				_, err = fwdFd.Write(buffer)
 				if err != nil {
@@ -512,7 +512,7 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
-				strContent, _ := idx.getString(i)
+				strContent, _ := idx.GetString(i)
 				strLen := len(strContent)
 				binary.LittleEndian.PutUint64(buffer, uint64(strLen))
 				_, err := dtlFd.Write(buffer)
@@ -536,5 +536,5 @@ func (fwdIdx *ForwardIndex) mergeIndex(idxList []*ForwardIndex, fullSegmentName 
 	fwdIdx.isMemory = false
 	fwdIdx.memoryStr = nil
 	fwdIdx.memoryNum = nil
-	return offset, cnt, nil
+	return uint64(offset), uint32(cnt), nil
 }

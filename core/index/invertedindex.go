@@ -33,9 +33,9 @@ type InvertedIndex struct {
 	isMemory  bool
 	fieldType uint8
 	fieldName string
-	idxMmap   *mmap.Mmap
-	termMap   map[string][]basic.DocNode  //索引的临时索引
-	btree     btree.Btree
+	idxMmap   *mmap.Mmap                  //倒排文件
+	btreeDb   btree.Btree                 //B+树
+	termMap   map[string][]basic.DocNode  //索引的内存容器
 }
 
 const DOCNODE_BYTE_CNT = 8
@@ -43,7 +43,7 @@ const DOCNODE_BYTE_CNT = 8
 //新建空的字符型倒排索引
 func NewInvertedIndex(fieldType uint8, startDocId uint32, fieldname string) *InvertedIndex {
 	this := &InvertedIndex{
-		btree:     nil,
+		btreeDb:   nil,
 		curDocId:  startDocId,
 		fieldName: fieldname,
 		fieldType: fieldType,
@@ -57,7 +57,7 @@ func NewInvertedIndex(fieldType uint8, startDocId uint32, fieldname string) *Inv
 //通过段的名称建立字符型倒排索引
 func LoadInvertedIndex(btdb btree.Btree, fieldType uint8, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
 	this := &InvertedIndex{
-		btree:     btdb,
+		btreeDb:   btdb,
 		fieldType: fieldType,
 		fieldName: fieldname,
 		isMemory:  false,
@@ -106,7 +106,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 //落地 termMap落地到倒排文件; term进入B+tree
 //倒排文件格式: 顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
 //B+树: key是term, val则是term在倒排文件中的offsetduolv
-func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
+func (rIdx *InvertedIndex) Persist(segmentName string, tree btree.Btree) error {
 
 	//打开倒排文件, 获取文件大小作为初始偏移
 	//TODO 此处为何是直接写文件,而不是mmap??
@@ -123,7 +123,10 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 	offset := int(fi.Size()) //当前偏移量, 即文件最后位置
 
 	//开始文件写入
-	rIdx.btree = tree //TODO 移出去
+	rIdx.btreeDb = tree //TODO 移出去
+	if !rIdx.btreeDb.HasTree(rIdx.fieldName) {
+		rIdx.btreeDb.AddTree(rIdx.fieldName)
+	}
 	for term, docNodeList := range rIdx.termMap {
 		//先写入长度, 占8个字节
 		nodeCnt := len(docNodeList)
@@ -141,7 +144,11 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 		idxFd.Write(buffer.Bytes())
 
 		//B+树录入
-		rIdx.btree.Set(rIdx.fieldName, term, uint64(offset))
+		err = rIdx.btreeDb.Set(rIdx.fieldName, term, uint64(offset))
+		if err != nil {
+			//TODO 造成不一致了哦
+			return err
+		}
 		offset = offset + DOCNODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
@@ -152,26 +159,20 @@ func (rIdx *InvertedIndex) persist(segmentName string, tree btree.Btree) error {
 	return nil
 }
 
-// Query function description : 给定一个查询词query，找出doc的列表（标准操作）
-// params : key string 查询的key值
-// return : docid结构体列表  bool 是否找到相应结果
-func (rIdx *InvertedIndex) queryTerm(term string) ([]basic.DocNode, bool) {
-
-	//this.Logger.Info("[INFO] QueryTerm %v",keystr)
+//给定一个查询词query，找出doc的列表（标准操作）
+func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 	if rIdx.isMemory == true {
-		// this.Logger.Info("[INFO] ismemory is  %v",this.isMemory)
 		docNodes, ok := rIdx.termMap[term]
 		if ok {
 			return docNodes, true
 		}
 	} else if rIdx.idxMmap != nil {
-		offset, ok := rIdx.btree.GetInt(rIdx.fieldName, term)
-		//this.Logger.Info("[INFO] found  %v this.FullName %v offset %v",keystr,this.fieldName,offset)
+		offset, ok := rIdx.btreeDb.GetInt(rIdx.fieldName, term)
 		if !ok {
 			return nil, false
 		}
 		count := rIdx.idxMmap.ReadUInt64(uint64(offset))
-		docNodes := readDocNodes(uint64(offset) +DOCNODE_BYTE_CNT, count, rIdx.idxMmap)
+		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.idxMmap)
 		return docNodes, true
 	}
 
@@ -189,38 +190,39 @@ func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
 }
 
 //索引销毁
-func (rIdx *InvertedIndex) destroy() error {
+//TODO 过于简单？？
+func (rIdx *InvertedIndex) Destroy() error {
 	rIdx.termMap = nil
 	return nil
 }
 
-//设置mmap
-func (rIdx *InvertedIndex) setIdxMmap(mmap *mmap.Mmap) {
+//设置倒排文件mmap
+func (rIdx *InvertedIndex) SetIdxMmap(mmap *mmap.Mmap) {
 	rIdx.idxMmap = mmap
 }
 
 //设置btree
-func (rIdx *InvertedIndex) setBtree(tree btree.Btree) {
-	rIdx.btree = tree
+func (rIdx *InvertedIndex) SetBtree(tree btree.Btree) {
+	rIdx.btreeDb = tree
 }
 
 //btree操作,
 //TODO 返回值太多, 只有第1,2和最后一个返回值有用
 func (rIdx *InvertedIndex) GetFristKV() (string, uint32, uint32, int, bool) {
-	if rIdx.btree == nil {
+	if rIdx.btreeDb == nil {
 		log.Err("Btree is null")
 		return "", 0, 0, 0, false
 	}
-	return rIdx.btree.GetFristKV(rIdx.fieldName)
+	return rIdx.btreeDb.GetFristKV(rIdx.fieldName)
 }
 
 //btree操作
 func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
-	if rIdx.btree == nil {
+	if rIdx.btreeDb == nil {
 		return "", 0, 0, 0, false
 	}
 
-	return rIdx.btree.GetNextKV(rIdx.fieldName, key)
+	return rIdx.btreeDb.GetNextKV(rIdx.fieldName, key)
 }
 
 type tmpMerge struct {
@@ -232,7 +234,7 @@ type tmpMerge struct {
 //多路归并, 将多个反向索引进行合并成为一个大的反向索引
 //比较烧脑，下面提供了一个简化版便于调试说明问题
 //TODO 是否需要设置rIdx的curId???
-func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName string, tree btree.Btree) error {
+func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName string, tree btree.Btree) error {
 	//打开文件，获取长度，作为offset
 	idxFileName := fmt.Sprintf("%v.idx", fullSetmentName)
 	fd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
@@ -244,22 +246,27 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 	offset := int(fi.Size())
 
 	//数据准备，开始多路归并
-	rIdx.btree = tree
+	rIdx.btreeDb = tree
 	ivts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
-		if ivt.btree == nil {
+		if ivt.btreeDb == nil {
 			continue
 		}
 		term, _, _, _, ok := ivt.GetFristKV()
 		if !ok {
 			continue
 		}
-		nodes, _ := ivt.queryTerm(term)
+		nodes, _ := ivt.QueryTerm(term)
 		ivts = append(ivts, tmpMerge{
 			rIndex: ivt,
 			term:  term,
 			nodes: nodes,
 		})
+	}
+
+	//补齐树
+	if !rIdx.btreeDb.HasTree(rIdx.fieldName) {
+		rIdx.btreeDb.AddTree(rIdx.fieldName)
 	}
 
 	//开始进行归并
@@ -304,7 +311,7 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 				continue
 			}
 			ivts[i].term = next
-			ivts[i].nodes, ok = ivts[i].rIndex.queryTerm(next)
+			ivts[i].nodes, ok = ivts[i].rIndex.QueryTerm(next)
 			if !ok {
 				panic("Index wrong!")
 			}
@@ -322,7 +329,7 @@ func (rIdx *InvertedIndex) mergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 			return err
 		}
 		fd.Write(buffer.Bytes())
-		rIdx.btree.Set(rIdx.fieldName, minTerm, uint64(offset))
+		rIdx.btreeDb.Set(rIdx.fieldName, minTerm, uint64(offset))
 		offset = offset + DOCNODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
@@ -376,7 +383,7 @@ func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, uint32, int, b
 	return "", 0, 0, 0, false
 }
 
-func (rIdx *InvertedIndex) queryTerm(key string) ([]int, bool) {
+func (rIdx *InvertedIndex) QueryTerm(key string) ([]int, bool) {
 	for i, v := range rIdx.Btree.List {
 		if v.Term == key {
 			return rIdx.Btree.List[i].Nodes, true
@@ -433,7 +440,7 @@ func main() {
 			continue
 		}
 
-		nodes, _ := ivt.queryTerm(term)
+		nodes, _ := ivt.QueryTerm(term)
 		//fmt.Println(nodes)
 		ivts = append(ivts, tmpMerge {
 			RIndex: ivt,
@@ -493,7 +500,7 @@ func main() {
 			}
 
 			ivts[i].Term = key
-			ivts[i].Nodes, ok = ivts[i].RIndex.queryTerm(key)
+			ivts[i].Nodes, ok = ivts[i].RIndex.QueryTerm(key)
 		}
 
 		//写倒排文件 & 写B+树 省略
