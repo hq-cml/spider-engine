@@ -23,7 +23,7 @@ type Field struct {
 	isMemory   bool
 	ivtIdx     *index.InvertedIndex //倒排索引
 	fwdIdx     *index.ForwardIndex  //正排索引
-	fwdOffset  uint64               //正排索引的数据，在文件中的起始偏移
+	fwdOffset  uint64               //此正排索引的数据，在文件中的起始偏移（这个东西不能自增）
 	fwdDocCnt  uint32               //正排索引文档个数
 	btree      btree.Btree
 }
