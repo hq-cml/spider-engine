@@ -467,6 +467,7 @@ func (fwdIdx *ForwardIndex) SetExtMmap(mmap *mmap.Mmap) {
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
 //TODO 这里面存在一个问题, 如果保证的多个index的顺序, 现在直接通过切片保证的, 如果切片顺序不对呢??
+//TODO 按理说应该传进来的idxList不都是从docId=0开始, 应该能够自动拼上才对的
 func (fwdIdx *ForwardIndex) MergeIndex(idxList []*ForwardIndex, fullSegmentName string) (uint64, uint32, error) {
 	//打开正排文件
 	pflFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, fullSegmentName)

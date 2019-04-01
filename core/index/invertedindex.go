@@ -33,9 +33,9 @@ type InvertedIndex struct {
 	isMemory  bool
 	fieldType uint8
 	fieldName string
-	idxMmap   *mmap.Mmap                  //倒排文件
-	btreeDb   btree.Btree                 //B+树
-	termMap   map[string][]basic.DocNode  //索引的内存容器
+	ivtMmap   *mmap.Mmap                 //倒排文件(以mmap的形式)
+	btreeDb   btree.Btree                //B+树
+	termMap   map[string][]basic.DocNode //索引的内存容器
 }
 
 const DOCNODE_BYTE_CNT = 8
@@ -55,13 +55,13 @@ func NewInvertedIndex(fieldType uint8, startDocId uint32, fieldname string) *Inv
 
 //TODO ??
 //通过段的名称建立字符型倒排索引
-func LoadInvertedIndex(btdb btree.Btree, fieldType uint8, fieldname string, idxMmap *mmap.Mmap) *InvertedIndex {
+func LoadInvertedIndex(btdb btree.Btree, fieldType uint8, fieldname string, ivtMmap *mmap.Mmap) *InvertedIndex {
 	this := &InvertedIndex{
 		btreeDb:   btdb,
 		fieldType: fieldType,
 		fieldName: fieldname,
 		isMemory:  false,
-		idxMmap:   idxMmap,
+		ivtMmap:   ivtMmap,
 	}
 	return this
 }
@@ -166,13 +166,13 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 		if ok {
 			return docNodes, true
 		}
-	} else if rIdx.idxMmap != nil {
+	} else if rIdx.ivtMmap != nil {
 		offset, ok := rIdx.btreeDb.GetInt(rIdx.fieldName, term)
 		if !ok {
 			return nil, false
 		}
-		count := rIdx.idxMmap.ReadUInt64(uint64(offset))
-		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.idxMmap)
+		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
+		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
 		return docNodes, true
 	}
 
@@ -198,7 +198,7 @@ func (rIdx *InvertedIndex) Destroy() error {
 
 //设置倒排文件mmap
 func (rIdx *InvertedIndex) SetIdxMmap(mmap *mmap.Mmap) {
-	rIdx.idxMmap = mmap
+	rIdx.ivtMmap = mmap
 }
 
 //设置btree

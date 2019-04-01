@@ -89,7 +89,7 @@ func TestQureyTermInFile(t *testing.T) {
 	defer rIdx.btreeDb.Close()
 	//从磁盘加载mmap
 	var err error
-	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	rIdx.ivtMmap, err = mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestMergeIndex(t *testing.T) {
 	r, _ := json.Marshal(rIdx1.termMap)
 	rIdx1.Persist("/tmp/spider/Segment_1", tree1) //落地
 	t.Log(string(r))
-	rIdx1.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_1" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
+	rIdx1.ivtMmap, err = mmap.NewMmap("/tmp/spider/Segment_1" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestMergeIndex(t *testing.T) {
 	r, _ = json.Marshal(rIdx2.termMap)
 	rIdx2.Persist("/tmp/spider/Segment_2", tree2) //落地
 	t.Log(string(r))
-	rIdx2.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_2" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
+	rIdx2.ivtMmap, err = mmap.NewMmap("/tmp/spider/Segment_2" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestMergeIndex(t *testing.T) {
 	r, _ = json.Marshal(rIdx3.termMap)
 	rIdx3.Persist("/tmp/spider/Segment_3", tree3) //落地
 	t.Log(string(r))
-	rIdx3.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment_3" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
+	rIdx3.ivtMmap, err = mmap.NewMmap("/tmp/spider/Segment_3" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0) //加载
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestMergeIndex(t *testing.T) {
 	rIdx.MergeIndex(
 		[]*InvertedIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Segment", tree)
 
-	rIdx.idxMmap, err = mmap.NewMmap("/tmp/spider/Segment" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	rIdx.ivtMmap, err = mmap.NewMmap("/tmp/spider/Segment" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

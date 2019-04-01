@@ -71,8 +71,8 @@ func NewEmptyField(fieldname string, start uint32, fieldType uint8) *Field {
 }
 
 //加载重建字段索引
-func LoadField(fieldname string, start, max uint32, fieldtype uint8, fwdOffset uint64,
-	fwdDocCnt uint32, idxMmap , baseMmap, extMmap *mmap.Mmap, isMomery bool, btree btree.Btree) *Field {
+func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset uint64,
+	fwdDocCnt uint32, ivtMmap, baseMmap, extMmap *mmap.Mmap, isMomery bool, btree btree.Btree) *Field {
 
 	var ivtIdx *index.InvertedIndex
 	if fieldtype == index.IDX_TYPE_STRING ||
@@ -80,7 +80,7 @@ func LoadField(fieldname string, start, max uint32, fieldtype uint8, fwdOffset u
 		fieldtype == index.IDX_TYPE_STRING_LIST ||
 		fieldtype == index.IDX_TYPE_STRING_SINGLE ||
 		fieldtype == index.GATHER_TYPE {
-		ivtIdx = index.LoadInvertedIndex(btree, fieldtype, fieldname, idxMmap)
+		ivtIdx = index.LoadInvertedIndex(btree, fieldtype, fieldname, ivtMmap)
 	}
 
 	fwdIdx := index.LoadForwardIndex(fieldtype, baseMmap, extMmap,
@@ -89,7 +89,7 @@ func LoadField(fieldname string, start, max uint32, fieldtype uint8, fwdOffset u
 	return &Field{
 		fieldName:  fieldname,
 		startDocId: start,
-		nextDocId:  max,
+		nextDocId:  next,
 		fieldType:  fieldtype,
 		isMemory:   isMomery,
 		fwdDocCnt:  fwdDocCnt,
