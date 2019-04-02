@@ -110,3 +110,9 @@ func (db *BoltBTree) HasTree(treeName string) bool {
 func (db *BoltBTree) Close() error {
 	return db.wrapper.CloseDB()
 }
+
+//display
+func (db *BoltBTree) Display(treeName string) error {
+	return db.wrapper.DisplayBucket(treeName)
+}
+

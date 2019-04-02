@@ -206,6 +206,8 @@ func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbe
 }
 
 //字段归并
+//TODO 这些操作, 完全不闭合, 而且还依赖顺序, 后续要大改
+//TODO 目前只能合并出完整的磁盘版本, 但是filed并不能直接用
 func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Btree) (uint64, uint32, error) {
 	var err error
 	if fld.fwdIdx != nil {
@@ -233,6 +235,9 @@ func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Bt
 				log.Infof("invert is nil ")
 			}
 		}
+		//fmt.Println("A--------", len(ivts))
+		//fmt.Println("A--------", ivts[0])
+		//fmt.Println("A--------", ivts[1])
 		if err := fld.ivtIdx.MergeIndex(ivts, segmentName, btree); err != nil {
 			return 0, 0, err
 		}

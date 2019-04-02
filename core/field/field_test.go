@@ -127,6 +127,7 @@ func TestLoad(t *testing.T) {
 	t.Log("\n\n")
 }
 
+//为merge做准备, 建立两个独立的field
 func TestPrepareMerge(t *testing.T) {
 	//清空
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
@@ -154,9 +155,9 @@ func TestPrepareMerge(t *testing.T) {
 	if err := field2.Persist("/tmp/spider/Segment2", treedb2); err != nil {
 		t.Fatal("Wrong:", err)
 	}
-
 }
 
+//将两个filed合并
 func TestMerge(t *testing.T) {
 	//加载Field1
 	btdb1 := btree.NewBtree("xx", "/tmp/spider/spider1" + basic.IDX_FILENAME_SUFFIX_BTREE)
@@ -191,7 +192,7 @@ func TestMerge(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	field2 := LoadField(TEST_FIELD, 2, 4, index.IDX_TYPE_STRING_SEG, 0, 2, ivtMmap2, mmp12, mmp22, false, btdb1)
+	field2 := LoadField(TEST_FIELD, 2, 4, index.IDX_TYPE_STRING_SEG, 0, 2, ivtMmap2, mmp12, mmp22, false, btdb2)
 
 	//准备合并
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
@@ -203,5 +204,100 @@ func TestMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("Offset:", offset, "Cnt:", cnt)
+	field.btree.Display(TEST_FIELD)
 
+	t.Log("\n\n")
+
+	//TODO 这些操作, 完全不闭合, 而且还依赖顺序, 后续要大改
+	//TODO 目前只能合并出完整的磁盘版本, 但是filed并不能直接用
+	//TODO 这里必须要重新加载一次...
+	////测试query
+	//tmp, b := field.Query("天安门")
+	//if !b {
+	//	t.Fatal("Wrong")
+	//}
+	//t.Log(json.JsonEnocde(tmp))
+	//if len(tmp) != 2 {
+	//	t.Fatal("Wrong")
+	//}
+	//tmp, b = field.Query("火红")
+	//if !b {
+	//	t.Fatal("Wrong")
+	//}
+	//t.Log(json.JsonEnocde(tmp))
+	//if len(tmp) != 2 {
+	//	t.Fatal("Wrong")
+	//}
+	//
+	////测试get
+	//s, b := field.GetString(2)
+	//if !b {
+	//	t.Fatal("Wrong")
+	//}
+	//if s != "火红的太阳" {
+	//	t.Fatal("Wrong")
+	//}
+	//
+	//_, b = field.GetString(4)
+	//if b {
+	//	t.Fatal("Wrong")
+	//}
+}
+
+//将合并的filed加载回来测试
+//TODO 这些例子都太宽厚了, 刻意成分太重, 后面要返工
+func TestLoadMerge(t *testing.T) {
+	//从磁盘加载btree
+	btdb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
+	defer btdb.Close()
+	//从磁盘加载mmap
+	ivtMmap, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mmp1, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	mmp2, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+
+	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, ivtMmap, mmp1, mmp2, false, btdb)
+
+	field.btree.Display(TEST_FIELD)
+
+	//测试query
+	tmp, b := field.Query("天安门")
+	if !b {
+		t.Fatal("Wrong")
+	}
+	t.Log(json.JsonEnocde(tmp))
+	if len(tmp) != 2 {
+		t.Fatal("Wrong")
+	}
+	tmp, b = field.Query("火红")
+	if !b {
+		t.Fatal("Wrong")
+	}
+	t.Log(json.JsonEnocde(tmp))
+	if len(tmp) != 2 {
+		t.Fatal("Wrong")
+	}
+
+	//测试get
+	s, b := field.GetString(2)
+	if !b {
+		t.Fatal("Wrong")
+	}
+	if s != "火红的太阳" {
+		t.Fatal("Wrong")
+	}
+
+	_, b = field.GetString(4)
+	if b {
+		t.Fatal("Wrong")
+	}
+	t.Log("\n\n")
 }

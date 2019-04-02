@@ -15,6 +15,7 @@ type Btree interface {
 	GetNextKV(treeName, key string) (string, uint32, uint32, int, bool)
 	HasTree(treeName string) bool
 	Close() error
+	Display(treeName string) error
 }
 
 //工厂
