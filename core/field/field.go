@@ -16,15 +16,15 @@ import (
 
 //字段的结构定义
 type Field struct {
-	fieldName  string
+	FieldName  string
 	startDocId uint32               //TODO 是否存在不为0的情况
 	nextDocId  uint32
-	fieldType  uint8
+	FieldType  uint8
 	isMemory   bool
 	ivtIdx     *index.InvertedIndex //倒排索引
 	fwdIdx     *index.ForwardIndex  //正排索引
-	fwdOffset  uint64               //此正排索引的数据，在文件中的起始偏移（这个东西不能自增）
-	fwdDocCnt  uint32               //正排索引文档个数
+	FwdOffset  uint64               //此正排索引的数据，在文件中的起始偏移（这个东西不能自增）
+	FwdDocCnt  uint32               //正排索引文档个数
 	btree      btree.Btree
 }
 
@@ -32,15 +32,15 @@ type Field struct {
 func NewEmptyFakeField(fieldname string, start uint32, fieldtype uint8, docCnt uint32) *Field {
 	fwdIdx := index.NewEmptyFakeForwardIndex(fieldtype, start, docCnt)
 	return &Field{
-		fieldName:  fieldname,
+		FieldName:  fieldname,
 		startDocId: start,
 		nextDocId:  start,
-		fieldType:  fieldtype,
+		FieldType:  fieldtype,
 		isMemory:   true,
 		ivtIdx:     nil,
 		fwdIdx:     fwdIdx,
-		fwdOffset:  0,
-		fwdDocCnt:  0,
+		FwdOffset:  0,
+		FwdDocCnt:  0,
 		btree:      nil,
 	}
 }
@@ -57,15 +57,15 @@ func NewEmptyField(fieldname string, start uint32, fieldType uint8) *Field {
 	}
 	fwdIdx := index.NewEmptyForwardIndex(fieldType, start)
 	return &Field{
-		fieldName:  fieldname,
+		FieldName:  fieldname,
 		startDocId: start,
 		nextDocId:  start,
-		fieldType:  fieldType,
+		FieldType:  fieldType,
 		isMemory:   true,
 		ivtIdx:     ivtIdx,
 		fwdIdx:     fwdIdx,
-		fwdOffset:  0,
-		fwdDocCnt:  0,
+		FwdOffset:  0,
+		FwdDocCnt:  0,
 		btree:      nil,
 	}
 }
@@ -87,13 +87,13 @@ func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset 
 		fwdOffset, fwdDocCnt, false)
 
 	return &Field{
-		fieldName:  fieldname,
+		FieldName:  fieldname,
 		startDocId: start,
 		nextDocId:  next,
-		fieldType:  fieldtype,
+		FieldType:  fieldtype,
 		isMemory:   isMomery,
-		fwdDocCnt:  fwdDocCnt,
-		fwdOffset:  fwdOffset,
+		FwdDocCnt:  fwdDocCnt,
+		FwdOffset:  fwdOffset,
 		ivtIdx:     ivtIdx,
 		fwdIdx:     fwdIdx,
 		btree:      btree,
@@ -115,8 +115,8 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 	}
 
 	//数字型和时间型不能加倒排索引
-	if fld.fieldType != index.IDX_TYPE_NUMBER &&
-		fld.fieldType != index.IDX_TYPE_DATE &&
+	if fld.FieldType != index.IDX_TYPE_NUMBER &&
+		fld.FieldType != index.IDX_TYPE_DATE &&
 		fld.ivtIdx != nil {
 		if err := fld.ivtIdx.AddDocument(docId, content); err != nil {
 			log.Errf("Field --> AddDocument :: Add Invert Document Error %v", err)
@@ -136,7 +136,7 @@ func (fld *Field) UpdateDocument(docid uint32, contentstr string) error {
 		log.Errf("Field --> UpdateDocument :: Wrong docid %v", docid)
 		return errors.New("[ERROR] Wrong docid")
 	}
-	if fld.fieldType == index.IDX_TYPE_NUMBER || fld.fieldType == index.IDX_TYPE_DATE{
+	if fld.FieldType == index.IDX_TYPE_NUMBER || fld.FieldType == index.IDX_TYPE_DATE{
 		if err := fld.fwdIdx.UpdateDocument(docid, contentstr); err != nil {
 			log.Errf("Field --> UpdateDocument :: Update Document Error %v", err)
 			return err
@@ -151,7 +151,7 @@ func (fld *Field) Persist(segmentName string, btree btree.Btree) error {
 
 	var err error
 	if fld.fwdIdx != nil {
-		fld.fwdOffset, fld.fwdDocCnt, err = fld.fwdIdx.Persist(segmentName)
+		fld.FwdOffset, fld.FwdDocCnt, err = fld.fwdIdx.Persist(segmentName)
 		if err != nil {
 			log.Errf("Field --> Persist :: Serialization Error %v", err)
 			return err
@@ -167,7 +167,7 @@ func (fld *Field) Persist(segmentName string, btree btree.Btree) error {
 		}
 	}
 
-	log.Infof("Field[%v] --> Serialization OK...", fld.fieldName)
+	log.Infof("Field[%v] --> Serialization OK...", fld.FieldName)
 	return nil
 }
 
@@ -216,12 +216,12 @@ func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Bt
 		for _, fd := range fields {
 			fwds = append(fwds, fd.fwdIdx)
 		}
-		fld.fwdOffset, fld.fwdDocCnt, err = fld.fwdIdx.MergeIndex(fwds, segmentName)
+		fld.FwdOffset, fld.FwdDocCnt, err = fld.fwdIdx.MergeIndex(fwds, segmentName)
 		if err != nil {
 			log.Errf("Field --> mergeField :: Serialization Error %v", err)
 			return 0, 0, err
 		}
-		fld.nextDocId += uint32(fld.fwdDocCnt)
+		fld.nextDocId += uint32(fld.FwdDocCnt)
 	}
 
 	if fld.ivtIdx != nil {
@@ -244,11 +244,11 @@ func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Bt
 
 	}
 
-	return fld.fwdOffset, fld.fwdDocCnt, nil
+	return fld.FwdOffset, fld.FwdDocCnt, nil
 }
 
 //销毁字段
-func (fld *Field) destroy() error {
+func (fld *Field) Destroy() error {
 	if fld.fwdIdx != nil {
 		fld.fwdIdx.Destroy()
 	}

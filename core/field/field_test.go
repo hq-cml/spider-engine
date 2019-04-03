@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"os"
 	"github.com/hq-cml/spider-engine/core/index"
-	"github.com/hq-cml/spider-engine/utils/json"
+	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/mmap"
@@ -35,7 +35,7 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(json.JsonEnocde(tmp))
+	t.Log(helper.JsonEnocde(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -43,7 +43,7 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(json.JsonEnocde(tmp))
+	t.Log(helper.JsonEnocde(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -63,14 +63,14 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	}
 
 	//准备落地
-	t.Logf("FiledOffset: %v, DocCnt: %v", field.fwdOffset, field.fwdDocCnt)
+	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.FwdDocCnt)
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
 	if err := field.Persist("/tmp/spider/Segment0", treedb); err != nil {
 		t.Fatal("Wrong:", err)
 	}
 
-	t.Logf("FiledOffset: %v, DocCnt: %v", field.fwdOffset, field.fwdDocCnt)
+	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.FwdDocCnt)
 	t.Log("\n\n")
 }
 
@@ -98,7 +98,7 @@ func TestLoad(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(json.JsonEnocde(tmp))
+	t.Log(helper.JsonEnocde(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -106,7 +106,7 @@ func TestLoad(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(json.JsonEnocde(tmp))
+	t.Log(helper.JsonEnocde(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -273,7 +273,7 @@ func TestLoadMerge(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(json.JsonEnocde(tmp))
+	t.Log(helper.JsonEnocde(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -281,7 +281,7 @@ func TestLoadMerge(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(json.JsonEnocde(tmp))
+	t.Log(helper.JsonEnocde(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
