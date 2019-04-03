@@ -3,11 +3,13 @@ package helper
 import (
 	"os"
 	"io/ioutil"
+	"encoding/json"
+	"fmt"
 )
 
 //读取file文件
-func ReadFile(file_name string) ([]byte, error) {
-	fin, err := os.Open(file_name)
+func ReadFile(filePath string) ([]byte, error) {
+	fin, err := os.Open(filePath)
 	defer fin.Close()
 	if err != nil {
 		return nil, err
@@ -30,3 +32,17 @@ func Exist(path string) bool {
 	return true
 }
 
+func WriteToFile(data []byte, filePath string) error {
+	fout, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer fout.Close()
+
+	_, err = fout.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}

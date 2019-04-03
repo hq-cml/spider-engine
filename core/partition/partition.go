@@ -9,12 +9,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"github.com/hq-cml/FalconEngine/src/utils"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/prometheus/common/log"
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/basic"
+	"github.com/hq-cml/spider-engine/utils/bitmap"
 )
 
 // Segment description:段结构
@@ -209,5 +212,276 @@ func (part *Partition) AddDocument(docid uint32, content map[string]string) erro
 	}
 	part.NextDocId++
 	return nil
+}
+
+//落地持久化
+func (part *Partition) Persist() error {
+
+	btdbPath := part.SegmentName + basic.IDX_FILENAME_SUFFIX_BTREE
+	if part.btreeDb == nil {
+		part.btreeDb = btree.NewBtree("", btdbPath)
+	}
+	log.Debugf("[INFO] Serialization Segment File : [%v] Start", part.SegmentName)
+	for name, fld := range part.Fields {
+		//TODO 用同一颗B树???
+		if err := part.Fields[name].Persist(part.SegmentName, part.btreeDb); err != nil {
+			log.Errorf("Partition --> Serialization %v", err)
+			return err
+		}
+		log.Debugf("%v %v %v", name, fld.FwdOffset, fld.FwdDocCnt)
+	}
+
+	//存储源信息
+	if err := part.StoreMeta(); err != nil {
+		return err
+	}
+
+	part.isMemory = false
+
+	var err error
+	part.ivtMmap, err = mmap.NewMmap(part.SegmentName + basic.IDX_FILENAME_SUFFIX_INVERT, false, 0) //创建默认大小的mmap
+	if err != nil {
+		log.Errorf("mmap error : %v \n", err)
+	}
+	//part.ivtMmap.SetFileEnd(0)
+
+	part.baseMmap, err = mmap.NewMmap(part.SegmentName + basic.IDX_FILENAME_SUFFIX_FWD, false, 0)
+	if err != nil {
+		log.Errorf("mmap error : %v \n", err)
+	}
+	//part.baseMmap.SetFileEnd(0)
+
+	part.extMmap, err = mmap.NewMmap(part.SegmentName + basic.IDX_FILENAME_SUFFIX_FWDEXT, false, 0)
+	if err != nil {
+		log.Errorf("mmap error : %v \n", err)
+	}
+	//part.extMmap.SetFileEnd(0)
+
+	//TODO 各个Filed公用同一套mmap ??
+	for name := range part.Fields {
+		part.Fields[name].SetMmap(part.baseMmap, part.extMmap, part.ivtMmap)
+	}
+	log.Infof("[INFO] Serialization Segment File : [%v] Finish", part.SegmentName)
+	return nil
+}
+
+func (part *Partition) StoreMeta() error {
+	metaFileName := part.SegmentName + basic.IDX_FILENAME_SUFFIX_META
+	data := helper.JsonEnocde(part)
+	if data != "" {
+		if err := helper.WriteToFile(data, metaFileName); err != nil {
+			return err
+		}
+	} else {
+		return errors.New("Json error")
+	}
+
+	return nil
+}
+
+//关闭Partition
+func (part *Partition) Close() error {
+	for _, field := range part.Fields {
+		field.Destroy()
+	}
+
+	if part.ivtMmap != nil {
+		part.ivtMmap.Unmap()
+	}
+
+	if part.baseMmap != nil {
+		part.baseMmap.Unmap()
+	}
+
+	if part.extMmap != nil {
+		part.extMmap.Unmap()
+	}
+
+	if part.btreeDb != nil {
+		part.btreeDb.Close()
+	}
+
+	return nil
+}
+
+//销毁分区
+func (part *Partition) Destroy() error {
+
+	for _, field := range part.Fields {
+		field.Destroy()
+	}
+
+	if part.ivtMmap != nil {
+		part.ivtMmap.Unmap()
+	}
+
+	if part.baseMmap != nil {
+		part.baseMmap.Unmap()
+	}
+
+	if part.extMmap != nil {
+		part.extMmap.Unmap()
+	}
+
+	if part.btreeDb != nil {
+		part.btreeDb.Close()
+	}
+	//TODO ??
+	//posFilename := fmt.Sprintf("%v.pos", part.SegmentName)
+	//os.Remove(posFilename)
+
+	os.Remove(part.SegmentName + basic.IDX_FILENAME_SUFFIX_META)
+	os.Remove(part.SegmentName + basic.IDX_FILENAME_SUFFIX_INVERT)
+	os.Remove(part.SegmentName + basic.IDX_FILENAME_SUFFIX_FWD)
+	os.Remove(part.SegmentName + basic.IDX_FILENAME_SUFFIX_FWDEXT)
+	os.Remove(part.SegmentName + basic.IDX_FILENAME_SUFFIX_BTREE)
+	return nil
+
+}
+
+func (part *Partition) findFieldDocs(key, field string) ([]basic.DocNode, bool) {
+	if _, hasField := part.Fields[field]; !hasField {
+		log.Infof("[INFO] Field %v not found", field)
+		return nil, false
+	}
+	docids, match := part.Fields[field].Query(key)
+	if !match {
+		return nil, false
+	}
+	return docids, true
+
+}
+
+//查询
+func (part *Partition) Query(fieldname string, key interface{}) ([]basic.DocNode, bool) {
+	if _, hasField := part.Fields[fieldname]; !hasField {
+		log.Warnf("[WARN] Field[%v] not found", fieldname)
+		return nil, false
+	}
+
+	return part.Fields[fieldname].Query(key)
+}
+
+//获取详情，单个字段
+func (part *Partition) GetFieldValue(docid uint32, fieldname string) (string, bool) {
+
+	if docid < part.StartDocId || docid >= part.NextDocId {
+		return "", false
+	}
+
+	if _, ok := part.Fields[fieldname]; !ok {
+		return "", false
+	}
+	return part.Fields[fieldname].GetString(docid)
+
+}
+
+//获取整篇文档详情，全部字段
+func (this *Partition) GetDocument(docid uint32) (map[string]string, bool) {
+
+	if docid < this.StartDocId || docid >= this.NextDocId {
+		return nil, false
+	}
+
+	res := make(map[string]string)
+
+	for name, field := range this.Fields {
+		res[name], _ = field.GetString(docid)
+	}
+
+	return res, true
+
+}
+
+//获取详情，部分字段
+func (part *Partition) GetValueWithFields(docid uint32, fields []string) (map[string]string, bool) {
+
+	if fields == nil {
+		return part.GetDocument(docid)
+	}
+
+	if docid < part.StartDocId || docid >= part.NextDocId {
+		return nil, false
+	}
+	flag := false
+
+	res := make(map[string]string)
+	for _, field := range fields {
+		if _, ok := part.Fields[field]; ok {
+			res[field], _ = part.GetFieldValue(docid, field)
+			flag = true
+		} else {
+			res[field] = ""
+		}
+
+	}
+
+	return res, flag
+}
+
+//搜索
+//搜索的结果将append到indocids中, 不断append
+func (part *Partition) SearchDocIds(query basic.SearchQuery,
+	filteds []basic.SearchFilted,
+	bitmap *bitmap.Bitmap,
+	indocids []basic.DocNode) ([]basic.DocNode, bool) {
+
+	start := len(indocids)
+	//query查询
+	if query.Value == "" {
+		docids := make([]utils.DocIdNode, 0)
+		for i := part.StartDocId; i < part.NextDocId; i++ {
+			if bitmap.GetBit(uint64(i)) == 0 {
+				docids = append(docids, utils.DocIdNode{Docid: i})
+			}
+		}
+		indocids = append(indocids, docids...)
+	} else {
+		docids, match := part.Fields[query.FieldName].Query(query.Value)
+		if !match {
+			return indocids, false
+		}
+
+		indocids = append(indocids, docids...)
+	}
+
+	//bitmap去掉数据
+	index := start
+	if (filteds == nil || len(filteds) == 0) && bitmap != nil {
+		for _, docid := range indocids[start:] {
+			//去掉bitmap删除的
+			if bitmap.GetBit(uint64(docid.Docid)) == 0 {
+				indocids[index] = docid
+				index++
+			}
+		}
+		return indocids[:index], true
+	}
+
+	//过滤操作
+	index = start
+	for _, docidinfo := range indocids[start:] {
+		match := true
+		for _, filter := range filteds {
+			if _, hasField := part.Fields[filter.FieldName]; hasField {
+				if (bitmap != nil && bitmap.GetBit(uint64(docidinfo.Docid)) == 1) ||
+					(!part.Fields[filter.FieldName].Filter(docidinfo.Docid, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr)) {
+					match = false
+					break
+				}
+				log.Debugf("Partition[%v] QUERY  %v", part.SegmentName, docidinfo)
+			} else {
+				log.Debugf("Partition[%v] FILTER FIELD[%v] NOT FOUND", part.SegmentName, filter.FieldName)
+				return indocids[:start], true
+			}
+		}
+		if match {
+			indocids[index] = docidinfo
+			index++
+		}
+
+	}
+
+	return indocids[:index], true
 }
 
