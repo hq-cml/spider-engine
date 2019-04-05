@@ -35,7 +35,7 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(helper.JsonEnocde(tmp))
+	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -43,7 +43,7 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(helper.JsonEnocde(tmp))
+	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -98,7 +98,7 @@ func TestLoad(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(helper.JsonEnocde(tmp))
+	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -106,7 +106,7 @@ func TestLoad(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(helper.JsonEnocde(tmp))
+	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -216,7 +216,7 @@ func TestMerge(t *testing.T) {
 	//if !b {
 	//	t.Fatal("Wrong")
 	//}
-	//t.Log(json.JsonEnocde(tmp))
+	//t.Log(json.JsonEncode(tmp))
 	//if len(tmp) != 2 {
 	//	t.Fatal("Wrong")
 	//}
@@ -224,7 +224,7 @@ func TestMerge(t *testing.T) {
 	//if !b {
 	//	t.Fatal("Wrong")
 	//}
-	//t.Log(json.JsonEnocde(tmp))
+	//t.Log(json.JsonEncode(tmp))
 	//if len(tmp) != 2 {
 	//	t.Fatal("Wrong")
 	//}
@@ -273,7 +273,7 @@ func TestLoadMerge(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(helper.JsonEnocde(tmp))
+	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}
@@ -281,7 +281,7 @@ func TestLoadMerge(t *testing.T) {
 	if !b {
 		t.Fatal("Wrong")
 	}
-	t.Log(helper.JsonEnocde(tmp))
+	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
 		t.Fatal("Wrong")
 	}

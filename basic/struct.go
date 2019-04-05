@@ -55,7 +55,7 @@ type SearchFilted struct {
 	Start     int64    `json:"_start"`
 	End       int64    `json:"_end"`
 	Range     []int64  `json:"_range"`
-	Type      uint64   `json:"_type"`
+	Type      uint8    `json:"_type"`
 	MatchStr  string   `json:"_matchstr"`
 	RangeStr  []string `json:"_rangestr"`
 }
