@@ -11,31 +11,32 @@ package table
  */
 
 import (
+	"github.com/hq-cml/falconEngine/src/utils"
+	"github.com/hq-cml/falconEngine/src/tree"
 	"sync"
+	"fmt"
+	"encoding/json"
+	"time"
+	"errors"
 	"github.com/hq-cml/spider-engine/core/partition"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
 	"github.com/hq-cml/spider-engine/utils/log"
 	"github.com/hq-cml/spider-engine/basic"
+	"github.com/hq-cml/spider-engine/utils/helper"
+	"github.com/hq-cml/spider-engine/core/index"
+	"github.com/hq-cml/spider-engine/core/field"
 )
 
-// SimpleFieldInfo description: 字段的描述信息
-type SimpleFieldInfo struct {
-	FieldName string `json:"fieldname"`
-	FieldType uint64 `json:"fieldtype"`
-	PflOffset int64  `json:"pfloffset"` //正排索引的偏移量
-	PflLen    int    `json:"pfllen"`    //正排索引长度
-}
-
 type Table struct {
-	Name           string                     `json:"name"`
-	Path           string                     `json:"pathname"`
-	Fields         map[string]SimpleFieldInfo `json:"fields"`
-	PrimaryKey     string                     `json:"primarykey"`
-	StartDocId     uint32                     `json:"startdocid"`
-	NextDocId      uint32                     `json:"nextdocid"`
-	PrefixSegment  uint64                     `json:"prefixsegment"`
-	PartitionNames []string                   `json:"partitionnames"`
+	Name           string                     		`json:"name"`
+	Path           string                     		`json:"pathname"`
+	Fields         map[string]field.FieldSummary 	`json:"fields"`
+	PrimaryKey     string                    	    `json:"primarykey"`
+	StartDocId     uint32                    		`json:"startdocid"`
+	NextDocId      uint32                     		`json:"nextdocid"`
+	PrefixSegment  uint64                     		`json:"prefixsegment"`
+	PartitionNames []string                  		`json:"partitionnames"`
 
 	partitions   []*partition.Partition
 	memPartition *partition.Partition
@@ -48,37 +49,36 @@ type Table struct {
 }
 
 //关闭
-func (table *Table) Close() error {
+func (tbl *Table) Close() error {
 
-	table.mutex.Lock()
-	defer table.mutex.Unlock()
-	log.Infof("Close Table [%v]", table.Name)
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+	log.Infof("Close Table [%v]", tbl.Name)
 
-	if table.memPartition != nil {
-		table.memPartition.Close()
+	if tbl.memPartition != nil {
+		tbl.memPartition.Close()
 	}
 
-	for _, seg := range table.partitions {
+	for _, seg := range tbl.partitions {
 		seg.Close()
 	}
 
-	if table.btreeDb != nil {
-		table.btreeDb.Close()
+	if tbl.btreeDb != nil {
+		tbl.btreeDb.Close()
 	}
 
-	if table.bitmap != nil {
-		table.bitmap.Close()
+	if tbl.bitmap != nil {
+		tbl.bitmap.Close()
 	}
 
-	log.Infof("Close Table [%v] Finish", table.Name)
+	log.Infof("Close Table [%v] Finish", tbl.Name)
 	return nil
-
 }
 
 //新建空表
 func NewEmptyTable(name, path string) *Table {
 	var mu sync.Mutex
-	table := &Table{
+	table := Table{
 		Name:           name,
 		StartDocId:     0,
 		NextDocId:      0,
@@ -90,7 +90,7 @@ func NewEmptyTable(name, path string) *Table {
 		btreeDb:        nil,
 		bitmap:         nil,
 		Path:           path,
-		Fields:         make(map[string]SimpleFieldInfo),
+		Fields:         make(map[string]field.FieldSummary),
 		mutex: 			mu,
 		pkmap: make(map[string]string),
 	}
@@ -98,5 +98,53 @@ func NewEmptyTable(name, path string) *Table {
 	btmpName := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
 	table.bitmap = bitmap.NewBitmap(btmpName, false)
 
-	return table
+	return &table
+}
+
+//从文件加载表
+func LoadTable(name, path string) (*Table, error) {
+	var mu sync.Mutex
+	tbl := Table{
+		mutex: 			mu,
+	}
+
+	metaFileName := path + name + basic.IDX_FILENAME_SUFFIX_META
+	buffer, err := helper.ReadFile(metaFileName)
+	if err != nil {
+		return nil, err
+	}
+	//TODO ?? 是否会覆盖掉mutex
+	err = json.Unmarshal(buffer, &tbl)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, segmentname := range tbl.PartitionNames {
+		segment := partition.LoadPartition(segmentname)
+		tbl.partitions = append(tbl.partitions, segment)
+	}
+
+	//新建空的分区
+	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
+	var fields []field.FieldSummary
+	for _, f := range tbl.Fields {
+		if f.FieldType != index.IDX_TYPE_PK {
+			fields = append(fields, f)
+		}
+	}
+
+	tbl.memPartition = partition.NewEmptyPartitionWithFieldsInfo(segmentname, tbl.NextDocId, fields)
+	tbl.PrefixSegment++
+
+	//读取bitmap
+	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
+	tbl.bitmap = bitmap.NewBitmap(btmpPath, true)
+
+	if tbl.PrimaryKey != "" {
+		primaryname := fmt.Sprintf("%v%v_primary.pk", tbl.Path, tbl.Name)
+		tbl.btreeDb = btree.NewBtree("", primaryname)
+	}
+
+	log.Infof("Load Table %v success", tbl.Name)
+	return &tbl, nil
 }

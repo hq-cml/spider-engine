@@ -28,6 +28,14 @@ type Field struct {
 	btree      btree.Btree
 }
 
+// 字段的描述信息
+type FieldSummary struct {
+	FieldName string 	`json:"fieldname"`
+	FieldType uint8 	`json:"fieldtype"`
+	FwdOffset uint64  	`json:"fwdOffset"` //正排索引的偏移量
+	FwdDocCnt uint32    `json:"fwdDocCnt"` //正排索引长度
+}
+
 //TODO ??
 func NewEmptyFakeField(fieldname string, start uint32, fieldtype uint8, docCnt uint32) *Field {
 	fwdIdx := index.NewEmptyFakeForwardIndex(fieldtype, start, docCnt)
