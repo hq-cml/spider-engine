@@ -11,8 +11,6 @@ package table
  */
 
 import (
-	"github.com/hq-cml/falconEngine/src/utils"
-	"github.com/hq-cml/falconEngine/src/tree"
 	"sync"
 	"fmt"
 	"encoding/json"
@@ -29,14 +27,14 @@ import (
 )
 
 type Table struct {
-	Name           string                     		`json:"name"`
-	Path           string                     		`json:"pathname"`
-	Fields         map[string]field.FieldSummary 	`json:"fields"`
-	PrimaryKey     string                    	    `json:"primarykey"`
-	StartDocId     uint32                    		`json:"startdocid"`
-	NextDocId      uint32                     		`json:"nextdocid"`
-	PrefixSegment  uint64                     		`json:"prefixsegment"`
-	PartitionNames []string                  		`json:"partitionnames"`
+	Name           string                        `json:"name"`
+	Path           string                        `json:"pathname"`
+	FieldSummaries map[string]field.FieldSummary `json:"fields"`
+	PrimaryKey     string                        `json:"primarykey"`
+	StartDocId     uint32                        `json:"startdocid"`
+	NextDocId      uint32                        `json:"nextdocid"`
+	PrefixSegment  uint64                        `json:"prefixsegment"`
+	PartitionNames []string                      `json:"partitionnames"`
 
 	partitions   []*partition.Partition
 	memPartition *partition.Partition
@@ -75,6 +73,20 @@ func (tbl *Table) Close() error {
 	return nil
 }
 
+//产生内存Partition
+func (tbl *Table) generateMemPartition() {
+	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
+	var summaries []field.FieldSummary
+	for _, f := range tbl.FieldSummaries {
+		if f.FieldType != index.IDX_TYPE_PK { //TODO why??
+			summaries = append(summaries, f)
+		}
+	}
+
+	tbl.memPartition = partition.NewEmptyPartitionWithFieldsInfo(segmentname, tbl.NextDocId, summaries)
+	tbl.PrefixSegment++
+}
+
 //新建空表
 func NewEmptyTable(name, path string) *Table {
 	var mu sync.Mutex
@@ -90,9 +102,9 @@ func NewEmptyTable(name, path string) *Table {
 		btreeDb:        nil,
 		bitmap:         nil,
 		Path:           path,
-		Fields:         make(map[string]field.FieldSummary),
-		mutex: 			mu,
-		pkmap: make(map[string]string),
+		FieldSummaries: make(map[string]field.FieldSummary),
+		mutex:          mu,
+		pkmap:          make(map[string]string),
 	}
 
 	btmpName := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
@@ -125,26 +137,126 @@ func LoadTable(name, path string) (*Table, error) {
 	}
 
 	//新建空的分区
-	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
-	var fields []field.FieldSummary
-	for _, f := range tbl.Fields {
-		if f.FieldType != index.IDX_TYPE_PK {
-			fields = append(fields, f)
-		}
-	}
-
-	tbl.memPartition = partition.NewEmptyPartitionWithFieldsInfo(segmentname, tbl.NextDocId, fields)
-	tbl.PrefixSegment++
+	tbl.generateMemPartition()
 
 	//读取bitmap
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
 	tbl.bitmap = bitmap.NewBitmap(btmpPath, true)
 
 	if tbl.PrimaryKey != "" {
-		primaryname := fmt.Sprintf("%v%v_primary.pk", tbl.Path, tbl.Name)
+		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.btreeDb = btree.NewBtree("", primaryname)
 	}
 
 	log.Infof("Load Table %v success", tbl.Name)
 	return &tbl, nil
+}
+
+//TODO 为什么这里添加列， 只有内存分区那一块有效，其他的分支只是增加一个分区？？
+func (tbl *Table) AddField(summary field.FieldSummary) error {
+
+	if _, ok := tbl.FieldSummaries[summary.FieldName]; ok {
+		log.Warnf("Field %v have Exist ", summary.FieldName)
+		return nil
+	}
+
+	tbl.FieldSummaries[summary.FieldName] = summary
+	if summary.FieldType == index.IDX_TYPE_PK {
+		tbl.PrimaryKey = summary.FieldName
+		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_BTREE)
+		tbl.btreeDb = btree.NewBtree("", primaryname)
+		tbl.btreeDb.AddTree(summary.FieldName)
+	} else {
+		tbl.mutex.Lock()
+		defer tbl.mutex.Unlock()
+
+		if tbl.memPartition == nil {
+
+			tbl.generateMemPartition()
+
+		} else if tbl.memPartition.IsEmpty() {
+			err := tbl.memPartition.AddField(summary)
+			if err != nil {
+				log.Errf("Add Field Error  %v", err)
+				return err
+			}
+		} else {
+			tmpsegment := tbl.memPartition
+			if err := tmpsegment.Persist(); err != nil {
+				return err
+			}
+			tbl.partitions = append(tbl.partitions, tmpsegment)
+			tbl.PartitionNames = make([]string, 0)
+			for _, prt := range tbl.partitions {
+				tbl.PartitionNames = append(tbl.PartitionNames, prt.SegmentName)
+			}
+
+			tbl.generateMemPartition()
+		}
+	}
+	return tbl.StoreMeta()
+}
+
+func (tbl *Table) DeleteField(fieldname string) error {
+
+	if _, ok := tbl.FieldSummaries[fieldname]; !ok {
+		log.Warnf("Field %v not found ", fieldname)
+		return nil
+	}
+
+	if fieldname == tbl.PrimaryKey {
+		log.Warnf("Field %v is btreeDb key can not delete ", fieldname)
+		return nil
+	}
+
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+
+	delete(tbl.FieldSummaries, fieldname)
+
+	if tbl.memPartition == nil {
+		//tbl.memPartition.DeleteField(fieldname) //panic
+		return tbl.StoreMeta()
+	}
+
+	if tbl.memPartition.IsEmpty() {
+		tbl.memPartition.DeleteField(fieldname)
+		return tbl.StoreMeta()
+	}
+
+	//TODO 这里为何不 tbl.memPartition.DeleteField(fieldname)
+	tmpsegment := tbl.memPartition
+	if err := tmpsegment.Persist(); err != nil {
+		return err
+	}
+	tbl.partitions = append(tbl.partitions, tmpsegment)
+	tbl.PartitionNames = make([]string, 0)
+	for _, seg := range tbl.partitions {
+		tbl.PartitionNames = append(tbl.PartitionNames, seg.SegmentName)
+	}
+
+	tbl.generateMemPartition()
+
+	return tbl.StoreMeta()
+}
+
+func (tbl *Table) StoreMeta() error {
+	metaFileName := fmt.Sprintf("%v%v%s", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_META)
+	data := helper.JsonEncode(tbl)
+	if data != "" {
+		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
+			return err
+		}
+	} else {
+		return errors.New("Json error")
+	}
+
+	startTime := time.Now()
+	log.Debugf("Start muti set %v", startTime)
+	tbl.btreeDb.MutiSet(tbl.PrimaryKey, tbl.pkmap)
+	endTime := time.Now()
+	log.Debugf("Cost  muti set  %v", endTime.Sub(startTime))
+	tbl.pkmap = make(map[string]string)
+
+	return nil
 }
