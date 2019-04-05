@@ -31,7 +31,8 @@ const (
 	IDX_FILENAME_SUFFIX_FWD    = ".fwd"
 	IDX_FILENAME_SUFFIX_FWDEXT = ".ext"
 	IDX_FILENAME_SUFFIX_INVERT = ".ivt"
-	IDX_FILENAME_SUFFIX_META = ".meta"
+	IDX_FILENAME_SUFFIX_META   = ".meta"
+	IDX_FILENAME_SUFFIX_BITMAP = ".btmp"
 )
 
 /*************************************************************************

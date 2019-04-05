@@ -173,7 +173,7 @@ func (part *Partition) DeleteField(fieldname string) error {
 func (part *Partition) UpdateDocument(docid uint32, content map[string]string) error {
 	//TODO >=???
 	if docid >= part.NextDocId || docid < part.StartDocId {
-		log.Errf("Partition --> UpdateDocument :: Wrong DocId[%v]  MaxDocId[%v]", docid, part.NextDocId)
+		log.Errf("Partition --> UpdateDocument :: Wrong DocId[%v]  NextDocId[%v]", docid, part.NextDocId)
 		return errors.New("Partition --> UpdateDocument :: Wrong DocId Number")
 	}
 
@@ -197,7 +197,7 @@ func (part *Partition) UpdateDocument(docid uint32, content map[string]string) e
 func (part *Partition) AddDocument(docid uint32, content map[string]string) error {
 
 	if docid != part.NextDocId {
-		log.Errf("Partition --> AddDocument :: Wrong DocId[%v]  MaxDocId[%v]", docid, part.NextDocId)
+		log.Errf("Partition --> AddDocument :: Wrong DocId[%v]  NextDocId[%v]", docid, part.NextDocId)
 		return errors.New("Partition --> AddDocument :: Wrong DocId Number")
 	}
 

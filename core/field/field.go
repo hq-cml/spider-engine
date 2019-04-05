@@ -16,15 +16,15 @@ import (
 
 //字段的结构定义
 type Field struct {
-	FieldName  string
-	startDocId uint32               //TODO 是否存在不为0的情况
+	FieldName  string				`json:"fieldname"`
+	startDocId uint32                					//TODO 是否存在不为0的情况
 	nextDocId  uint32
-	FieldType  uint8
-	isMemory   bool
-	ivtIdx     *index.InvertedIndex //倒排索引
-	fwdIdx     *index.ForwardIndex  //正排索引
-	FwdOffset  uint64               //此正排索引的数据，在文件中的起始偏移（这个东西不能自增）
-	FwdDocCnt  uint32               //正排索引文档个数
+	FieldType  uint8				`json:"fieldtype"`
+	isMemory   bool					`json:"-"`
+	ivtIdx     *index.InvertedIndex 					//倒排索引
+	fwdIdx     *index.ForwardIndex  					//正排索引
+	FwdOffset  uint64               `json:"fwdOffset"`	//此正排索引的数据，在文件中的起始偏移（这个东西不能自增）
+	FwdDocCnt  uint32               `json:"fwdDocCnt"`	//正排索引文档个数
 	btree      btree.Btree
 }
 
