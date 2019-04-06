@@ -8,9 +8,13 @@ package table
  *
  * 一张表，拥有一套完整的索引系统
  * 其每个字段都会默认建立正排索引，并根据需要可选的建立倒排索引
+ *
+ * 一张表，必须拥有自己的主键，主键是锁定文档的唯一Key，而不是docId
+ * 一个文档如果编辑，那么底层docId可能发生变化，但是Key是不变的
  */
 
 import (
+	"github.com/hq-cml/falconEngine/src/utils"
 	"sync"
 	"fmt"
 	"encoding/json"
@@ -36,13 +40,14 @@ type Table struct {
 	PrefixSegment  uint64                        `json:"prefixsegment"`
 	PartitionNames []string                      `json:"partitionnames"`
 
-	partitions   []*partition.Partition
-	memPartition *partition.Partition
-	btreeDb      btree.Btree
-	bitmap       *bitmap.Bitmap
+	partitions    []*partition.Partition
 
-	pkmap map[string]string
+	primaryBtdb    btree.Btree          //文件部分倒排索引（用于主键）
+	primaryMap    map[string]string     //内存部分倒排索引（用于主键），主键不会重复，所以直接map[string]string
 
+	memPartition  *partition.Partition
+
+	bitmap        *bitmap.Bitmap
 	mutex sync.Mutex //锁，当分区持久化到或者合并时使用或者新建分区时使用
 }
 
@@ -61,8 +66,8 @@ func (tbl *Table) Close() error {
 		seg.Close()
 	}
 
-	if tbl.btreeDb != nil {
-		tbl.btreeDb.Close()
+	if tbl.primaryBtdb != nil {
+		tbl.primaryBtdb.Close()
 	}
 
 	if tbl.bitmap != nil {
@@ -99,12 +104,12 @@ func NewEmptyTable(name, path string) *Table {
 		PrimaryKey:     "",
 		partitions:     make([]*partition.Partition, 0),
 		memPartition:   nil,
-		btreeDb:        nil,
+		primaryBtdb:    nil,
 		bitmap:         nil,
 		Path:           path,
 		FieldSummaries: make(map[string]field.FieldSummary),
 		mutex:          mu,
-		pkmap:          make(map[string]string),
+		primaryMap:     make(map[string]string),
 	}
 
 	btmpName := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
@@ -145,7 +150,7 @@ func LoadTable(name, path string) (*Table, error) {
 
 	if tbl.PrimaryKey != "" {
 		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_BTREE)
-		tbl.btreeDb = btree.NewBtree("", primaryname)
+		tbl.primaryBtdb = btree.NewBtree("", primaryname)
 	}
 
 	log.Infof("Load Table %v success", tbl.Name)
@@ -164,8 +169,8 @@ func (tbl *Table) AddField(summary field.FieldSummary) error {
 	if summary.FieldType == index.IDX_TYPE_PK {
 		tbl.PrimaryKey = summary.FieldName
 		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_BTREE)
-		tbl.btreeDb = btree.NewBtree("", primaryname)
-		tbl.btreeDb.AddTree(summary.FieldName)
+		tbl.primaryBtdb = btree.NewBtree("", primaryname)
+		tbl.primaryBtdb.AddTree(summary.FieldName)
 	} else {
 		tbl.mutex.Lock()
 		defer tbl.mutex.Unlock()
@@ -205,7 +210,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	}
 
 	if fieldname == tbl.PrimaryKey {
-		log.Warnf("Field %v is btreeDb key can not delete ", fieldname)
+		log.Warnf("Field %v is primaryBtdb key can not delete ", fieldname)
 		return nil
 	}
 
@@ -253,10 +258,122 @@ func (tbl *Table) StoreMeta() error {
 
 	startTime := time.Now()
 	log.Debugf("Start muti set %v", startTime)
-	tbl.btreeDb.MutiSet(tbl.PrimaryKey, tbl.pkmap)
+	tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
 	endTime := time.Now()
 	log.Debugf("Cost  muti set  %v", endTime.Sub(startTime))
-	tbl.pkmap = make(map[string]string)
+	tbl.primaryMap = make(map[string]string)
 
 	return nil
+}
+
+func (tbl *Table) AddOrUpdateDoc(content map[string]string, updateType uint8) (uint32, error) {
+
+	if len(tbl.FieldSummaries) == 0 {
+		log.Errf("No Field or Partiton is nil")
+		return 0, errors.New("no field or segment is nil")
+	}
+
+	//如果memPart为空，则新建
+	if tbl.memPartition == nil {
+		tbl.mutex.Lock()
+		tbl.generateMemPartition()
+		if err := tbl.StoreMeta(); err != nil {
+			tbl.mutex.Unlock()
+			return 0, err
+		}
+		tbl.mutex.Unlock()
+	}
+
+	newDocId := tbl.NextDocId
+	tbl.NextDocId++
+
+	if updateType == basic.UPDATE_TYPE_ADD {
+		//直接添加主键，不检查
+		if tbl.PrimaryKey != "" {
+			tbl.primaryMap[content[tbl.PrimaryKey]] = fmt.Sprintf("%v", newDocId)
+			//if err := tbl.changePrimaryDocId(content[tbl.PrimaryKey], newDocId); err != nil {
+			//	return 0, err
+			//}
+			if tbl.NextDocId%50000 == 0 {
+				startTime := time.Now()
+				log.Debugf("start muti set %v", startTime)
+				tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
+				endTime := time.Now()
+				log.Debugf("[INFO] cost  muti set  %v", endTime.Sub(startTime))
+				tbl.primaryMap = make(map[string]string)
+			}
+
+		}
+		//无主键的表直接添加
+		return newDocId, tbl.memPartition.AddDocument(newDocId, content)
+	} else {
+		//
+		if _, hasPrimary := content[tbl.PrimaryKey]; !hasPrimary {
+			log.Errf("Primary Key Not Found %v", tbl.PrimaryKey)
+			return 0, errors.New("No Primary Key")
+		}
+
+		//先删除docId
+		oldDocid, founddoc := tbl.findPrimaryDockId(content[tbl.PrimaryKey])
+		if founddoc {
+			tbl.bitmap.Set(uint64(oldDocid.Docid))
+		}
+
+		//再新增docId
+		if err := tbl.changePrimaryDocId(content[tbl.PrimaryKey], newDocId); err != nil {
+			return 0, err
+		}
+		//实质内容本质上还是新增，主键不变，但是doc变了
+		return newDocId, tbl.memPartition.AddDocument(newDocId, content)
+	}
+}
+
+func (tbl *Table) changePrimaryDocId(key string, docid uint32) error {
+
+	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, uint64(docid))
+
+	if err != nil {
+		log.Errf("[ERROR] update Put key error  %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (tbl *Table) findPrimaryDockId(key string) (basic.DocNode, bool) {
+
+	val, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
+	if !ok /*|| val >= uint64(tbl.memPartition.StartDocId)*/ {
+		return basic.DocNode{}, false
+	}
+	return basic.DocNode{Docid: uint32(val)}, true
+}
+
+//将内存分区落盘
+func (tbl *Table) SyncMemoryPartition() error {
+
+	if tbl.memPartition == nil {
+		return nil
+	}
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+
+	//memPartition为空， 则退出
+	if tbl.memPartition.NextDocId == tbl.memPartition.StartDocId {
+		return nil
+	}
+
+	//持久化内存分区
+	if err := tbl.memPartition.Persist(); err != nil {
+		log.Errf("SyncMemoryPartition Error %v", err)
+		return err
+	}
+	partitionName := tbl.memPartition.SegmentName
+	tbl.memPartition.Close()
+	tbl.memPartition = nil
+	newPartition := partition.LoadPartition(partitionName)
+	tbl.partitions = append(tbl.partitions, newPartition)
+	tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
+
+	return tbl.StoreMeta()
 }

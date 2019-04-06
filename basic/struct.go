@@ -35,6 +35,11 @@ const (
 	IDX_FILENAME_SUFFIX_BITMAP = ".btmp"
 )
 
+const (
+	UPDATE_TYPE_ADD uint8 = 1
+	UPDATE_TYPE_MODIFY uint8 = 2
+)
+
 /*************************************************************************
 索引查询接口
 索引查询分为 查询和过滤,统计，子查询四种
