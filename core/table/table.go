@@ -14,7 +14,6 @@ package table
  */
 
 import (
-	"github.com/hq-cml/falconEngine/src/utils"
 	"sync"
 	"fmt"
 	"encoding/json"
@@ -28,6 +27,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/core/field"
+	"math"
 )
 
 type Table struct {
@@ -302,7 +302,6 @@ func (tbl *Table) AddOrUpdateDoc(content map[string]string, updateType uint8) (u
 				log.Debugf("[INFO] cost  muti set  %v", endTime.Sub(startTime))
 				tbl.primaryMap = make(map[string]string)
 			}
-
 		}
 		//无主键的表直接添加
 		return newDocId, tbl.memPartition.AddDocument(newDocId, content)
@@ -376,4 +375,198 @@ func (tbl *Table) SyncMemoryPartition() error {
 	tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
 
 	return tbl.StoreMeta()
+}
+
+func (tbl *Table) GetDocument(docid uint32) (map[string]string, bool) {
+
+	for _, prt := range tbl.partitions {
+		if docid >= prt.StartDocId && docid < prt.NextDocId {
+			return prt.GetDocument(docid)
+		}
+	}
+	return nil, false
+}
+
+func (tbl *Table) DeleteDocument(pk string) bool {
+
+	docId, found := tbl.findPrimaryDockId(pk)
+	if found {
+		return tbl.bitmap.Set(uint64(docId.Docid))
+	}
+	return false
+}
+
+func (tbl *Table) MergePartitions(start int) error {
+
+	var startIdx int = -1
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+
+	if len(tbl.partitions) == 1 {
+		return nil
+	}
+
+	//找到第一个待不符合规范，即要合并的partition
+	for idx := range tbl.partitions {
+		if tbl.partitions[idx].NextDocId - tbl.partitions[idx].StartDocId < partition.PARTITION_MAX_DOC_CNT {
+			startIdx = idx
+			break
+		}
+	}
+
+	if startIdx == -1 {
+		return nil
+	}
+
+	todoPartitions := tbl.partitions[startIdx:]
+
+
+	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
+	var summaries []field.FieldSummary
+	for _, f := range tbl.FieldSummaries {
+		if f.FieldType != index.IDX_TYPE_PK { //TODO why??
+			summaries = append(summaries, f)
+		}
+	}
+
+	tmpPartition := partition.NewEmptyPartitionWithFieldsInfo(segmentname, tbl.NextDocId, summaries)
+	tbl.PrefixSegment++  //TODO 要新增吗
+	if err := tbl.StoreMeta(); err != nil {
+		return err
+	}
+	err := tmpPartition.MergePartitions(todoPartitions)
+	if err != nil {
+		log.Errf("MergePartitions Error: %s", err)
+		return err
+	}
+
+	//tmpname:=tmpPartition.SegmentName
+	tmpPartition.Close()
+	tmpPartition = nil
+
+	for _, prt := range todoPartitions {
+		prt.Destroy()
+	}
+
+	//Load回来
+	tmpPartition = partition.LoadPartition(segmentname)
+	//截断后面的临时part
+	tbl.partitions = tbl.partitions[:startIdx]
+	tbl.PartitionNames = tbl.PartitionNames[:startIdx]
+	//追加上
+	tbl.partitions = append(tbl.partitions, tmpPartition)
+	tbl.PartitionNames = append(tbl.PartitionNames, segmentname)
+	return tbl.StoreMeta()
+}
+
+func (tbl *Table) SearchUnitDocIds(querys []basic.SearchQuery, filteds []basic.SearchFilted) ([]basic.DocNode, bool) {
+
+	docids := make([]basic.DocNode, 0)
+	for _, prt := range tbl.partitions {
+		docids, _ = prt.SearchUnitDocIds(querys, filteds, tbl.bitmap, docids)
+	}
+
+	if len(docids) > 0 {
+		return docids, true
+	}
+
+	return nil, false
+}
+
+//TODO 有点奇怪, 再细化拆解
+var GetDocIDsChan chan []basic.DocNode
+var GiveDocIDsChan chan []basic.DocNode
+
+func InteractionWithStartAndDf(a []basic.DocNode, b []basic.DocNode, start int, df int, maxdoc uint32) ([]basic.DocNode, bool) {
+
+	if a == nil || b == nil {
+		return a, false
+	}
+
+	lena := len(a)
+	lenb := len(b)
+	lenc := start
+	ia := start
+	ib := 0
+	idf := math.Log10(float64(maxdoc) / float64(df))
+	for ia < lena && ib < lenb {
+
+		if a[ia].Docid == b[ib].Docid {
+			a[lenc] = a[ia]
+			//uint32((float64(a[ia].Weight) / 10000 * idf ) * 10000)
+			a[lenc].Weight += uint32(float64(a[ia].Weight) * idf)
+			lenc++
+			ia++
+			ib++
+			continue
+			//c = append(c, a[ia])
+		}
+
+		if a[ia].Docid < b[ib].Docid {
+			ia++
+		} else {
+			ib++
+		}
+	}
+
+	return a[:lenc], true
+}
+
+func (tbl *Table) SearchDocIds(querys []basic.SearchQuery, filteds []basic.SearchFilted) ([]basic.DocNode, bool) {
+
+	var ok bool
+	docids := <- GetDocIDsChan
+
+	if len(querys) == 0 || querys == nil {
+		for _, prt := range tbl.partitions {
+			docids, _ = prt.SearchDocs(basic.SearchQuery{}, filteds, tbl.bitmap, docids)
+		}
+		if len(docids) > 0 {
+			for _, doc := range docids {
+				if tbl.bitmap.GetBit(uint64(doc.Docid)) == 1 {
+					log.Infof("bitmap is 1 %v", doc.Docid)
+				}
+			}
+			return docids, true
+		}
+		GiveDocIDsChan <- docids
+		return nil, false
+	}
+
+	if len(querys) >= 1 {
+		for _, prt := range tbl.partitions {
+			docids, _ = prt.SearchDocs(querys[0], filteds, tbl.bitmap, docids)
+		}
+	}
+
+	if len(querys) == 1 {
+		if len(docids) > 0 {
+			return docids, true
+		}
+		GiveDocIDsChan <- docids
+		return nil, false
+	}
+
+	for _, query := range querys[1:] {
+
+		subdocids := <- GetDocIDsChan
+		for _, prt := range tbl.partitions {
+			subdocids, _ = prt.SearchDocs(query, filteds, tbl.bitmap, subdocids)
+		}
+
+		//tbl.Logger.Info("[INFO] key[%v] doclens:%v", query.Value, len(subdocids))
+		docids, ok = InteractionWithStartAndDf(docids, subdocids, 0, len(subdocids), tbl.NextDocId)
+		GiveDocIDsChan <- subdocids
+		if !ok {
+			GiveDocIDsChan <- docids
+			return nil, false
+		}
+	}
+
+	if len(docids) > 0 {
+		return docids, true
+	}
+	GiveDocIDsChan <- docids
+	return nil, false
+
 }

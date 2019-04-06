@@ -19,6 +19,10 @@ import (
 	"github.com/hq-cml/spider-engine/utils/bitmap"
 )
 
+const (
+	PARTITION_MAX_DOC_CNT = 1000000   //10w个文档，组成一个partition
+)
+
 // Segment description:段结构
 type Partition struct {
 	StartDocId  	uint32 							 `json:"startdocid"`
