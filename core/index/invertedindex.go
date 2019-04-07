@@ -224,6 +224,9 @@ func (rIdx *InvertedIndex) Destroy() error {
 
 //设置倒排文件mmap
 func (rIdx *InvertedIndex) SetIvtMmap(mmap *mmap.Mmap) {
+	if rIdx.ivtMmap != nil && rIdx.ivtMmap != mmap {
+		rIdx.ivtMmap.Unmap()
+	}
 	rIdx.ivtMmap = mmap
 }
 
@@ -260,11 +263,22 @@ type tmpMerge struct {
 }
 
 //多路归并, 将多个反向索引进行合并成为一个大的反向索引
-//比较烧脑，下面提供了一个简化版便于调试说明问题
-func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, partitionPathName string, tree btree.Btree) error {
+//只会提供merge并落地的功能，不会重新加载mmap
+func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, btdb btree.Btree) error {
+	//校验
+	if rIndexes == nil || len(rIndexes) == 0 {
+		return errors.New("Nil []*InvertedIndex")
+	}
+	indexType := rIndexes[0].indexType
+	fieldName := rIndexes[0].fieldName
+	for _, v := range rIndexes {
+		if v.indexType != indexType || v.fieldName != fieldName {
+			return errors.New("Indexes not consistent")
+		}
+	}
+
 	//打开文件，获取长度，作为offset
 	//因为同一个分区的所有字段，都公用同一套倒排文件，所以merge某个字段的index的时候，文件可能已经存在，需要追加打开
-	//TODO 但是这样会有一个问题，后面的字段打开的倒排mmap，会比前面的字段大，但是却用不上，需要修改mmap实现支持偏移量
 	idxFileName := partitionPathName + basic.IDX_FILENAME_SUFFIX_INVERT
 	fd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
 	if err != nil {
@@ -275,7 +289,6 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, partitionPathNa
 	offset := int(fi.Size())
 
 	//数据准备，开始多路归并
-	rIdx.btreeDb = tree
 	tmpIvts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
 		if ivt.btreeDb == nil {
@@ -295,8 +308,8 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, partitionPathNa
 	}
 
 	//补齐树
-	if !rIdx.btreeDb.HasTree(rIdx.fieldName) {
-		rIdx.btreeDb.AddTree(rIdx.fieldName)
+	if !btdb.HasTree(fieldName) {
+		btdb.AddTree(fieldName)
 	}
 
 	//开始进行归并
@@ -361,7 +374,7 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, partitionPathNa
 			return errors.New("Write length wrong")
 		}
 
-		rIdx.btreeDb.Set(rIdx.fieldName, minTerm, uint64(offset))
+		btdb.Set(fieldName, minTerm, uint64(offset))
 		offset = offset + DOCNODE_BYTE_CNT + writeLength
 
 		//如果所有的索引都合并完毕， 则退出
@@ -376,11 +389,6 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, partitionPathNa
 			break
 		}
 	}
-
-	//内存态 => 磁盘态
-	rIdx.termMap = nil
-	rIdx.inMemory = false
-	rIdx.nextDocId = 0
 
 	return nil
 }

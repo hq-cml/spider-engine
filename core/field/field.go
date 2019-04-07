@@ -243,9 +243,12 @@ func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Bt
 				log.Infof("invert is nil ")
 			}
 		}
-		if err := fld.ivtIdx.MergeIndex(ivts, segmentName, btree); err != nil {
+		err := index.MergePersistIvtIndex(ivts, segmentName, btree)
+		if  err != nil {
 			return 0, 0, err
 		}
+
+		//TODO 这里fld.ivtIdx内部几个关键变量比如btree, inMemmory不会再被设置了，是否有坑？
 	}
 
 	return fld.FwdOffset, fld.FwdDocCnt, nil
