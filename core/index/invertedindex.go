@@ -18,7 +18,6 @@ package index
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os"
 	"unsafe"
 	"reflect"
@@ -45,7 +44,7 @@ const DOCNODE_BYTE_CNT = 8
 
 //新建空的倒排索引
 func NewInvertedIndex(indexType uint8, startDocId uint32, fieldName string) *InvertedIndex {
-	this := &InvertedIndex{
+	rIdx := &InvertedIndex{
 		nextDocId: startDocId,
 		fieldName: fieldName,
 		indexType: indexType,
@@ -54,19 +53,19 @@ func NewInvertedIndex(indexType uint8, startDocId uint32, fieldName string) *Inv
 		ivtMmap:   nil,
 		btreeDb:   nil,
 	}
-	return this
+	return rIdx
 }
 
 //从磁盘加载倒排索引
 func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtMmap *mmap.Mmap) *InvertedIndex {
-	this := &InvertedIndex{
+	rIdx := &InvertedIndex{
 		indexType: indexType,
 		fieldName: fieldname,
 		inMemory:  false,       //加载的索引都是磁盘态的
 		ivtMmap:   ivtMmap,
 		btreeDb:   btdb,
 	}
-	return this
+	return rIdx
 }
 
 //增加一个doc文档
@@ -157,13 +156,13 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) e
 			log.Errf("Persist :: Error %v", err)
 			return err
 		}
-		n, err := idxFd.Write(buffer.Bytes())
+		writeLength, err := idxFd.Write(buffer.Bytes())
 		if err != nil {
 			log.Errf("Persist :: Error %v", err)
 			return err
 		}
-		if n != nodeCnt * basic.DOC_NODE_SIZE {
-			log.Errf("Write length wrong %v, %v", n, nodeCnt * basic.DOC_NODE_SIZE)
+		if writeLength != nodeCnt * basic.DOC_NODE_SIZE {
+			log.Errf("Write length wrong %v, %v", writeLength, nodeCnt * basic.DOC_NODE_SIZE)
 			return errors.New("Write length wrong")
 		}
 
@@ -174,12 +173,13 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) e
 			//造成不一致了哦，或者说写脏了一块数据，但是以后也不会被引用到，因为btree里面没落盘
 			return err
 		}
-		offset = offset + DOCNODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
+		offset = offset + DOCNODE_BYTE_CNT + writeLength
 	}
 
 	//内存态 => 磁盘态
 	rIdx.termMap = nil
 	rIdx.inMemory = false
+	rIdx.nextDocId = 0
 
 	log.Debugf("Persist :: Writing to File : [%v%v] ", partitionPathName, basic.IDX_FILENAME_SUFFIX_INVERT)
 	return nil
@@ -251,7 +251,9 @@ func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, bool) {
 	return rIdx.btreeDb.GetNextKV(rIdx.fieldName, key)
 }
 
+//临时结构，辅助Merge
 type tmpMerge struct {
+	over   bool
 	rIndex *InvertedIndex
 	term   string
 	nodes []basic.DocNode
@@ -259,10 +261,11 @@ type tmpMerge struct {
 
 //多路归并, 将多个反向索引进行合并成为一个大的反向索引
 //比较烧脑，下面提供了一个简化版便于调试说明问题
-//TODO 是否需要设置rIdx的curId???
-func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName string, tree btree.Btree) error {
+func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, partitionPathName string, tree btree.Btree) error {
 	//打开文件，获取长度，作为offset
-	idxFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_INVERT, fullSetmentName)
+	//因为同一个分区的所有字段，都公用同一套倒排文件，所以merge某个字段的index的时候，文件可能已经存在，需要追加打开
+	//TODO 但是这样会有一个问题，后面的字段打开的倒排mmap，会比前面的字段大，但是却用不上，需要修改mmap实现支持偏移量
+	idxFileName := partitionPathName + basic.IDX_FILENAME_SUFFIX_INVERT
 	fd, err := os.OpenFile(idxFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644) //追加打开
 	if err != nil {
 		return err
@@ -273,7 +276,7 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 
 	//数据准备，开始多路归并
 	rIdx.btreeDb = tree
-	ivts := make([]tmpMerge, 0)
+	tmpIvts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
 		if ivt.btreeDb == nil {
 			continue
@@ -283,7 +286,8 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 			continue
 		}
 		nodes, _ := ivt.QueryTerm(term)
-		ivts = append(ivts, tmpMerge{
+		tmpIvts = append(tmpIvts, tmpMerge{
+			over: false,
 			rIndex: ivt,
 			term:  term,
 			nodes: nodes,
@@ -296,48 +300,41 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 	}
 
 	//开始进行归并
-	//flag是子索引完毕标志，哪个子索引完毕，则对应位置1
-	//quitFlag是结束标志，当所有的子索引都结束了，则flag==quitFlag
-	quitFlag := 0
-	for i := range ivts {
-		quitFlag = quitFlag | (1 << uint(i))
-	}
-	flag := 0
-	for flag != quitFlag {
+	for {
 		minTerm := ""
-		for i, v := range ivts { //随便找一个还未完的索引的头term
-			if ((flag >> uint(i)) & 0x1) == 0 {
+		for _, v := range tmpIvts { //随便找一个还未完的索引的首term
+			if !v.over {
 				minTerm = v.term
 				break
 			}
 		}
 
-		for i, v := range ivts { //找到所有还未完结的索引中最小那个头term
-			if ((flag>>uint(i))&0x1) == 0 && minTerm > v.term {
+		for _, v := range tmpIvts { //找到所有还未完结的索引中最小那个首term
+			if !v.over && minTerm > v.term {
 				minTerm = v.term
 			}
 		}
 
-		minIds := make([]int, 0) //可能多个索引都包含这个最小头term，统统取出来
-		for i, ivt := range ivts {
-			if (flag>>uint(i)&0x1) == 0 && minTerm == ivt.term {
+		minIds := make([]int, 0) //可能多个索引都包含这个最小首term，统统取出来
+		for i, ivt := range tmpIvts {
+			if !ivt.over && minTerm == ivt.term {
 				minIds = append(minIds, i)
 			}
 		}
 
-		value := make([]basic.DocNode, 0) //合并这这些个头term, 他们各自的后继者需要顶上来
+		value := make([]basic.DocNode, 0) //合并这这些个首term, 他们各自的后继者需要顶上来
 		for _, i := range minIds {
-			value = append(value, ivts[i].nodes...)
+			value = append(value, tmpIvts[i].nodes...)
 
 			//找到后继者，顶上去
-			next, _, ok := ivts[i].rIndex.GetNextKV(ivts[i].term)
+			next, _, ok := tmpIvts[i].rIndex.GetNextKV(tmpIvts[i].term)
 			if !ok {
 				//如果没有后继者了，那么该索引位置标记为无效
-				flag = flag | (1 << uint(i))
+				tmpIvts[i].over = true
 				continue
 			}
-			ivts[i].term = next
-			ivts[i].nodes, ok = ivts[i].rIndex.QueryTerm(next)
+			tmpIvts[i].term = next
+			tmpIvts[i].nodes, ok = tmpIvts[i].rIndex.QueryTerm(next)
 			if !ok {
 				panic("Index wrong!")
 			}
@@ -351,197 +348,39 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 		buffer := new(bytes.Buffer)
 		err = binary.Write(buffer, binary.LittleEndian, value)
 		if err != nil {
-			log.Err("[ERROR] invert --> Merge :: Error %v", err)
+			log.Err("Invert --> Merge :: Error %v", err)
 			return err
 		}
-		fd.Write(buffer.Bytes())
+		writeLength, err := fd.Write(buffer.Bytes())
+		if err != nil {
+			log.Errf("Invert --> Merge :: Error %v", err)
+			return err
+		}
+		if writeLength != nodeCnt * basic.DOC_NODE_SIZE {
+			log.Errf("Write length wrong %v, %v", writeLength, nodeCnt * basic.DOC_NODE_SIZE)
+			return errors.New("Write length wrong")
+		}
+
 		rIdx.btreeDb.Set(rIdx.fieldName, minTerm, uint64(offset))
-		offset = offset + DOCNODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
-	}
+		offset = offset + DOCNODE_BYTE_CNT + writeLength
 
-	rIdx.termMap = nil     //TODO 存在和上面persist同样的疑问
-	rIdx.inMemory = false
-
-	return nil
-}
-
-//多路归并这块比较抽象， 一个对等简化版便于调试
-/*
-import (
-	"fmt"
-	"encoding/json"
-)
-
-//mock Btree
-type myIndex struct {
-	List []KV
-}
-
-type KV struct {
-	Term  string
-	Nodes []int
-}
-
-type tmpMerge struct {
-	RIndex *InvertedIndex
-	Term   string
-	Nodes  []int
-}
-
-type InvertedIndex struct {
-	//。。。省略
-	Btree myIndex
-}
-
-func (rIdx *InvertedIndex)GetFristKV() (string, uint32, uint32, int, bool){
-	tmp := rIdx.Btree.List[0]
-	return tmp.Term, 0, 0, 0, true
-}
-
-func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
-	length := len(rIdx.Btree.List)
-	for i, v := range rIdx.Btree.List {
-		if v.Term == key && i < (length-1) {
-			return rIdx.Btree.List[i+1].Term, 0, 0, 0, true
-		}
-	}
-
-	return "", 0, 0, 0, false
-}
-
-func (rIdx *InvertedIndex) QueryTerm(key string) ([]int, bool) {
-	for i, v := range rIdx.Btree.List {
-		if v.Term == key {
-			return rIdx.Btree.List[i].Nodes, true
-		}
-	}
-
-	return nil, false
-}
-
-var idx1 InvertedIndex
-var idx2 InvertedIndex
-var idx3 InvertedIndex
-
-func init() {
-	idx1 = InvertedIndex {
-		Btree:myIndex{
-			List: []KV {
-				KV{Term:"a", Nodes:[]int{2,3}},
-				KV{Term:"c", Nodes:[]int{1,2}},
-				KV{Term:"f", Nodes:[]int{1,3}},
-			},
-		}}
-
-	idx2 = InvertedIndex {
-		Btree:myIndex{
-			List: []KV {
-				KV{Term:"b", Nodes:[]int{4,6}},
-				KV{Term:"c", Nodes:[]int{5,6}},
-				KV{Term:"d", Nodes:[]int{4,5}},
-			},
-		}}
-
-	idx3 = InvertedIndex {
-		Btree:myIndex{
-			List: []KV {
-				KV{Term:"a", Nodes:[]int{8,9}},
-				KV{Term:"c", Nodes:[]int{7,9}},
-				KV{Term:"e", Nodes:[]int{7,8}},
-			},
-		}}
-}
-
-func main() {
-	rIndexes := []*InvertedIndex{&idx1, &idx2, &idx3}
-	ivts := make([]tmpMerge, 0)
-	for _, ivt := range rIndexes {
-		//if ivt.Btree == nil {
-		//	continue
-		//}
-
-		term, _, _, _, ok := ivt.GetFristKV()
-		//fmt.Println(term)
-		if !ok {
-			continue
-		}
-
-		nodes, _ := ivt.QueryTerm(term)
-		//fmt.Println(nodes)
-		ivts = append(ivts, tmpMerge {
-			RIndex: ivt,
-			Term:   term,
-			Nodes:  nodes,
-		})
-	}
-
-	resflag := 0
-	for i := range rIndexes {
-		resflag = resflag | (1 << uint(i))
-	}
-
-	fmt.Println("Resflag: ", resflag) //7
-	b, err := json.Marshal(ivts)
-	fmt.Println(string(b), err)
-
-	flag := 0
-	TURN := 1
-	for flag != resflag {
-		fmt.Println("AAAAAAAA-----------[",  TURN ,"] Flag:", flag)
-		minTerm := ""
-		for i, v := range ivts {
-			if ((flag >> uint(i)) & 0x1) == 0 {
-				fmt.Println("XXXXXXXXXXX-----------", i)
-				minTerm = v.Term
+		//如果所有的索引都合并完毕， 则退出
+		quit := true
+		for _, ivt := range tmpIvts {
+			if !ivt.over {
+				quit = false
 				break
 			}
 		}
-		fmt.Println("XXXXXXXXXXX-----------", minTerm)
-
-		for i, v := range ivts {
-			if ((flag>>uint(i))&0x1) == 0 && minTerm > v.Term {
-				fmt.Println("YYYYYYYYYYY-----------", i)
-				minTerm = v.Term
-			}
+		if quit {
+			break
 		}
-		fmt.Println("YYYYYYYYYYY-----------", minTerm)
-
-		meridxs := make([]int, 0)
-		for i, ivt := range ivts {
-			if (flag>>uint(i)&0x1) == 0 && minTerm == ivt.Term {
-				fmt.Println("ZZZZZZZZZZZZ-----------", i)
-				meridxs = append(meridxs, i)
-			}
-		}
-		fmt.Println("ZZZZZZZZZZZZ-----------", meridxs, ",Term:", minTerm)
-
-		value := make([]int, 0)
-		for _, i := range meridxs {
-			value = append(value, ivts[i].Nodes...)
-			key, _, _, _, ok := ivts[i].RIndex.GetNextKV(ivts[i].Term)
-			if !ok {
-				fmt.Println("SSSSSSSSSSSSSS-------结束位：", i)
-				flag = flag | (1 << uint(i))
-				continue
-			}
-
-			ivts[i].Term = key
-			ivts[i].Nodes, ok = ivts[i].RIndex.QueryTerm(key)
-		}
-
-		//写倒排文件 & 写B+树 省略
-		//。。。。
-
-		fmt.Println("AAAAAAAA-----------[",  TURN ,"], Value: ", value, "Flag:", flag, ",Term:", minTerm)
-
-		//if TURN == 5 {
-		//	return
-		//}
-
-		fmt.Println()
-		fmt.Println()
-		fmt.Println()
-		TURN++
 	}
+
+	//内存态 => 磁盘态
+	rIdx.termMap = nil
+	rIdx.inMemory = false
+	rIdx.nextDocId = 0
+
+	return nil
 }
-*/
