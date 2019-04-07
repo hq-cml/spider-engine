@@ -73,32 +73,32 @@ func (bt *BoltBTree) Inc(treeName, key string) error {
 }
 
 //TODO 重构, 返回值太多
-func (bt *BoltBTree) GetFristKV(treeName string) (string, uint32, uint32, int, bool) {
+func (bt *BoltBTree) GetFristKV(treeName string) (string, uint32, bool) {
 	key, vstr, err := bt.wrapper.GetFristKV(treeName)
 	if err != nil {
-		return "", 0, 0, 0, false
+		return "", 0, false
 	}
 	//db.logger.Info("Search btname : %v  key : %v value str : %v ",btname,key,vstr)
 	u, e := strconv.ParseUint(vstr, 10, 64)
 	if e != nil {
-		return "", 0, 0, 0, false
+		return "", 0, false
 	}
 	//db.logger.Info("Search btname : %v  key : %v value  : %v ",btname,key,u)
-	return key, uint32(u), 0, 0, true
+	return key, uint32(u), true
 }
 
-func (db *BoltBTree) GetNextKV(treeName, key string) (string, uint32, uint32, int, bool) {
+func (db *BoltBTree) GetNextKV(treeName, key string) (string, uint32, bool) {
 
 	vkey, vstr, err := db.wrapper.GetNextKV(treeName, key)
 	if err != nil {
-		return "", 0, 0, 0, false
+		return "", 0, false
 	}
 
 	u, e := strconv.ParseUint(vstr, 10, 64)
 	if e != nil {
-		return "", 0, 0, 0, false
+		return "", 0, false
 	}
-	return vkey, uint32(u), 0, 0, true
+	return vkey, uint32(u), true
 
 }
 

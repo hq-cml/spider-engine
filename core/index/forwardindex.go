@@ -522,7 +522,6 @@ func (fwdIdx *ForwardIndex) MergeIndex(idxList []*ForwardIndex, fullSegmentName 
 					log.Errf("[ERROR] StringProfile --> Serialization :: Write Error %v", err)
 				}
 				//存储offset
-				//this.Logger.Info("[INFO] dtloffset %v,%v",dtloffset,infolen)
 				binary.LittleEndian.PutUint64(buffer, uint64(dtloffset))
 				_, err = fwdFd.Write(buffer)
 				if err != nil {

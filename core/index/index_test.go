@@ -81,7 +81,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 func TestQureyTermInFile(t *testing.T) {
 	//新建索引
 	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
-	rIdx.isMemory = false //写死, 强制走磁盘
+	rIdx.inMemory = false //写死, 强制走磁盘
 
 	//从磁盘加载btree
 	//InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)
@@ -175,7 +175,7 @@ func TestMergeIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	term, _, _, _, ok := rIdx.btreeDb.GetFristKV(TEST_TREE)
+	term, _, ok := rIdx.btreeDb.GetFristKV(TEST_TREE)
 	for ok {
 		nodes, exist := rIdx.QueryTerm(term)
 		if !exist {
@@ -184,7 +184,7 @@ func TestMergeIndex(t *testing.T) {
 		n, _ := json.Marshal(nodes)
 		t.Log("从磁盘访问 ", term ,": ", string(n))
 
-		term, _, _, _, ok = rIdx.btreeDb.GetNextKV(TEST_TREE, term)
+		term, _, ok = rIdx.btreeDb.GetNextKV(TEST_TREE, term)
 	}
 
 	t.Log("\n\n")

@@ -243,13 +243,9 @@ func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Bt
 				log.Infof("invert is nil ")
 			}
 		}
-		//fmt.Println("A--------", len(ivts))
-		//fmt.Println("A--------", ivts[0])
-		//fmt.Println("A--------", ivts[1])
 		if err := fld.ivtIdx.MergeIndex(ivts, segmentName, btree); err != nil {
 			return 0, 0, err
 		}
-
 	}
 
 	return fld.FwdOffset, fld.FwdDocCnt, nil
@@ -281,9 +277,9 @@ func (fld *Field) SetExtMmap(mmap *mmap.Mmap) {
 	}
 }
 
-func (fld *Field) SetIdxMmap(mmap *mmap.Mmap) {
+func (fld *Field) SetIvtMmap(mmap *mmap.Mmap) {
 	if fld.ivtIdx != nil {
-		fld.ivtIdx.SetIdxMmap(mmap)
+		fld.ivtIdx.SetIvtMmap(mmap)
 	}
 }
 
@@ -296,6 +292,6 @@ func (fld *Field) SetBtree(btdb btree.Btree) {
 func (fld *Field) SetMmap(base, ext, idx *mmap.Mmap) {
 	fld.SetBaseMmap(base)
 	fld.SetExtMmap(ext)
-	fld.SetIdxMmap(idx)
+	fld.SetIvtMmap(idx)
 }
 

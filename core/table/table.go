@@ -396,7 +396,7 @@ func (tbl *Table) DeleteDocument(pk string) bool {
 	return false
 }
 
-func (tbl *Table) MergePartitions(start int) error {
+func (tbl *Table) MergePartitions() error {
 
 	var startIdx int = -1
 	tbl.mutex.Lock()

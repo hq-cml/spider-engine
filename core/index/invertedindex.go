@@ -3,14 +3,17 @@ package index
 /**
  * 倒排索引实现
  *
- * 根据搜索引擎的原理, 每一个字段(列)都拥有一个倒排索引
- * 倒排索引由一颗B+树和一个倒排文件搭配，宏观上可以看成一个Map
- * 其中Key的部分基于B+树实现, 便于搜索和范围过滤；val的部分是倒排文件，基于mmap, 便于快速存取并同步disk
+ * 根据搜索引擎的原理, 一个字段(列)需要支持搜索，那么其需要拥有一个倒排索引
+ * 本倒排索引由一颗B+树和一个倒排文件搭配，宏观上可以看成一个Map（Key是分词后的各个Term，Val是Term对应的docId列表）
+ * 其中Key的部分基于B+树实现, 便于搜索和范围过滤；val的部分存在倒排文件中，基于mmap, 便于快速存取并同步disk
  *
  * B+树（由bolt实现）: key是term, val则是term在倒排文件中的offset
  * 倒排文件: 由mmap实现，顺序的数据块, 每块数据长这个个样子
  * [nodeCnt(8Byte)|nodeStruct1|nodeStruct2|....][nodeCnt(8Byte)|nodeStruct1|nodeStruct3|....]....
  * nodeStuct:{docId: xx, weight: xx}
+ *
+ * Note：
+ * 同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
  */
 import (
 	"bytes"
@@ -29,65 +32,74 @@ import (
 //倒排索引
 //每个字段, 拥有一个倒排索引
 type InvertedIndex struct {
-	curDocId  uint32
-	isMemory  bool
-	fieldType uint8
-	fieldName string
+	nextDocId uint32                     //下一个加入本索引的docId（所以本索引最大docId是nextDocId-1）
+	inMemory  bool                       //本索引是内存态还是磁盘态（不会同时并存）
+	indexType uint8                      //本索引的类型
+	fieldName string                     //本索引所属字段
+	termMap   map[string][]basic.DocNode //索引的内存容器
 	ivtMmap   *mmap.Mmap                 //倒排文件(以mmap的形式)
 	btreeDb   btree.Btree                //B+树
-	termMap   map[string][]basic.DocNode //索引的内存容器
 }
 
 const DOCNODE_BYTE_CNT = 8
 
-//新建空的字符型倒排索引
-func NewInvertedIndex(fieldType uint8, startDocId uint32, fieldname string) *InvertedIndex {
+//新建空的倒排索引
+func NewInvertedIndex(indexType uint8, startDocId uint32, fieldName string) *InvertedIndex {
 	this := &InvertedIndex{
-		btreeDb:   nil,
-		curDocId:  startDocId,
-		fieldName: fieldname,
-		fieldType: fieldType,
+		nextDocId: startDocId,
+		fieldName: fieldName,
+		indexType: indexType,
 		termMap:   make(map[string][]basic.DocNode),
-		isMemory:  true,
+		inMemory:  true,                            	//新索引都是从内存态开始
+		ivtMmap:   nil,
+		btreeDb:   nil,
 	}
 	return this
 }
 
-//TODO ??
-//通过段的名称建立字符型倒排索引
-func LoadInvertedIndex(btdb btree.Btree, fieldType uint8, fieldname string, ivtMmap *mmap.Mmap) *InvertedIndex {
+//从磁盘加载倒排索引
+func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtMmap *mmap.Mmap) *InvertedIndex {
 	this := &InvertedIndex{
-		btreeDb:   btdb,
-		fieldType: fieldType,
+		indexType: indexType,
 		fieldName: fieldname,
-		isMemory:  false,
+		inMemory:  false,       //加载的索引都是磁盘态的
 		ivtMmap:   ivtMmap,
+		btreeDb:   btdb,
 	}
 	return this
 }
 
 //增加一个doc文档
+//Note：
+// 增加文档，只会出现在最新的一个分区（即都是内存态的），所以只会操作内存态的
+// 也就是，一个索引一旦落盘之后，就不在支持增加Doc了
+//TODO 改、删怎么处理的？？
 func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 
+	//校验必须是内存态
+	if !rIdx.inMemory {
+		return errors.New("InvertedIndex --> AddDocument :: Must memory status")
+	}
+
 	//docId校验
-	if docId != rIdx.curDocId {
-		return errors.New("invert --> AddDocument :: Wrong DocId Number")
+	if docId != rIdx.nextDocId {
+		return errors.New("InvertedIndex --> AddDocument :: Wrong DocId Number")
 	}
 
 	//根据type进行分词
 	var nodes map[string]basic.DocNode
-	switch rIdx.fieldType {
-	case IDX_TYPE_STRING, GATHER_TYPE: //全词匹配模式
+	switch rIdx.indexType {
+	case IDX_TYPE_STRING, GATHER_TYPE: 			//全词匹配模式
 		nodes = SplitWholeWords(docId, content)
-	case IDX_TYPE_STRING_LIST: //分号切割模式
+	case IDX_TYPE_STRING_LIST: 					//分号切割模式
 		nodes = SplitSemicolonWords(docId, content)
-	case IDX_TYPE_STRING_SINGLE: //单个词模式
+	case IDX_TYPE_STRING_SINGLE: 				//单个词模式
 		nodes = SplitRuneWords(docId, content)
-	case IDX_TYPE_STRING_SEG: //分词模式
+	case IDX_TYPE_STRING_SEG: 					//分词模式
 		nodes = SplitTrueWords(docId, content)
 	}
 
-	//分词结果填入索引的临时存储
+	//分词结果填入内存索引
 	for term, node := range nodes {
 		if _, exist := rIdx.termMap[term]; !exist {
 			rIdx.termMap[term] = []basic.DocNode{}
@@ -96,7 +108,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	}
 
 	//docId自增
-	rIdx.curDocId++
+	rIdx.nextDocId++
 
 	log.Debugf("InvertedIndex AddDocument --> DocId: %v ,Content: %v\n", docId, content)
 	return nil
@@ -104,13 +116,17 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 
 //持久化倒排索引
 //落地 termMap落地到倒排文件; term进入B+tree
-//倒排文件格式: 顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
-//B+树: key是term, val则是term在倒排文件中的offsetduolv
-func (rIdx *InvertedIndex) Persist(segmentName string, tree btree.Btree) error {
+//倒排文件格式:
+//  顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
+//B+树:
+//  key是term, val则是term在倒排文件中的offset
+//
+//Note:
+// 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
+func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) error {
 
 	//打开倒排文件, 获取文件大小作为初始偏移
-	//TODO 此处为何是直接写文件,而不是mmap??
-	idxFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_INVERT, segmentName)
+	idxFileName := partitionPathName + basic.IDX_FILENAME_SUFFIX_INVERT
 	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644) //追加打开file
 	if err != nil {
 		return err
@@ -123,7 +139,7 @@ func (rIdx *InvertedIndex) Persist(segmentName string, tree btree.Btree) error {
 	offset := int(fi.Size()) //当前偏移量, 即文件最后位置
 
 	//开始文件写入
-	rIdx.btreeDb = tree //TODO 移出去
+	rIdx.btreeDb = tree //TODO 能否不是传进来的？？
 	if !rIdx.btreeDb.HasTree(rIdx.fieldName) {
 		rIdx.btreeDb.AddTree(rIdx.fieldName)
 	}
@@ -134,44 +150,53 @@ func (rIdx *InvertedIndex) Persist(segmentName string, tree btree.Btree) error {
 		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
 		idxFd.Write(lenBuffer)
 
-		//在写入node list
+		//再写入node list
 		buffer := new(bytes.Buffer)
 		err = binary.Write(buffer, binary.LittleEndian, docNodeList)
 		if err != nil {
 			log.Errf("Persist :: Error %v", err)
 			return err
 		}
-		idxFd.Write(buffer.Bytes())
+		n, err := idxFd.Write(buffer.Bytes())
+		if err != nil {
+			log.Errf("Persist :: Error %v", err)
+			return err
+		}
+		if n != nodeCnt * basic.DOC_NODE_SIZE {
+			log.Errf("Write length wrong %v, %v", n, nodeCnt * basic.DOC_NODE_SIZE)
+			return errors.New("Write length wrong")
+		}
 
 		//B+树录入
 		err = rIdx.btreeDb.Set(rIdx.fieldName, term, uint64(offset))
 		if err != nil {
-			//TODO 造成不一致了哦
+			log.Errf("Persist :: Error %v", err)
+			//造成不一致了哦，或者说写脏了一块数据，但是以后也不会被引用到，因为btree里面没落盘
 			return err
 		}
 		offset = offset + DOCNODE_BYTE_CNT + nodeCnt * basic.DOC_NODE_SIZE
 	}
 
-	rIdx.termMap = nil    //TODO ??直接置为 nil?
-	rIdx.isMemory = false //TODO ??isMemry用法,用途
+	//内存态 => 磁盘态
+	rIdx.termMap = nil
+	rIdx.inMemory = false
 
-	log.Debugf("Persist :: Writing to File : [%v%v] ", segmentName, basic.IDX_FILENAME_SUFFIX_INVERT)
+	log.Debugf("Persist :: Writing to File : [%v%v] ", partitionPathName, basic.IDX_FILENAME_SUFFIX_INVERT)
 	return nil
 }
 
-//给定一个查询词query，找出doc的列表（标准操作）
+//给定一个查询词query，找出doc的list
 func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
-	if rIdx.isMemory == true {
+	if rIdx.inMemory {
 		docNodes, ok := rIdx.termMap[term]
 		if ok {
 			return docNodes, true
 		}
-	} else if rIdx.ivtMmap != nil {
+	} else if (rIdx.ivtMmap != nil && rIdx.btreeDb != nil) {
 		offset, ok := rIdx.btreeDb.GetInt(rIdx.fieldName, term)
 		if !ok {
 			return nil, false
 		}
-		//fmt.Println("B------",rIdx.fieldName, term, offset)
 		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
 		return docNodes, true
@@ -198,7 +223,7 @@ func (rIdx *InvertedIndex) Destroy() error {
 }
 
 //设置倒排文件mmap
-func (rIdx *InvertedIndex) SetIdxMmap(mmap *mmap.Mmap) {
+func (rIdx *InvertedIndex) SetIvtMmap(mmap *mmap.Mmap) {
 	rIdx.ivtMmap = mmap
 }
 
@@ -208,19 +233,19 @@ func (rIdx *InvertedIndex) SetBtree(tree btree.Btree) {
 }
 
 //btree操作,
-//TODO 返回值太多, 只有第1,2和最后一个返回值有用
-func (rIdx *InvertedIndex) GetFristKV() (string, uint32, uint32, int, bool) {
+func (rIdx *InvertedIndex) GetFristKV() (string, uint32, bool) {
 	if rIdx.btreeDb == nil {
-		log.Err("Btree is null")
-		return "", 0, 0, 0, false
+		log.Err("Btree is nil")
+		return "", 0, false
 	}
 	return rIdx.btreeDb.GetFristKV(rIdx.fieldName)
 }
 
 //btree操作
-func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, uint32, int, bool) {
+func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, bool) {
 	if rIdx.btreeDb == nil {
-		return "", 0, 0, 0, false
+		log.Err("Btree is nil")
+		return "", 0, false
 	}
 
 	return rIdx.btreeDb.GetNextKV(rIdx.fieldName, key)
@@ -253,7 +278,7 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 		if ivt.btreeDb == nil {
 			continue
 		}
-		term, _, _, _, ok := ivt.GetFristKV()
+		term, _, ok := ivt.GetFristKV()
 		if !ok {
 			continue
 		}
@@ -305,7 +330,7 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 			value = append(value, ivts[i].nodes...)
 
 			//找到后继者，顶上去
-			next, _, _, _, ok := ivts[i].rIndex.GetNextKV(ivts[i].term)
+			next, _, ok := ivts[i].rIndex.GetNextKV(ivts[i].term)
 			if !ok {
 				//如果没有后继者了，那么该索引位置标记为无效
 				flag = flag | (1 << uint(i))
@@ -335,7 +360,7 @@ func (rIdx *InvertedIndex) MergeIndex(rIndexes []*InvertedIndex, fullSetmentName
 	}
 
 	rIdx.termMap = nil     //TODO 存在和上面persist同样的疑问
-	rIdx.isMemory = false
+	rIdx.inMemory = false
 
 	return nil
 }

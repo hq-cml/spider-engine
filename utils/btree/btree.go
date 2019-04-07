@@ -11,8 +11,8 @@ type Btree interface {
 	MutiSet(treeName string, kv map[string]string) error
 	GetInt(treeName, key string) (int64, bool)
 	Inc(treeName, key string) error
-	GetFristKV(treeName string) (string, uint32, uint32, int, bool)
-	GetNextKV(treeName, key string) (string, uint32, uint32, int, bool)
+	GetFristKV(treeName string) (string, uint32, bool)
+	GetNextKV(treeName, key string) (string, uint32, bool)
 	HasTree(treeName string) bool
 	Close() error
 	Display(treeName string) error
