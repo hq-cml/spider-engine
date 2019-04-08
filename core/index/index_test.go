@@ -85,8 +85,8 @@ func TestQureyTermInFile(t *testing.T) {
 
 	//从磁盘加载btree
 	//InitBoltWrapper("/tmp/spider/spider.db", 0666, 3 * time.Second)
-	rIdx.btreeDb = btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
-	defer rIdx.btreeDb.Close()
+	rIdx.btdb = btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
+	defer rIdx.btdb.Close()
 	//从磁盘加载mmap
 	var err error
 	rIdx.ivtMmap, err = mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
@@ -175,7 +175,7 @@ func TestMergeIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	rIdx := LoadInvertedIndex(tree, IDX_TYPE_STRING_LIST, TEST_TREE, ivtMmap)
-	term, _, ok := rIdx.btreeDb.GetFristKV(TEST_TREE)
+	term, _, ok := rIdx.btdb.GetFristKV(TEST_TREE)
 	for ok {
 		nodes, exist := rIdx.QueryTerm(term)
 		if !exist {
@@ -184,7 +184,7 @@ func TestMergeIndex(t *testing.T) {
 		n, _ := json.Marshal(nodes)
 		t.Log("从磁盘访问 ", term ,": ", string(n))
 
-		term, _, ok = rIdx.btreeDb.GetNextKV(TEST_TREE, term)
+		term, _, ok = rIdx.btdb.GetNextKV(TEST_TREE, term)
 	}
 
 	t.Log("\n\n")
@@ -284,7 +284,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx1 := LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 0)
+	idx1 := LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 0, 0, 3)
 	iv, b := idx1.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong")
@@ -310,7 +310,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx2 := LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0)
+	idx2 := LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0, 0, 2)
 
 	sv, b := idx2.GetString(0)
 	if !b || sv != "abc" {
@@ -337,11 +337,11 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err := idx2.AddDocument(3, "123"); err != nil {t.Fatal("add Error:", err) }
 	if err := idx2.AddDocument(4, "456"); err != nil {t.Fatal("add Error:", err) }
 
-	offset, cnt, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
+	offset, cnt, nextId, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
-	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge Offset:", offset, ". Cnt:", cnt)
+	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge Offset:", offset, ". Cnt:", cnt, ". NextId:", nextId)
 
 	//Load回来验证
 	mmp, err := mmap.NewMmap("/tmp/spider/Partition.int.fwd.merge"+basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
@@ -349,7 +349,7 @@ func TestMergeFwdIndex(t *testing.T) {
 		t.Fatal("Load Error:", err)
 	}
 	idx := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0)
-	idx = LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 0)
+	idx = LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 0, 0, 5)
 	iv, b := idx.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong", iv)
@@ -375,11 +375,11 @@ func TestMergeFwdIndexString(t *testing.T) {
 	idx2.AddDocument(3, "jkl")
 
 	idx := NewEmptyForwardIndex(IDX_TYPE_STRING, 0)
-	offset, cnt, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.int.fwd.merge.string")
+	offset, cnt, nextId, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.int.fwd.merge.string")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
-	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge.string Offset:", offset, ". Cnt:", cnt)
+	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge.string Offset:", offset, ". Cnt:", cnt, ". NextId:", nextId)
 
 	//Load回来验证
 	mmp1, err := mmap.NewMmap("/tmp/spider/Partition.int.fwd.merge.string" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
@@ -390,7 +390,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx = LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0)
+	idx = LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0, 0, 4)
 	iv, b := idx.GetString(0)
 	if !b || iv != "abc" {
 		t.Fatal("Sth wrong", iv)

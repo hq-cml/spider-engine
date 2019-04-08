@@ -17,7 +17,7 @@ package index
  * 一个特殊的点是，每个分区只是一部分的文档，所以正排索引的startDocId和nextDocId很重要，这两个变量作为本索引内部的起始
  * 比如一个DocId需要获取：
  *    在索引内存态通过memoryNum[docId-startId]来引用
- *    若磁盘态则通过baseMmap.Get(fileOffset + (docId-startId)*DATA_BYTE_CNT)
+ *    若磁盘态则通过baseMmap.Get(fwdOffset + (docId-startId)*DATA_BYTE_CNT)
  **/
 import (
 	"encoding/binary"
@@ -38,10 +38,10 @@ type ForwardIndex struct {
 	startDocId uint32 					//初始分区：从0开始；非初始分区：从本分区的第一篇DocId开始
 	nextDocId  uint32 					//下一个加入本索引的docId（所以本索引最大docId是nextDocId-1）
 	inMemory   bool   					//本索引是内存态还是磁盘态（不会同时并存）
-	indexType  uint8					//本索引的类型
-	fileOffset uint64                   //本索引的数据，在base文件中的起始偏移
-	docCnt     uint32                   //本索引文档数量
-	fake       bool
+	indexType  uint8  					//本索引的类型
+	fwdOffset  uint64 					//本索引的数据，在base文件中的起始偏移
+	docCnt     uint32 					//本索引文档数量
+	fake       bool                     //假，用于占位，高层的分区缺少某个字段时候，用此占位
 	memoryNum  []int64    `json:"-"`    //内存态本正排索引(数字)
 	memoryStr  []string   `json:"-"`    //内存态本正排索引(字符串)
 	baseMmap   *mmap.Mmap `json:"-"`    //底层mmap文件, 用于存储磁盘态正排索引
@@ -50,17 +50,13 @@ type ForwardIndex struct {
 
 const DATA_BYTE_CNT = 8
 
-//TODO 存疑
+//假索引，高层占位用
 func NewEmptyFakeForwardIndex(indexType uint8, start uint32, docCnt uint32) *ForwardIndex {
 	return &ForwardIndex{
 		docCnt:     docCnt,
-		fileOffset: 0,
-		inMemory:   true,
 		indexType:  indexType,
 		startDocId: start,
 		nextDocId:  start,
-		memoryNum:  make([]int64, 0),
-		memoryStr:  make([]string, 0),
 		fake:       true,   //here is the point!
 	}
 }
@@ -69,7 +65,7 @@ func NewEmptyFakeForwardIndex(indexType uint8, start uint32, docCnt uint32) *For
 func NewEmptyForwardIndex(indexType uint8, start uint32) *ForwardIndex {
 	return &ForwardIndex{
 		fake:       false,
-		fileOffset: 0,
+		fwdOffset:  0,
 		inMemory:   true,
 		indexType:  indexType,
 		startDocId: start,
@@ -82,15 +78,18 @@ func NewEmptyForwardIndex(indexType uint8, start uint32) *ForwardIndex {
 //从磁盘加载正排索引
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 //如果mmap自己创建的话，会造成多个mmap实例对应同一个磁盘文件，这样会造成不确定性(mmmap头部有隐藏信息字段)，也不易于维护
-func LoadForwardIndex(indexType uint8, baseMmap, extMmap *mmap.Mmap, offset uint64, docLen uint32) *ForwardIndex {
+func LoadForwardIndex(indexType uint8, baseMmap, extMmap *mmap.Mmap,
+		offset uint64, docLen, start, next uint32) *ForwardIndex {
 	return &ForwardIndex{
-		fake:       false,
-		docCnt:     docLen,
-		fileOffset: offset,
-		inMemory:   false,
-		indexType:  indexType,
-		baseMmap:   baseMmap,
-		extMmap:    extMmap,
+		fake:      false,
+		docCnt:    docLen,
+		fwdOffset: offset,
+		inMemory:  false,
+		indexType: indexType,
+		baseMmap:  baseMmap,
+		extMmap:   extMmap,
+		startDocId: start,
+		nextDocId:  next,
 	}
 }
 
@@ -148,6 +147,8 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 }
 
 //更新文档
+//Note:
+//只支持数字（包括时间）型的索引的更改，string类型的通过外层的bitmap来实现更改
 func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) error {
 	//范围校验
 	if docId < fwdIdx.startDocId || docId >= fwdIdx.nextDocId {
@@ -157,7 +158,7 @@ func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) er
 
 	//只支持数字（包括时间）型的索引的更改，string类型的通过外层的bitmap来实现更改
 	if fwdIdx.indexType != IDX_TYPE_NUMBER && fwdIdx.indexType != IDX_TYPE_DATE {
-		return errors.New("not support")
+		return nil
 	}
 
 	vtype := reflect.TypeOf(content)
@@ -190,7 +191,7 @@ func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) er
 	if fwdIdx.inMemory == true {
 		fwdIdx.memoryNum[docId - fwdIdx.startDocId] = value    //下标:docId-fwdIdx.startDocId作为索引内部的引用值
 	} else {
-		offset := fwdIdx.fileOffset + uint64(docId - fwdIdx.startDocId) * DATA_BYTE_CNT
+		offset := fwdIdx.fwdOffset + uint64(docId - fwdIdx.startDocId) * DATA_BYTE_CNT
 		fwdIdx.baseMmap.WriteInt64(offset, value)
 	}
 	return nil
@@ -219,7 +220,7 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 	}
 
 	//数字或者日期类型, 直接从索引文件读取
-	realOffset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
+	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 	if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
 		return "", false
 	}
@@ -265,7 +266,7 @@ func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 		return 0xFFFFFFFF, false
 	}
 
-	realOffset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
+	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 	if fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE {
 		if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
 			return 0xFFFFFFFF, false
@@ -296,7 +297,7 @@ func (fwdIdx *ForwardIndex) SetExtMmap(mmap *mmap.Mmap) {
 //返回值: 本索引落地完成之后，在fwd文件中的偏移量和本索引一共存了Doc数量
 //Note:
 // 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
-// 这里一个设计的问题，函数并未自动加载回mmap，但是设置了fileOffset
+// 这里一个设计的问题，函数并未自动加载回mmap，但是设置了fwdOffset和docCnt
 func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, error) {
 
 	//打开正排文件
@@ -356,7 +357,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 	}
 
 	//当前偏移量, 即文件最后位置
-	fwdIdx.fileOffset = uint64(offset) //TODO 此处到底要不要设置
+	fwdIdx.fwdOffset = uint64(offset) //TODO 此处到底要不要设置
 	fwdIdx.docCnt = uint32(cnt)
 
 	//内存态 => 磁盘态
@@ -368,35 +369,36 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
-func MergePersistFwdIndex(idxList []*ForwardIndex, fullSegmentName string) (uint64, uint32, error) {
+func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (uint64, uint32, uint32, error) {
 	//一些校验, index的类型，顺序必须完整正确
 	if idxList == nil || len(idxList) == 0 {
-		return 0, 0, errors.New("Nil []*ForwardIndex")
+		return 0, 0, 0, errors.New("Nil []*ForwardIndex")
 	}
 	indexType := idxList[0].indexType
 	l := len(idxList)
 	for i:=0; i<(l-1); i++ {
 		if idxList[i].indexType != idxList[i+1].indexType {
-			return 0, 0, errors.New("Indexes not consistent")
+			return 0, 0, 0, errors.New("Indexes not consistent")
 		}
 
 		if idxList[i].nextDocId != idxList[i+1].startDocId {
-			return 0, 0, errors.New("Indexes order wrong")
+			return 0, 0, 0, errors.New("Indexes order wrong")
 		}
 	}
+	nextId := idxList[l-1].nextDocId;
 
 	//打开正排文件
-	pflFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, fullSegmentName)
+	pflFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, partitionPathName)
 	var fwdFd *os.File
 	var err error
 	fwdFd, err = os.OpenFile(pflFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	defer fwdFd.Close()
 	fi, _ := fwdFd.Stat()
 	offset := fi.Size()
-	//fwdIdx.fileOffset = uint64(offset)
+	//fwdIdx.fwdOffset = uint64(offset)
 
 	cnt := 0
 	if indexType == IDX_TYPE_NUMBER || indexType == IDX_TYPE_DATE {
@@ -416,10 +418,10 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, fullSegmentName string) (uint
 		//cnt = int(fwdIdx.nextDocId - fwdIdx.startDocId)
 	} else {
 		//打开dtl文件
-		dtlFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, fullSegmentName)
+		dtlFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, partitionPathName)
 		dtlFd, err := os.OpenFile(dtlFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
 		defer dtlFd.Close()
 		fi, _ = dtlFd.Stat()
@@ -452,7 +454,7 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, fullSegmentName string) (uint
 	//fwdIdx.inMemory = false
 	//fwdIdx.memoryStr = nil
 	//fwdIdx.memoryNum = nil
-	return uint64(offset), uint32(cnt), nil
+	return uint64(offset), uint32(cnt), nextId, nil
 }
 
 //过滤从numbers切片中找出是否有=或!=于pos数
@@ -474,7 +476,7 @@ func (fwdIdx *ForwardIndex) FilterNums(pos uint32, filterType uint8, numbers []i
 			return false
 		}
 
-		offset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
+		offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 		value = fwdIdx.baseMmap.ReadInt64(offset)
 	}
 
@@ -514,7 +516,7 @@ func (fwdIdx *ForwardIndex) Filter(pos uint32, filterRype uint8, start, end int6
 			if fwdIdx.baseMmap == nil {
 				return false
 			}
-			offset := fwdIdx.fileOffset + uint64(pos) * DATA_BYTE_CNT
+			offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 			value = fwdIdx.baseMmap.ReadInt64(offset)
 		}
 

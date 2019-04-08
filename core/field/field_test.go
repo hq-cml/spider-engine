@@ -63,14 +63,14 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	}
 
 	//准备落地
-	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.FwdDocCnt)
+	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.DocCnt)
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
 	if err := field.Persist("/tmp/spider/Segment0", treedb); err != nil {
 		t.Fatal("Wrong:", err)
 	}
 
-	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.FwdDocCnt)
+	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.DocCnt)
 	t.Log("\n\n")
 }
 
@@ -197,55 +197,17 @@ func TestMerge(t *testing.T) {
 	//准备合并
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
-	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
 
-	offset, cnt, err := field.MergeField([]*Field{field1, field2}, "/tmp/spider/segment", treedb)
+	offset, cnt, nextId, err := MergePersistField([]*Field{field1, field2}, "/tmp/spider/segment", treedb)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("Offset:", offset, "Cnt:", cnt)
-	field.btree.Display(TEST_FIELD)
+	t.Log("Offset:", offset, "Cnt:", cnt, ". NextId:", nextId)
 
 	t.Log("\n\n")
-
-	//TODO 这些操作, 完全不闭合, 而且还依赖顺序, 后续要大改
-	//TODO 目前只能合并出完整的磁盘版本, 但是filed并不能直接用
-	//TODO 这里必须要重新加载一次...
-	////测试query
-	//tmp, b := field.Query("天安门")
-	//if !b {
-	//	t.Fatal("Wrong")
-	//}
-	//t.Log(json.JsonEncode(tmp))
-	//if len(tmp) != 2 {
-	//	t.Fatal("Wrong")
-	//}
-	//tmp, b = field.Query("火红")
-	//if !b {
-	//	t.Fatal("Wrong")
-	//}
-	//t.Log(json.JsonEncode(tmp))
-	//if len(tmp) != 2 {
-	//	t.Fatal("Wrong")
-	//}
-	//
-	////测试get
-	//s, b := field.GetString(2)
-	//if !b {
-	//	t.Fatal("Wrong")
-	//}
-	//if s != "火红的太阳" {
-	//	t.Fatal("Wrong")
-	//}
-	//
-	//_, b = field.GetString(4)
-	//if b {
-	//	t.Fatal("Wrong")
-	//}
 }
 
 //将合并的filed加载回来测试
-//TODO 这些例子都太宽厚了, 刻意成分太重, 后面要返工
 func TestLoadMerge(t *testing.T) {
 	//从磁盘加载btree
 	btdb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
@@ -266,7 +228,7 @@ func TestLoadMerge(t *testing.T) {
 
 	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, ivtMmap, mmp1, mmp2, false, btdb)
 
-	field.btree.Display(TEST_FIELD)
+	field.btdb.Display(TEST_FIELD)
 
 	//测试query
 	tmp, b := field.Query("天安门")

@@ -37,7 +37,7 @@ type InvertedIndex struct {
 	fieldName string                     //本索引所属字段
 	termMap   map[string][]basic.DocNode //索引的内存容器
 	ivtMmap   *mmap.Mmap                 //倒排文件(以mmap的形式)
-	btreeDb   btree.Btree                //B+树
+	btdb      btree.Btree                //B+树
 }
 
 const DOCNODE_BYTE_CNT = 8
@@ -51,7 +51,7 @@ func NewEmptyInvertedIndex(indexType uint8, startDocId uint32, fieldName string)
 		termMap:   make(map[string][]basic.DocNode),
 		inMemory:  true,                            	//新索引都是从内存态开始
 		ivtMmap:   nil,
-		btreeDb:   nil,
+		btdb:      nil,
 	}
 	return rIdx
 }
@@ -65,7 +65,7 @@ func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtM
 		fieldName: fieldname,
 		inMemory:  false,       //加载的索引都是磁盘态的
 		ivtMmap:   ivtMmap,
-		btreeDb:   btdb,
+		btdb:      btdb,
 	}
 	return rIdx
 }
@@ -141,9 +141,9 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) e
 	offset := int(fi.Size()) //当前偏移量, 即文件最后位置
 
 	//开始文件写入
-	rIdx.btreeDb = tree //TODO 能否不是传进来的？？
-	if !rIdx.btreeDb.HasTree(rIdx.fieldName) {
-		rIdx.btreeDb.AddTree(rIdx.fieldName)
+	rIdx.btdb = tree //TODO 能否不是传进来的？？
+	if !rIdx.btdb.HasTree(rIdx.fieldName) {
+		rIdx.btdb.AddTree(rIdx.fieldName)
 	}
 	for term, docNodeList := range rIdx.termMap {
 		//先写入长度, 占8个字节
@@ -170,7 +170,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) e
 		}
 
 		//B+树录入
-		err = rIdx.btreeDb.Set(rIdx.fieldName, term, uint64(offset))
+		err = rIdx.btdb.Set(rIdx.fieldName, term, uint64(offset))
 		if err != nil {
 			log.Errf("Persist :: Error %v", err)
 			//造成不一致了哦，或者说写脏了一块数据，但是以后也不会被引用到，因为btree里面没落盘
@@ -195,8 +195,8 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 		if ok {
 			return docNodes, true
 		}
-	} else if (rIdx.ivtMmap != nil && rIdx.btreeDb != nil) {
-		offset, ok := rIdx.btreeDb.GetInt(rIdx.fieldName, term)
+	} else if (rIdx.ivtMmap != nil && rIdx.btdb != nil) {
+		offset, ok := rIdx.btdb.GetInt(rIdx.fieldName, term)
 		if !ok {
 			return nil, false
 		}
@@ -235,26 +235,26 @@ func (rIdx *InvertedIndex) SetIvtMmap(mmap *mmap.Mmap) {
 
 //设置btree
 func (rIdx *InvertedIndex) SetBtree(tree btree.Btree) {
-	rIdx.btreeDb = tree
+	rIdx.btdb = tree
 }
 
 //btree操作,
 func (rIdx *InvertedIndex) GetFristKV() (string, uint32, bool) {
-	if rIdx.btreeDb == nil {
+	if rIdx.btdb == nil {
 		log.Err("Btree is nil")
 		return "", 0, false
 	}
-	return rIdx.btreeDb.GetFristKV(rIdx.fieldName)
+	return rIdx.btdb.GetFristKV(rIdx.fieldName)
 }
 
 //btree操作
 func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, bool) {
-	if rIdx.btreeDb == nil {
+	if rIdx.btdb == nil {
 		log.Err("Btree is nil")
 		return "", 0, false
 	}
 
-	return rIdx.btreeDb.GetNextKV(rIdx.fieldName, key)
+	return rIdx.btdb.GetNextKV(rIdx.fieldName, key)
 }
 
 //临时结构，辅助Merge
@@ -294,7 +294,7 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 	//数据准备，开始多路归并
 	tmpIvts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
-		if ivt.btreeDb == nil {
+		if ivt.btdb == nil {
 			continue
 		}
 		term, _, ok := ivt.GetFristKV()

@@ -129,12 +129,12 @@ func LoadPartition(partitionName string) *Partition {
 	//TODO 从文件加载进来的??
 	//for _, field := range part.FieldInfos {
 	for _, fld := range part.FieldSummaries {
-		if fld.FwdDocCnt == 0 {
+		if fld.DocCnt == 0 {
 			newField := field.NewEmptyField(fld.FieldName, part.StartDocId, fld.FieldType)
 			part.Fields[fld.FieldName] = newField
 		} else {
 			oldField := field.LoadField(fld.FieldName, part.StartDocId,
-				part.NextDocId, fld.FieldType, fld.FwdOffset, fld.FwdDocCnt,
+				part.NextDocId, fld.FieldType, fld.FwdOffset, fld.DocCnt,
 				part.ivtMmap, part.baseMmap, part.extMmap, false, part.btreeDb)
 			part.Fields[fld.FieldName] = oldField
 		}
@@ -251,9 +251,9 @@ func (prt *Partition) Persist() error {
 			log.Errf("Partition --> Serialization %v", err)
 			return err
 		}
-		summary.FwdOffset, summary.FwdDocCnt = prt.Fields[name].FwdOffset, prt.Fields[name].FwdDocCnt
+		summary.FwdOffset, summary.DocCnt = prt.Fields[name].FwdOffset, prt.Fields[name].DocCnt
 		prt.FieldSummaries[summary.FieldName] = summary
-		log.Debugf("%v %v %v", name, summary.FwdOffset, summary.FwdDocCnt)
+		log.Debugf("%v %v %v", name, summary.FwdOffset, summary.DocCnt)
 	}
 
 	//存储源信息
@@ -647,15 +647,15 @@ func (prt *Partition) MergePartitions(parts []*Partition) error {
 		for _, pt := range parts {
 			if _, ok := pt.Fields[name]; !ok {
 				fakefield := field.NewEmptyFakeField(prt.Fields[name].FieldName, pt.StartDocId,
-					prt.Fields[name].FieldType, pt.NextDocId-pt.StartDocId)
+					prt.Fields[name].IndexType, pt.NextDocId-pt.StartDocId)
 				fs = append(fs, fakefield)
-				continue
+			} else {
+				fs = append(fs, pt.Fields[name])
 			}
-			fs = append(fs, pt.Fields[name])
 		}
-		prt.Fields[name].MergeField(fs, prt.SegmentName, prt.btreeDb)
+		prt.Fields[name].MergePersistField(fs, prt.SegmentName, prt.btreeDb)
 		summary.FwdOffset = prt.Fields[name].FwdOffset
-		summary.FwdDocCnt = prt.Fields[name].FwdDocCnt
+		summary.DocCnt = prt.Fields[name].DocCnt
 		prt.FieldSummaries[name] = summary
 	}
 
