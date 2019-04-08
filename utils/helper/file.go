@@ -3,8 +3,6 @@ package helper
 import (
 	"os"
 	"io/ioutil"
-	"encoding/json"
-	"fmt"
 )
 
 //读取file文件

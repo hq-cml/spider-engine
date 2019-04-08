@@ -43,7 +43,7 @@ type InvertedIndex struct {
 const DOCNODE_BYTE_CNT = 8
 
 //新建空的倒排索引
-func NewInvertedIndex(indexType uint8, startDocId uint32, fieldName string) *InvertedIndex {
+func NewEmptyInvertedIndex(indexType uint8, startDocId uint32, fieldName string) *InvertedIndex {
 	rIdx := &InvertedIndex{
 		nextDocId: startDocId,
 		fieldName: fieldName,
@@ -57,6 +57,8 @@ func NewInvertedIndex(indexType uint8, startDocId uint32, fieldName string) *Inv
 }
 
 //从磁盘加载倒排索引
+//这里并未真的从磁盘加载，mmap和btdb都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
+//如果mmap自己创建的话，会造成多个mmap实例对应同一个磁盘文件，这样会造成不确定性(mmmap头部有隐藏信息字段)，也不易于维护
 func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtMmap *mmap.Mmap) *InvertedIndex {
 	rIdx := &InvertedIndex{
 		indexType: indexType,
@@ -71,7 +73,7 @@ func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtM
 //增加一个doc文档
 //Note：
 // 增加文档，只会出现在最新的一个分区（即都是内存态的），所以只会操作内存态的
-// 也就是，一个索引一旦落盘之后，就不在支持增加Doc了
+// 也就是，一个索引一旦落盘之后，就不在支持增加Doc了（会有其他分区的内存态索引去负责新增）
 //TODO 改、删怎么处理的？？
 func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 
@@ -122,6 +124,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 //
 //Note:
 // 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
+// 这里一个设计的问题，函数并未自动加载回mmap，但是设置了btdb
 func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) error {
 
 	//打开倒排文件, 获取文件大小作为初始偏移

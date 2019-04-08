@@ -61,7 +61,7 @@ func NewEmptyField(fieldname string, start uint32, fieldType uint8) *Field {
 		fieldType == index.IDX_TYPE_STRING_LIST ||
 		fieldType == index.IDX_TYPE_STRING_SINGLE ||
 		fieldType == index.GATHER_TYPE {
-		ivtIdx = index.NewInvertedIndex(fieldType, start, fieldname)
+		ivtIdx = index.NewEmptyInvertedIndex(fieldType, start, fieldname)
 	}
 	fwdIdx := index.NewEmptyForwardIndex(fieldType, start)
 	return &Field{
@@ -92,7 +92,7 @@ func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset 
 	}
 
 	fwdIdx := index.LoadForwardIndex(fieldtype, baseMmap, extMmap,
-		fwdOffset, fwdDocCnt, false)
+		fwdOffset, fwdDocCnt)
 
 	return &Field{
 		FieldName:  fieldname,
@@ -217,19 +217,22 @@ func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbe
 //TODO 这些操作, 完全不闭合, 而且还依赖顺序, 后续要大改
 //TODO 目前只能合并出完整的磁盘版本, 但是filed并不能直接用
 func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Btree) (uint64, uint32, error) {
-	var err error
+
 	if fld.fwdIdx != nil {
 		fwds := make([]*index.ForwardIndex, 0)
 
 		for _, fd := range fields {
 			fwds = append(fwds, fd.fwdIdx)
 		}
-		fld.FwdOffset, fld.FwdDocCnt, err = fld.fwdIdx.MergeIndex(fwds, segmentName)
+		off, cnt, err := index.MergePersistFwdIndex(fwds, segmentName)
 		if err != nil {
 			log.Errf("Field --> mergeField :: Serialization Error %v", err)
 			return 0, 0, err
 		}
+		fld.FwdOffset, fld.FwdDocCnt = off,cnt
 		fld.nextDocId += uint32(fld.FwdDocCnt)
+
+		//TODO 这里fld.fwdIdx内部几个关键变量比如offset不会再被设置了，可能有坑
 	}
 
 	if fld.ivtIdx != nil {
@@ -248,7 +251,7 @@ func (fld *Field) MergeField(fields []*Field, segmentName string, btree btree.Bt
 			return 0, 0, err
 		}
 
-		//TODO 这里fld.ivtIdx内部几个关键变量比如btree, inMemmory不会再被设置了，是否有坑？
+		//TODO 这里fld.ivtIdx内部几个关键变量比如btree, inMemmory不会再被设置了，可能有坑
 	}
 
 	return fld.FwdOffset, fld.FwdDocCnt, nil

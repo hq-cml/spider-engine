@@ -261,6 +261,7 @@ func (prt *Partition) Persist() error {
 		return err
 	}
 
+	//TODO 下面这一坨， 很可能不需要， 而且即便需要也不是load=false
 	prt.isMemory = false
 
 	var err error

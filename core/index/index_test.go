@@ -41,7 +41,7 @@ func TestSplitWords(t *testing.T) {
 
 //********************* 倒排索引 *********************
 func TestAddDoc(t *testing.T) {
-	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
 	rIdx.AddDocument(0, "我爱北京天安门")
 	rIdx.AddDocument(1, "天安门上太阳升")
 	rIdx.AddDocument(2, "火红的太阳")
@@ -51,7 +51,7 @@ func TestAddDoc(t *testing.T) {
 }
 
 func TestQureyTermInMemAndPersist(t *testing.T) {
-	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
 	rIdx.AddDocument(0, "我爱北京天安门")
 	rIdx.AddDocument(1, "天安门上太阳升")
 	rIdx.AddDocument(2, "火红的太阳")
@@ -80,7 +80,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 
 func TestQureyTermInFile(t *testing.T) {
 	//新建索引
-	rIdx := NewInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
 	rIdx.inMemory = false //写死, 强制走磁盘
 
 	//从磁盘加载btree
@@ -121,7 +121,7 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引1 => 落地索引1 => 再加载索引1
 	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree1.Close()
-	rIdx1 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
+	rIdx1 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
 	rIdx1.AddDocument(1, "c;f")
 	rIdx1.AddDocument(2, "a;c")
 	rIdx1.AddDocument(3, "f;a")
@@ -136,7 +136,7 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引2 => 落地索引2 => 再加载索引2
 	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree2.Close()
-	rIdx2 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
+	rIdx2 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
 	rIdx2.AddDocument(4, "b;d")
 	rIdx2.AddDocument(5, "d;c")
 	rIdx2.AddDocument(6, "b;c")
@@ -151,7 +151,7 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引3 => 落地索引3 => 再加载索引3
 	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree3.Close()
-	rIdx3 := NewInvertedIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
+	rIdx3 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
 	rIdx3.AddDocument(7, "c;e")
 	rIdx3.AddDocument(8, "a;e")
 	rIdx3.AddDocument(9, "c;a")
@@ -275,6 +275,8 @@ func TestPersist(t *testing.T) {
 		t.Fatal("Persist Error:", err)
 	}
 	t.Log("Persist ", "/tmp/spider/Partition.string.fwd. Offset:", offset, ". Cnt:", cnt)
+
+	t.Log("\n\n")
 }
 
 func TestLoadFwdIndex(t *testing.T) {
@@ -282,8 +284,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx1 := LoadForwardIndex(IDX_TYPE_NUMBER,
-		mmp, nil, 0, 0, false)
+	idx1 := LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 0)
 	iv, b := idx1.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong")
@@ -309,8 +310,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx2 := LoadForwardIndex(IDX_TYPE_STRING,
-		mmp1, mmp2, 0, 0, false)
+	idx2 := LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0)
 
 	sv, b := idx2.GetString(0)
 	if !b || sv != "abc" {
@@ -323,6 +323,8 @@ func TestLoadFwdIndex(t *testing.T) {
 		t.Fatal("Sth wrong")
 	}
 	t.Log("1: ", sv)
+
+	t.Log("\n\n")
 }
 
 func TestMergeFwdIndex(t *testing.T) {
@@ -331,13 +333,11 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err := idx1.AddDocument(1, 200); err != nil {t.Fatal("add Error:", err) }
 	if err := idx1.AddDocument(2, 300); err != nil {t.Fatal("add Error:", err) }
 
-	idx2 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0) //数字型存入字符
-	if err := idx2.AddDocument(0, "123"); err != nil {t.Fatal("add Error:", err) }
-	if err := idx2.AddDocument(1, "456"); err != nil {t.Fatal("add Error:", err) }
+	idx2 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 3) //数字型存入字符
+	if err := idx2.AddDocument(3, "123"); err != nil {t.Fatal("add Error:", err) }
+	if err := idx2.AddDocument(4, "456"); err != nil {t.Fatal("add Error:", err) }
 
-	idx := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0)
-	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
-	offset, cnt, err := idx.MergeIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
+	offset, cnt, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
@@ -348,8 +348,8 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx = LoadForwardIndex(IDX_TYPE_NUMBER,
-		mmp, nil, 0, 0, false)
+	idx := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0)
+	idx = LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 0)
 	iv, b := idx.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong", iv)
@@ -361,6 +361,8 @@ func TestMergeFwdIndex(t *testing.T) {
 		t.Fatal("Sth wrong", iv)
 	}
 	t.Log("3: ", iv)
+
+	t.Log("\n\n")
 }
 
 func TestMergeFwdIndexString(t *testing.T) {
@@ -368,13 +370,12 @@ func TestMergeFwdIndexString(t *testing.T) {
 	idx1.AddDocument(0, "abc")
 	idx1.AddDocument(1, "def")
 
-	idx2 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
-	idx2.AddDocument(0, "ghi")
-	idx2.AddDocument(1, "jkl")
+	idx2 := NewEmptyForwardIndex(IDX_TYPE_STRING, 2) //数字型存入字符
+	idx2.AddDocument(2, "ghi")
+	idx2.AddDocument(3, "jkl")
 
 	idx := NewEmptyForwardIndex(IDX_TYPE_STRING, 0)
-	//TODO 这个地方存在坑, 如果idx1, idx2的顺序不对,就会出坑
-	offset, cnt, err := idx.MergeIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.int.fwd.merge.string")
+	offset, cnt, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.int.fwd.merge.string")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
@@ -389,8 +390,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	idx = LoadForwardIndex(IDX_TYPE_STRING,
-		mmp1, mmp2, 0, 0, false)
+	idx = LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0)
 	iv, b := idx.GetString(0)
 	if !b || iv != "abc" {
 		t.Fatal("Sth wrong", iv)
@@ -402,6 +402,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 		t.Fatal("Sth wrong", iv)
 	}
 	t.Log("3: ", iv)
+	t.Log("\n\n")
 }
 
 func TestFilterNums(t *testing.T) {
@@ -418,4 +419,5 @@ func TestFilterNums(t *testing.T) {
 	if idx1.FilterNums(1, basic.FILT_EQ, []int64{300, 400}) {
 		t.Fatal("Sth wrong")
 	}
+	t.Log("\n\n")
 }
