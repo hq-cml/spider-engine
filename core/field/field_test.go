@@ -92,7 +92,7 @@ func TestLoad(t *testing.T) {
 		t.Fatal("Load Error:", err)
 	}
 
-	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, ivtMmap, mmp1, mmp2, false, btdb)
+	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, ivtMmap, mmp1, mmp2, btdb)
 	//测试query
 	tmp, b := field.Query("天安门")
 	if !b {
@@ -175,7 +175,7 @@ func TestMerge(t *testing.T) {
 		t.Fatal("Load Error:", err)
 	}
 
-	field1 := LoadField(TEST_FIELD, 0, 2, index.IDX_TYPE_STRING_SEG, 0, 2, ivtMmap1, mmp11, mmp21, false, btdb1)
+	field1 := LoadField(TEST_FIELD, 0, 2, index.IDX_TYPE_STRING_SEG, 0, 2, ivtMmap1, mmp11, mmp21, btdb1)
 
 	//加载field2
 	btdb2 := btree.NewBtree("xx", "/tmp/spider/spider2" + basic.IDX_FILENAME_SUFFIX_BTREE)
@@ -192,7 +192,7 @@ func TestMerge(t *testing.T) {
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	field2 := LoadField(TEST_FIELD, 2, 4, index.IDX_TYPE_STRING_SEG, 0, 2, ivtMmap2, mmp12, mmp22, false, btdb2)
+	field2 := LoadField(TEST_FIELD, 2, 4, index.IDX_TYPE_STRING_SEG, 0, 2, ivtMmap2, mmp12, mmp22, btdb2)
 
 	//准备合并
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
@@ -226,7 +226,7 @@ func TestLoadMerge(t *testing.T) {
 		t.Fatal("Load Error:", err)
 	}
 
-	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, ivtMmap, mmp1, mmp2, false, btdb)
+	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, ivtMmap, mmp1, mmp2, btdb)
 
 	field.btdb.Display(TEST_FIELD)
 

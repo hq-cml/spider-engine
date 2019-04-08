@@ -13,7 +13,7 @@ package index
  *          extMmap实际存string的内容，格式如： [len|content][len|content][len|content]...
  *
  * Note：
- * 正派索引巧妙应用了数组的下表，作为docId, 数组元素值作为实际的值，所以这也可看做一种map
+ * 正排索引巧妙应用了数组的下表，作为docId, 数组元素值作为实际的值，所以这也可看做一种map
  * 一个特殊的点是，每个分区只是一部分的文档，所以正排索引的startDocId和nextDocId很重要，这两个变量作为本索引内部的起始
  * 比如一个DocId需要获取：
  *    在索引内存态通过memoryNum[docId-startId]来引用

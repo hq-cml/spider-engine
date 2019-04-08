@@ -31,14 +31,14 @@ import (
 )
 
 type Table struct {
-	Name           string                        `json:"name"`
-	Path           string                        `json:"pathname"`
-	FieldSummaries map[string]field.FieldSummary `json:"fields"`
-	PrimaryKey     string                        `json:"primarykey"`
-	StartDocId     uint32                        `json:"startdocid"`
-	NextDocId      uint32                        `json:"nextdocid"`
-	PrefixSegment  uint64                        `json:"prefixsegment"`
-	PartitionNames []string                      `json:"partitionnames"`
+	Name           string                      `json:"name"`
+	Path           string                      `json:"pathname"`
+	FieldSummaries map[string]field.BasicField `json:"fields"`
+	PrimaryKey     string                      `json:"primarykey"`
+	StartDocId     uint32                      `json:"startdocid"`
+	NextDocId      uint32                      `json:"nextdocid"`
+	PrefixSegment  uint64                      `json:"prefixsegment"`
+	PartitionNames []string                    `json:"partitionnames"`
 
 	partitions    []*partition.Partition
 
@@ -81,14 +81,14 @@ func (tbl *Table) Close() error {
 //产生内存Partition
 func (tbl *Table) generateMemPartition() {
 	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
-	var summaries []field.FieldSummary
+	var summaries []field.BasicField
 	for _, f := range tbl.FieldSummaries {
-		if f.FieldType != index.IDX_TYPE_PK { //TODO why??
+		if f.IndexType != index.IDX_TYPE_PK { //TODO why??
 			summaries = append(summaries, f)
 		}
 	}
 
-	tbl.memPartition = partition.NewEmptyPartitionWithFieldsInfo(segmentname, tbl.NextDocId, summaries)
+	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(segmentname, tbl.NextDocId, summaries)
 	tbl.PrefixSegment++
 }
 
@@ -107,7 +107,7 @@ func NewEmptyTable(name, path string) *Table {
 		primaryBtdb:    nil,
 		bitmap:         nil,
 		Path:           path,
-		FieldSummaries: make(map[string]field.FieldSummary),
+		FieldSummaries: make(map[string]field.BasicField),
 		mutex:          mu,
 		primaryMap:     make(map[string]string),
 	}
@@ -158,7 +158,7 @@ func LoadTable(name, path string) (*Table, error) {
 }
 
 //TODO 为什么这里添加列， 只有内存分区那一块有效，其他的分支只是增加一个分区？？
-func (tbl *Table) AddField(summary field.FieldSummary) error {
+func (tbl *Table) AddField(summary field.BasicField) error {
 
 	if _, ok := tbl.FieldSummaries[summary.FieldName]; ok {
 		log.Warnf("Field %v have Exist ", summary.FieldName)
@@ -166,7 +166,7 @@ func (tbl *Table) AddField(summary field.FieldSummary) error {
 	}
 
 	tbl.FieldSummaries[summary.FieldName] = summary
-	if summary.FieldType == index.IDX_TYPE_PK {
+	if summary.IndexType == index.IDX_TYPE_PK {
 		tbl.PrimaryKey = summary.FieldName
 		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.primaryBtdb = btree.NewBtree("", primaryname)
@@ -193,7 +193,7 @@ func (tbl *Table) AddField(summary field.FieldSummary) error {
 			tbl.partitions = append(tbl.partitions, tmpsegment)
 			tbl.PartitionNames = make([]string, 0)
 			for _, prt := range tbl.partitions {
-				tbl.PartitionNames = append(tbl.PartitionNames, prt.SegmentName)
+				tbl.PartitionNames = append(tbl.PartitionNames, prt.PartitionName)
 			}
 
 			tbl.generateMemPartition()
@@ -237,7 +237,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	tbl.partitions = append(tbl.partitions, tmpsegment)
 	tbl.PartitionNames = make([]string, 0)
 	for _, seg := range tbl.partitions {
-		tbl.PartitionNames = append(tbl.PartitionNames, seg.SegmentName)
+		tbl.PartitionNames = append(tbl.PartitionNames, seg.PartitionName)
 	}
 
 	tbl.generateMemPartition()
@@ -367,7 +367,7 @@ func (tbl *Table) SyncMemoryPartition() error {
 		log.Errf("SyncMemoryPartition Error %v", err)
 		return err
 	}
-	partitionName := tbl.memPartition.SegmentName
+	partitionName := tbl.memPartition.PartitionName
 	tbl.memPartition.Close()
 	tbl.memPartition = nil
 	newPartition := partition.LoadPartition(partitionName)
@@ -422,14 +422,14 @@ func (tbl *Table) MergePartitions() error {
 
 
 	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
-	var summaries []field.FieldSummary
+	var summaries []field.BasicField
 	for _, f := range tbl.FieldSummaries {
-		if f.FieldType != index.IDX_TYPE_PK { //TODO why??
+		if f.IndexType != index.IDX_TYPE_PK { //TODO why??
 			summaries = append(summaries, f)
 		}
 	}
 
-	tmpPartition := partition.NewEmptyPartitionWithFieldsInfo(segmentname, tbl.NextDocId, summaries)
+	tmpPartition := partition.NewEmptyPartitionWithBasicFields(segmentname, tbl.NextDocId, summaries)
 	tbl.PrefixSegment++  //TODO 要新增吗
 	if err := tbl.StoreMeta(); err != nil {
 		return err
@@ -440,7 +440,7 @@ func (tbl *Table) MergePartitions() error {
 		return err
 	}
 
-	//tmpname:=tmpPartition.SegmentName
+	//tmpname:=tmpPartition.PartitionName
 	tmpPartition.Close()
 	tmpPartition = nil
 

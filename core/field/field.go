@@ -16,10 +16,10 @@ import (
 
 //字段的结构定义
 type Field struct {
-	FieldName  string `json:"fieldname"`
-	startDocId uint32               	 //和它所拥有的正排索引一致
-	nextDocId  uint32				 	 //和它所拥有的正排索引一致
-	IndexType  uint8  `json:"indextype"`
+	FieldName  string `json:"fieldName"`
+	StartDocId uint32 					 //和它所拥有的正排索引一致
+	NextDocId  uint32 					 //和它所拥有的正排索引一致
+	IndexType  uint8  `json:"indexType"`
 	inMemory   bool
 	ivtIdx     *index.InvertedIndex      //倒排索引
 	fwdIdx     *index.ForwardIndex       //正排索引
@@ -28,10 +28,10 @@ type Field struct {
 	btdb       btree.Btree
 }
 
-// 字段的描述信息
-type FieldSummary struct {
-	FieldName string `json:"fieldname"`
-	FieldType uint8  `json:"fieldtype"`
+// 字段的最基本描述信息，用于分区的落盘
+type BasicField struct {
+	FieldName string `json:"fieldName"`
+	IndexType uint8  `json:"indexType"`
 	FwdOffset uint64 `json:"fwdOffset"` //正排索引的偏移量
 	DocCnt    uint32 `json:"docCnt"` 	//正排索引文档个数
 }
@@ -41,8 +41,8 @@ func NewEmptyFakeField(fieldname string, start uint32, IndexType uint8, docCnt u
 	fwdIdx := index.NewEmptyFakeForwardIndex(IndexType, start, docCnt)
 	return &Field{
 		FieldName:  fieldname,
-		startDocId: start,
-		nextDocId:  start,
+		StartDocId: start,
+		NextDocId:  start,
 		IndexType:  IndexType,
 		fwdIdx:     fwdIdx,    //主要是为了这个假索引
 	}
@@ -64,8 +64,8 @@ func NewEmptyField(fieldName string, start uint32, indexType uint8) *Field {
 
 	return &Field{
 		FieldName:  fieldName,
-		startDocId: start,
-		nextDocId:  start,
+		StartDocId: start,
+		NextDocId:  start,
 		IndexType:  indexType,
 		inMemory:   true,
 		ivtIdx:     ivtIdx,
@@ -79,7 +79,7 @@ func NewEmptyField(fieldName string, start uint32, indexType uint8) *Field {
 //加载字段索引
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset uint64,
-	fwdDocCnt uint32, ivtMmap, baseMmap, extMmap *mmap.Mmap, isMomery bool, btree btree.Btree) *Field {
+	fwdDocCnt uint32, ivtMmap, baseMmap, extMmap *mmap.Mmap, btree btree.Btree) *Field {
 
 	var ivtIdx *index.InvertedIndex
 	if fieldtype == index.IDX_TYPE_STRING ||
@@ -94,10 +94,10 @@ func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset 
 
 	return &Field{
 		FieldName:  fieldname,
-		startDocId: start,
-		nextDocId:  next,
+		StartDocId: start,
+		NextDocId:  next,
 		IndexType:  fieldtype,
-		inMemory:   isMomery,
+		inMemory:   false,
 		DocCnt:     fwdDocCnt,
 		FwdOffset:  fwdOffset,
 		ivtIdx:     ivtIdx,
@@ -110,8 +110,8 @@ func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset 
 //TODO 如何保证一致性？？？
 func (fld *Field) AddDocument(docId uint32, content string) error {
 
-	if docId != fld.nextDocId || fld.inMemory == false || fld.fwdIdx == nil {
-		log.Errf("AddDocument :: Wrong docId %v fld.nextDocId %v fld.profile %v", docId, fld.nextDocId, fld.fwdIdx)
+	if docId != fld.NextDocId || fld.inMemory == false || fld.fwdIdx == nil {
+		log.Errf("AddDocument :: Wrong docId %v fld.NextDocId %v fld.profile %v", docId, fld.NextDocId, fld.fwdIdx)
 		return errors.New("[ERROR] Wrong docId")
 	}
 
@@ -131,7 +131,7 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 		}
 	}
 
-	fld.nextDocId++
+	fld.NextDocId++
 	return nil
 }
 
@@ -164,9 +164,9 @@ func (fld *Field) Query(key interface{}) ([]basic.DocNode, bool) {
 //Note：利用正排索引
 func (fld *Field) GetString(docId uint32) (string, bool) {
 	//Pos是docId在本索引中的位置
-	pos := docId - fld.startDocId
+	pos := docId - fld.StartDocId
 
-	if docId >= fld.startDocId && docId < fld.nextDocId && fld.fwdIdx != nil {
+	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.fwdIdx != nil {
 		return fld.fwdIdx.GetString(pos)
 	}
 
@@ -217,10 +217,10 @@ func (fld *Field) SetMmap(base, ext, idx *mmap.Mmap) {
 
 //过滤（针对的是正排索引）
 func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbers []int64, str string) bool {
-	if docId >= fld.startDocId && docId < fld.nextDocId && fld.fwdIdx != nil {
+	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.fwdIdx != nil {
 
 		//Pos是docId在本索引中的位置
-		pos := docId - fld.startDocId
+		pos := docId - fld.StartDocId
 
 		if len(numbers) == 0 {
 			return fld.fwdIdx.Filter(pos, filterType, start, end, str)
