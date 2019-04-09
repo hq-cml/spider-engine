@@ -434,7 +434,7 @@ func (tbl *Table) MergePartitions() error {
 	if err := tbl.StoreMeta(); err != nil {
 		return err
 	}
-	err := tmpPartition.MergePartitions(todoPartitions)
+	err := tmpPartition.MergePersistPartitions(todoPartitions)
 	if err != nil {
 		log.Errf("MergePartitions Error: %s", err)
 		return err

@@ -66,9 +66,11 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.DocCnt)
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
+	t.Log("Before Persist. NextId:", field.NextDocId)
 	if err := field.Persist("/tmp/spider/Segment0", treedb); err != nil {
 		t.Fatal("Wrong:", err)
 	}
+	t.Log("After Persist. NextId:", field.NextDocId)
 
 	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.DocCnt)
 	t.Log("\n\n")

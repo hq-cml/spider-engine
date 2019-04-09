@@ -138,11 +138,11 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 //更新
 //Note:
 //只更新正排索引，倒排索引在上层通过bitmap来更新
-func (fld *Field) UpdateDocument(docid uint32, contentstr string) error {
+func (fld *Field) UpdateDocument(docid uint32, content string) error {
 	if fld.fwdIdx == nil {
 		return errors.New("fwdIdx is nil")
 	}
-	if err := fld.fwdIdx.UpdateDocument(docid, contentstr); err != nil {
+	if err := fld.fwdIdx.UpdateDocument(docid, content); err != nil {
 		log.Errf("Field --> UpdateDocument :: Update Document Error %v", err)
 		return err
 	}
@@ -209,10 +209,10 @@ func (fld *Field) SetBtree(btdb btree.Btree) {
 	}
 }
 
-func (fld *Field) SetMmap(base, ext, idx *mmap.Mmap) {
+func (fld *Field) SetMmap(base, ext, ivt *mmap.Mmap) {
 	fld.SetBaseMmap(base)
 	fld.SetExtMmap(ext)
-	fld.SetIvtMmap(idx)
+	fld.SetIvtMmap(ivt)
 }
 
 //过滤（针对的是正排索引）
@@ -239,6 +239,7 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 
 	var err error
 	if fld.fwdIdx != nil {
+		//落地, 并设置了field的信息
 		fld.FwdOffset, fld.DocCnt, err = fld.fwdIdx.Persist(partitionPathName)
 		if err != nil {
 			log.Errf("Field --> Persist :: Error %v", err)
@@ -247,6 +248,7 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 	}
 
 	if fld.ivtIdx != nil {
+		//落地, 并设置了btdb
 		fld.btdb = btdb
 		err = fld.ivtIdx.Persist(partitionPathName, fld.btdb)
 		if err != nil {
