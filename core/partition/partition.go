@@ -19,6 +19,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
+	"git.xiaojukeji.com/sofa-server/sofa_charges_go/logic/filter"
 )
 
 const (
@@ -467,68 +468,68 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 }
 
 //搜索（单query）
-//搜索的结果将append到indocids中
-func (prt *Partition) SearchDocs(query basic.SearchQuery,
-	filters []basic.SearchFilted, bitmap *bitmap.Bitmap,
-	indocids []basic.DocNode) ([]basic.DocNode, bool) {
+//搜索的结果将append到indocids中(根据query搜索结果, 再通过filter进行过滤 )
+//bitmap从更高层传入
+func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.SearchFilted,
+	bitmap *bitmap.Bitmap) ([]basic.DocNode, bool) {
 
-	start := len(indocids)
-	//query查询
-	if query.Value == "" {
-		docids := make([]basic.DocNode, 0)
-		for i := prt.StartDocId; i < prt.NextDocId; i++ {
-			if bitmap.GetBit(uint64(i)) == 0 {
-				docids = append(docids, basic.DocNode{Docid: i})
-			}
-		}
-		indocids = append(indocids, docids...)
-	} else {
-		docids, match := prt.Fields[query.FieldName].Query(query.Value)
-		if !match {
-			return indocids, false
-		}
-
-		indocids = append(indocids, docids...)
-	}
-
-	//bitmap去掉数据
-	index := start
-	if (filters == nil || len(filters) == 0) && bitmap != nil {
-		for _, docid := range indocids[start:] {
-			//去掉bitmap删除的
-			if bitmap.GetBit(uint64(docid.Docid)) == 0 {
-				indocids[index] = docid
-				index++
-			}
-		}
-		return indocids[:index], true
-	}
-
-	//过滤操作
-	index = start
-	for _, docidinfo := range indocids[start:] {
-		match := true
+	retDocs := []basic.DocNode{}
+	//校验
+	if filters != nil && len(filters) > 0 {
 		for _, filter := range filters {
-			if _, hasField := prt.Fields[filter.FieldName]; hasField {
-				if (bitmap != nil && bitmap.GetBit(uint64(docidinfo.Docid)) == 1) ||
-					(!prt.Fields[filter.FieldName].Filter(docidinfo.Docid, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr)) {
+			if _, hasField := part.Fields[filter.FieldName]; hasField {
+				return retDocs, false
+			}
+		}
+	}
+
+	//先用query查询, 如果为空, 则取出所有未删除的节点
+	if query.Value == "" {
+		for i := part.StartDocId; i < part.NextDocId; i++ {
+			retDocs = append(retDocs, basic.DocNode{Docid: i})
+		}
+	} else {
+		var match bool
+		retDocs, match = part.Fields[query.FieldName].Query(query.Value)
+		if !match {
+			return retDocs, false
+		}
+	}
+
+	//再用bitmap去掉已删除的数据
+	if bitmap != nil {
+		idx := 0
+		for _, doc := range retDocs{
+			//保留未删除的
+			if bitmap.GetBit(uint64(doc.Docid)) == 0 {
+				retDocs[idx] = doc
+				idx++
+			}
+		}
+		retDocs = retDocs[:idx]
+	}
+
+	//再使用过滤器
+	if filters != nil && len(filters) > 0 {
+		idx := 0
+		for _, doc := range retDocs {
+			match := true
+			//必须全部的过滤器都满足
+			for _, filter := range filters {
+				if !part.Fields[filter.FieldName].Filter(doc.Docid, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr) {
 					match = false
 					break
 				}
-				log.Debugf("Partition[%v] QUERY  %v", prt.PartitionName, docidinfo)
-			} else {
-				log.Debugf("Partition[%v] FILTER FIELD[%v] NOT FOUND", prt.PartitionName, filter.FieldName)
-				return indocids[:start], true
+				log.Debugf("Partition[%v] QUERY  %v", part.PartitionName, doc)
+			}
+			if match {
+				retDocs[idx] = doc
+				idx++
 			}
 		}
-		if match {
-			indocids[index] = docidinfo
-			index++
-		}
-
 	}
 
-	return indocids[:index], true
+	return retDocs, true
 }
 
 //TODO 求交集？？

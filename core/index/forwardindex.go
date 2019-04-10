@@ -457,7 +457,9 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 	return uint64(offset), uint32(cnt), nextId, nil
 }
 
-//过滤从numbers切片中找出是否有=或!=于pos数
+//从numbers判断pos指定的数,如果
+// type:EQ 只要有一个==, 就算ok
+// type:NEQ 必须全部都是!=, 就算ok
 func (fwdIdx *ForwardIndex) FilterNums(pos uint32, filterType uint8, numbers []int64) bool {
 	var value int64
 	if fwdIdx.fake {   //TODO ??
@@ -488,9 +490,9 @@ func (fwdIdx *ForwardIndex) FilterNums(pos uint32, filterType uint8, numbers []i
 			}
 		}
 		return false
-	case basic.FILT_NOT:
-		for _, start := range numbers {
-			if (0xFFFFFFFF&value != 0xFFFFFFFF) && (value == start) {
+	case basic.FILT_NEQ:
+		for _, num := range numbers {
+			if (0xFFFFFFFF&value != 0xFFFFFFFF) && (value == num) {
 				return false
 			}
 		}
@@ -529,7 +531,7 @@ func (fwdIdx *ForwardIndex) Filter(pos uint32, filterRype uint8, start, end int6
 			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value <= start)
 		case basic.FILT_RANGE:
 			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value >= start && value <= end)
-		case basic.FILT_NOT:
+		case basic.FILT_NEQ:
 			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value != start)
 		default:
 			return false
