@@ -54,8 +54,34 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
-
+	if len(list) != 2 {
+		t.Fatal("Should 2!!")
+	}
 	t.Log(helper.JsonEncode(list))
+
+	list, exist = memPartition.Query(TEST_FIELD3, "喜欢")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 3 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = memPartition.Query(TEST_FIELD3, "游泳")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	c, _ := memPartition.GetDocument(2)
+	t.Log(helper.JsonEncode(c))
+
+	s1, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	t.Log(s1)
 
 	//持久化落地
 	memPartition.Persist()
@@ -64,6 +90,81 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
+	if len(list) != 2 {
+		t.Fatal("Should 2!!")
+	}
 	t.Log(helper.JsonEncode(list))
 
+	list, exist = memPartition.Query(TEST_FIELD3, "喜欢")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 3 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = memPartition.Query(TEST_FIELD3, "游泳")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	d, _ := memPartition.GetDocument(2)
+	t.Log(helper.JsonEncode(d))
+
+	s2, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	t.Log(s2)
+
+	if s1 != s2 {
+		t.Fatal("Should ==")
+	}
+	memPartition.Close()
+
+	t.Log("\n\n")
+}
+
+func TestLoad(t *testing.T) {
+	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
+	part, err := LoadPartition(patitionName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, exist := part.Query(TEST_FIELD3, "美食")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 2 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part.Query(TEST_FIELD3, "喜欢")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 3 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part.Query(TEST_FIELD3, "游泳")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	d, _ := part.GetDocument(2)
+	t.Log(helper.JsonEncode(d))
+
+	s2, _ := part.GetFieldValue(1, TEST_FIELD3)
+	t.Log(s2)
+
+	t.Log("\n\n")
 }
