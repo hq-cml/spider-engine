@@ -19,7 +19,6 @@ import (
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
-	"git.xiaojukeji.com/sofa-server/sofa_charges_go/logic/filter"
 )
 
 const (
@@ -152,6 +151,7 @@ func (part *Partition) AddField(basicField field.BasicField) error {
 		return errors.New("memory Partition can not add field..")
 	}
 
+	//新增
 	part.BasicFields[basicField.FieldName] = basicField
 	newFiled := field.NewEmptyField(basicField.FieldName, part.NextDocId, basicField.IndexType)
 	part.Fields[basicField.FieldName] = newFiled
@@ -175,6 +175,31 @@ func (part *Partition) DeleteField(fieldname string) error {
 	delete(part.Fields, fieldname)
 	delete(part.BasicFields, fieldname)
 	log.Infof("Partition --> DeleteField[%v] :: Success ", fieldname)
+	return nil
+}
+
+//添加文档
+//content, 一篇文档的各个字段的值
+func (part *Partition) AddDocument(docId uint32, content map[string]string) error {
+
+	if docId != part.NextDocId {
+		log.Errf("Partition --> AddDocument :: Wrong DocId[%v]  NextDocId[%v]", docId, part.NextDocId)
+		return errors.New("Partition --> AddDocument :: Wrong DocId Number")
+	}
+
+	for name, _ := range part.Fields {
+		if _, ok := content[name]; !ok {
+			//如果某个字段没传, 则会是空值
+			if err := part.Fields[name].AddDocument(docId, ""); err != nil {
+				log.Errf("Partition --> AddDocument [%v] :: %v", part.PartitionName, err)
+			}
+		} else {
+			if err := part.Fields[name].AddDocument(docId, content[name]); err != nil {
+				log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", name, content[name], err)
+			}
+		}
+	}
+	part.NextDocId++
 	return nil
 }
 
@@ -202,31 +227,6 @@ func (part *Partition) UpdateDocument(docId uint32, content map[string]string) e
 		}
 	}
 
-	return nil
-}
-
-//添加文档
-//content, 一篇文档的各个字段的值
-func (part *Partition) AddDocument(docId uint32, content map[string]string) error {
-
-	if docId != part.NextDocId {
-		log.Errf("Partition --> AddDocument :: Wrong DocId[%v]  NextDocId[%v]", docId, part.NextDocId)
-		return errors.New("Partition --> AddDocument :: Wrong DocId Number")
-	}
-
-	for name, _ := range part.Fields {
-		if _, ok := content[name]; !ok {
-			//如果某个字段没传, 则会是空值
-			if err := part.Fields[name].AddDocument(docId, ""); err != nil {
-				log.Errf("Partition --> AddDocument [%v] :: %v", part.PartitionName, err)
-			}
-		} else {
-			if err := part.Fields[name].AddDocument(docId, content[name]); err != nil {
-				log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", name, content[name], err)
-			}
-		}
-	}
-	part.NextDocId++
 	return nil
 }
 
@@ -468,7 +468,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 }
 
 //搜索（单query）
-//搜索的结果将append到indocids中(根据query搜索结果, 再通过filter进行过滤 )
+//根据query搜索结果, 再通过filter进行过滤
 //bitmap从更高层传入
 func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.SearchFilted,
 	bitmap *bitmap.Bitmap) ([]basic.DocNode, bool) {
@@ -533,124 +533,124 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 }
 
 //TODO 求交集？？
-func interactionWithStart(a []basic.DocNode, b []basic.DocNode, start int) ([]basic.DocNode, bool) {
-
-	if a == nil || b == nil {
-		return a, false
-	}
-
-	lena := len(a)
-	lenb := len(b)
-	lenc := start
-	ia := start
-	ib := 0
-
-	//fmt.Printf("a:%v,b:%v,c:%v\n",lena,lenb,lenc)
-	for ia < lena && ib < lenb {
-
-		if a[ia].Docid == b[ib].Docid {
-			a[lenc] = a[ia]
-			lenc++
-			ia++
-			ib++
-			continue
-			//c = append(c, a[ia])
-		}
-
-		if a[ia].Docid < b[ib].Docid {
-			ia++
-		} else {
-			ib++
-		}
-	}
-
-	//fmt.Printf("a:%v,b:%v,c:%v\n",lena,lenb,lenc)
-	return a[:lenc], true
-
-}
-
-//搜索（多query）
-//TODO 再看
-func (prt *Partition) SearchUnitDocIds(querys []basic.SearchQuery, filteds []basic.SearchFilted,
-		bitmap *bitmap.Bitmap, indocids []basic.DocNode) ([]basic.DocNode, bool) {
-
-	start := len(indocids)
-	flag := false
-	var ok bool
-
-	if len(querys) == 0 || querys == nil {
-		docids := make([]basic.DocNode, 0)
-		for i := prt.StartDocId; i < prt.NextDocId; i++ {
-			docids = append(docids, basic.DocNode{Docid: i})
-		}
-		indocids = append(indocids, docids...)
-	} else {
-		for _, query := range querys {
-			if _, hasField := prt.Fields[query.FieldName]; !hasField {
-				log.Infof("Field %v not found", query.FieldName)
-				return indocids[:start], false
-			}
-			docids, match := prt.Fields[query.FieldName].Query(query.Value)
-			if !match {
-				return indocids[:start], false
-			}
-
-			if !flag {
-				flag = true
-				indocids = append(indocids, docids...)
-			} else {
-				indocids, ok = interactionWithStart(indocids, docids, start)
-				if !ok {
-					return indocids[:start], false
-				}
-			}
-		}
-	}
-	log.Infof("ResLen[%v] ", len(indocids))
-
-	//bitmap去掉数据
-	index := start
-
-	if filteds == nil && bitmap != nil {
-		for _, docid := range indocids[start:] {
-			//去掉bitmap删除的
-			if bitmap.GetBit(uint64(docid.Docid)) == 0 {
-				indocids[index] = docid
-				index++
-			}
-		}
-		if index == start {
-			return indocids[:start], false
-		}
-		return indocids[:index], true
-	}
-
-	//过滤操作
-	index = start
-	for _, docidinfo := range indocids[start:] {
-		match := true
-		for _, filter := range filteds {
-			if _, hasField := prt.Fields[filter.FieldName]; hasField {
-				if (bitmap != nil && bitmap.GetBit(uint64(docidinfo.Docid)) == 1) ||
-					(!prt.Fields[filter.FieldName].Filter(docidinfo.Docid, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr)) {
-					match = false
-					break
-				}
-				log.Debugf("SEGMENT[%v] QUERY  %v", prt.PartitionName, docidinfo)
-			} else {
-				log.Errf("SEGMENT[%v] FILTER FIELD[%v] NOT FOUND", prt.PartitionName, filter.FieldName)
-				return indocids[:start], false
-			}
-		}
-		if match {
-			indocids[index] = docidinfo
-			index++
-		}
-
-	}
-
-	if index == start {
-		return indocids[:start], false
-	}
-	return indocids[:index], true
-}
+//感觉不对, 存疑
+//func interactionWithStart(a []basic.DocNode, b []basic.DocNode, start int) ([]basic.DocNode, bool) {
+//
+//	if a == nil || b == nil {
+//		return a, false
+//	}
+//
+//	lena := len(a)
+//	lenb := len(b)
+//	lenc := start
+//	ia := start
+//	ib := 0
+//
+//	//fmt.Printf("a:%v,b:%v,c:%v\n",lena,lenb,lenc)
+//	for ia < lena && ib < lenb {
+//
+//		if a[ia].Docid == b[ib].Docid {
+//			a[lenc] = a[ia]
+//			lenc++
+//			ia++
+//			ib++
+//			continue
+//			//c = append(c, a[ia])
+//		}
+//
+//		if a[ia].Docid < b[ib].Docid {
+//			ia++
+//		} else {
+//			ib++
+//		}
+//	}
+//
+//	//fmt.Printf("a:%v,b:%v,c:%v\n",lena,lenb,lenc)
+//	return a[:lenc], true
+//
+//}
+//
+////搜索（多query）
+//func (prt *Partition) SearchUnitDocs(querys []basic.SearchQuery, filteds []basic.SearchFilted,
+//		bitmap *bitmap.Bitmap, indocids []basic.DocNode) ([]basic.DocNode, bool) {
+//
+//	start := len(indocids)
+//	flag := false
+//	var ok bool
+//
+//	if len(querys) == 0 || querys == nil {
+//		docids := make([]basic.DocNode, 0)
+//		for i := prt.StartDocId; i < prt.NextDocId; i++ {
+//			docids = append(docids, basic.DocNode{Docid: i})
+//		}
+//		indocids = append(indocids, docids...)
+//	} else {
+//		for _, query := range querys {
+//			if _, hasField := prt.Fields[query.FieldName]; !hasField {
+//				log.Infof("Field %v not found", query.FieldName)
+//				return indocids[:start], false
+//			}
+//			docids, match := prt.Fields[query.FieldName].Query(query.Value)
+//			if !match {
+//				return indocids[:start], false
+//			}
+//
+//			if !flag {
+//				flag = true
+//				indocids = append(indocids, docids...)
+//			} else {
+//				indocids, ok = interactionWithStart(indocids, docids, start)
+//				if !ok {
+//					return indocids[:start], false
+//				}
+//			}
+//		}
+//	}
+//	log.Infof("ResLen[%v] ", len(indocids))
+//
+//	//bitmap去掉数据
+//	index := start
+//
+//	if filteds == nil && bitmap != nil {
+//		for _, docid := range indocids[start:] {
+//			//去掉bitmap删除的
+//			if bitmap.GetBit(uint64(docid.Docid)) == 0 {
+//				indocids[index] = docid
+//				index++
+//			}
+//		}
+//		if index == start {
+//			return indocids[:start], false
+//		}
+//		return indocids[:index], true
+//	}
+//
+//	//过滤操作
+//	index = start
+//	for _, docidinfo := range indocids[start:] {
+//		match := true
+//		for _, filter := range filteds {
+//			if _, hasField := prt.Fields[filter.FieldName]; hasField {
+//				if (bitmap != nil && bitmap.GetBit(uint64(docidinfo.Docid)) == 1) ||
+//					(!prt.Fields[filter.FieldName].Filter(docidinfo.Docid, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr)) {
+//					match = false
+//					break
+//				}
+//				log.Debugf("SEGMENT[%v] QUERY  %v", prt.PartitionName, docidinfo)
+//			} else {
+//				log.Errf("SEGMENT[%v] FILTER FIELD[%v] NOT FOUND", prt.PartitionName, filter.FieldName)
+//				return indocids[:start], false
+//			}
+//		}
+//		if match {
+//			indocids[index] = docidinfo
+//			index++
+//		}
+//
+//	}
+//
+//	if index == start {
+//		return indocids[:start], false
+//	}
+//	return indocids[:index], true
+//}
