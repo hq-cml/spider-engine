@@ -50,6 +50,10 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	memPartition.AddDocument(1, user1)
 	memPartition.AddDocument(2, user2)
 
+	if memPartition.Fields[TEST_FIELD1].DocCnt != 3 {
+		t.Fatal("wrong number")
+	}
+
 	list, exist := memPartition.Query(TEST_FIELD3, "美食")
 	if !exist {
 		t.Fatal("Should exist!!")
@@ -168,3 +172,141 @@ func TestLoad(t *testing.T) {
 
 	t.Log("\n\n")
 }
+
+func TestPartitionMerge(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+	patitionName0 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
+	//创建分区1
+	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, nil)
+	if part0.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	//新增字段
+	part0.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
+	part0.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
+	part0.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
+	if part0.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	user0 := map[string]string {TEST_FIELD1:"张三", TEST_FIELD2:"20", TEST_FIELD3:"喜欢游泳,也喜欢美食"}
+	user1 := map[string]string {TEST_FIELD1:"李四", TEST_FIELD2:"30", TEST_FIELD3:"喜欢美食,也喜欢文艺"}
+	user2 := map[string]string {TEST_FIELD1:"王二", TEST_FIELD2:"25", TEST_FIELD3:"喜欢装逼"}
+	part0.AddDocument(0, user0)
+	part0.AddDocument(1, user1)
+	part0.AddDocument(2, user2)
+
+
+	//创建分区2
+	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
+	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, nil)
+	if part1.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	//新增字段
+	part1.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
+	part1.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
+	part1.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
+	if part1.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	user3 := map[string]string {TEST_FIELD1:"赵六", TEST_FIELD2:"22", TEST_FIELD3:"喜欢打牌,也喜欢美食"}
+	user4 := map[string]string {TEST_FIELD1:"钱七", TEST_FIELD2:"29", TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
+	user5 := map[string]string {TEST_FIELD1:"李八", TEST_FIELD2:"24", TEST_FIELD3:"喜欢睡觉"}
+	part1.AddDocument(3, user3)
+	part1.AddDocument(4, user4)
+	part1.AddDocument(5, user5)
+
+
+	part0.Persist()  //TODO 为何一定要落地先??
+	part1.Persist()
+	part0.btdb.Display(TEST_FIELD1)
+	part1.btdb.Display(TEST_FIELD1)
+
+	//外插花一个分区, 准备合并
+	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
+	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, nil)
+	defer part2.Close()
+
+	//新增字段
+	part2.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
+	part2.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
+	part2.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
+
+	err = part2.MergePersistPartitions([]*Partition{part0, part1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//part2.Fields[TEST_FIELD3].IvtIdx.GetBtree().Display(TEST_FIELD3)
+
+
+	//合并完毕, 测试合并效果
+	list, exist := part2.Query(TEST_FIELD3, "美食")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 3 {
+		t.Fatal("Should 3!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.Query(TEST_FIELD3, "喜欢")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 6 {
+		t.Fatal("Should 6!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.Query(TEST_FIELD3, "游泳")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 1!!")
+	}
+
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.Query(TEST_FIELD1, "李八")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 1!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	d, _ := part2.GetDocument(2)
+	t.Log(helper.JsonEncode(d))
+
+	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
+	if !ok {
+		t.Fatal("Shuold exist")
+	}
+	t.Log(s2)
+
+	t.Log("\n\n")
+
+}
+
+//func TestLoadMerge(t *testing.T) {
+//	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
+//	part, err := LoadPartition(patitionName)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	list, exist := part.Query(TEST_FIELD3, "美食")
+//	if !exist {
+//		t.Fatal("Should exist!!")
+//	}
+//	if len(list) != 3 {
+//		t.Fatal("Should 3!!")
+//	}
+//	t.Log(helper.JsonEncode(list))
+//}
