@@ -114,7 +114,7 @@ func LoadPartition(partitionName string) (*Partition, error) {
 	if err != nil {
 		fmt.Printf("mmap error : %v \n", err)
 	}
-	log.Debugf("[INFO] Load Detail File : %v.dtl", partitionName)
+	log.Debugf("Load Detail File : %v.dtl", partitionName)
 
 	//加载各个Field
 	for _, basicField := range part.BasicFields {
@@ -145,7 +145,7 @@ func (part *Partition) AddField(basicField field.BasicField) error {
 		return errors.New("Already has field..")
 	}
 
-	//TODO why ?? 必须是空的part或者是磁盘态的part, 才能新增字段
+	//如果分区是内存态,并且此时已经非空, 则不能增加字段(因为已经有部分的doc,新字段没法处理)
 	if part.inMemory && !part.IsEmpty() {
 		log.Warnf("Partition --> AddField field [%v] fail..", basicField.FieldName)
 		return errors.New("memory Partition can not add field..")
@@ -165,7 +165,7 @@ func (part *Partition) DeleteField(fieldname string) error {
 		return errors.New("not found field")
 	}
 
-	//TODO why ?? 必须是空的part或者是磁盘态的part, 删除新增字段
+	//如果分区是内存态,并且此时已经非空, 则不能删除字段
 	if part.inMemory && !part.IsEmpty() {
 		log.Warnf("Partition --> deleteField field [%v] fail..", fieldname)
 		return errors.New("memory Partition can not delete field..")
@@ -187,15 +187,15 @@ func (part *Partition) AddDocument(docId uint32, content map[string]string) erro
 		return errors.New("Partition --> AddDocument :: Wrong DocId Number")
 	}
 
-	for name, _ := range part.Fields {
-		if _, ok := content[name]; !ok {
+	for fieldName, _ := range part.Fields {
+		if _, ok := content[fieldName]; !ok {
 			//如果某个字段没传, 则会是空值
-			if err := part.Fields[name].AddDocument(docId, ""); err != nil {
+			if err := part.Fields[fieldName].AddDocument(docId, ""); err != nil {
 				log.Errf("Partition --> AddDocument [%v] :: %v", part.PartitionName, err)
 			}
 		} else {
-			if err := part.Fields[name].AddDocument(docId, content[name]); err != nil {
-				log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", name, content[name], err)
+			if err := part.Fields[fieldName].AddDocument(docId, content[fieldName]); err != nil {
+				log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
 			}
 		}
 	}
@@ -295,12 +295,15 @@ func (part *Partition) GetFieldValue(docId uint32, fieldName string) (string, bo
 func (part *Partition) GetDocument(docid uint32) (map[string]string, bool) {
 	//校验
 	if docid < part.StartDocId || docid >= part.NextDocId {
+		fmt.Println("A-----", docid, part.StartDocId, part.NextDocId)
 		return nil, false
 	}
 
 	//获取
+	fmt.Println("B-----", docid, part.StartDocId, part.NextDocId)
 	ret := make(map[string]string)
 	for fieldName, field := range part.Fields {
+		fmt.Println("E------", fieldName)
 		ret[fieldName], _ = field.GetString(docid)
 	}
 	return ret, true
@@ -417,6 +420,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 			if _, exist := pt.Fields[fieldName]; exist {
 				fs = append(fs, pt.Fields[fieldName])
 			} else {
+				//TODO fake的效用?
 				fakefield := field.NewEmptyFakeField(part.Fields[fieldName].FieldName, pt.StartDocId,
 					part.Fields[fieldName].IndexType, pt.NextDocId-pt.StartDocId)
 				fs = append(fs, fakefield)
@@ -427,13 +431,22 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 			log.Errln("MergePartitions Error:", err)
 			return err
 		}
+
+		basicField.FwdOffset = offset
+		basicField.DocCnt = cnt
+		part.BasicFields[fieldName] = basicField
+
 		part.Fields[fieldName].FwdOffset = offset
 		part.Fields[fieldName].DocCnt = cnt
 		part.Fields[fieldName].NextDocId = nextId
-
-		basicField.FwdOffset = part.Fields[fieldName].FwdOffset
-		basicField.DocCnt = part.Fields[fieldName].DocCnt
-		part.BasicFields[fieldName] = basicField
+		//加载回btdb(因为底层的mergePersistField很单纯, 不会做加载回来的操作)
+		//TODO 放回去吧
+		part.Fields[fieldName].SetBtree(part.btdb)
+		if part.Fields[fieldName].IvtIdx != nil {
+			part.Fields[fieldName].IvtIdx.SetInMemory(false)
+		}
+		part.Fields[fieldName].FwdIdx.SetInMemory(false)
+		part.Fields[fieldName].StartDocId = parts[0].StartDocId
 	}
 
 	//内存态 => 磁盘态
@@ -441,17 +454,17 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 
 	//加载回mmap
 	var err error
-	part.ivtMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_INVERT, false, 0)
+	part.ivtMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		log.Errln("MergePartitions Error:", err)
 		return err
 	}
-	part.baseMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWD,false, 0)
+	part.baseMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWD,true, 0)
 	if err != nil {
 		log.Errln("MergePartitions Error:", err)
 		return err
 	}
-	part.extMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWDEXT, false, 0)
+	part.extMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		log.Errln("MergePartitions Error:", err)
 		return err
@@ -460,10 +473,11 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		part.Fields[name].SetMmap(part.baseMmap, part.extMmap, part.ivtMmap)
 	}
 
-	//最后设置一下nextDocId
+	//最后设置一下startId和nextDocId
+	part.StartDocId = parts[0].StartDocId
 	part.NextDocId = parts[len(parts)-1].NextDocId
 
-	log.Infof("MergeSegments [%v] Finish", part.PartitionName)
+	log.Infof("MergePartitions [%v] Finish", part.PartitionName)
 	return part.StoreMeta()
 }
 
