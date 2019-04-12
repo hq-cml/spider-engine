@@ -30,6 +30,10 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	field.AddDocument(2, "火红的太阳")
 	field.AddDocument(3, "火红的萨日朗")
 
+	if field.DocCnt != 4 {
+		t.Fatal("Wrong number")
+	}
+
 	//测试query
 	tmp, b := field.Query("天安门")
 	if !b {

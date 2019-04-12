@@ -116,7 +116,7 @@ func (br *BoltWrapper) Set(bucketName, key, value string) error {
 		err := b.Put([]byte(key), []byte(value))
 		return err
 	}); err != nil {
-		log.Errln("Update Error:", err)
+		log.Errln("Bolt Set Error:", err)
 		return err
 	}
 
@@ -139,7 +139,7 @@ func (br *BoltWrapper) MutiSet(bucketName string, kv map[string]string) error {
 		}
 		return nil
 	}); err != nil {
-		log.Errln("MutiUpdate Error:", err)
+		log.Errln("Bolt MutiSet Error:", err)
 		return err
 	}
 	return nil

@@ -293,6 +293,10 @@ func (fwdIdx *ForwardIndex) SetExtMmap(mmap *mmap.Mmap) {
 	fwdIdx.extMmap = mmap
 }
 
+func (fwdIdx *ForwardIndex) SetInMemory(in bool) {
+	fwdIdx.inMemory = in
+}
+
 //落地正排索引
 //返回值: 本索引落地完成之后，在fwd文件中的偏移量和本索引一共存了Doc数量
 //Note:
@@ -370,6 +374,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
 func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (uint64, uint32, uint32, error) {
+	//fmt.Println("C-------", len(idxList))
 	//一些校验, index的类型，顺序必须完整正确
 	if idxList == nil || len(idxList) == 0 {
 		return 0, 0, 0, errors.New("Nil []*ForwardIndex")
@@ -407,9 +412,11 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				val, _ := idx.GetInt(i)
 				binary.LittleEndian.PutUint64(buffer, uint64(val))
-				_, err = fwdFd.Write(buffer)
+				_, err := fwdFd.Write(buffer)
+				//fmt.Println("D--------",pflFileName,  n, val)
 				if err != nil {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
+					return 0, 0, 0, err
 				}
 				//fwdIdx.nextDocId++
 				cnt ++
@@ -431,22 +438,25 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				strContent, _ := idx.GetString(i)
+				fmt.Println("W--------", strContent)
 				strLen := len(strContent)
 				binary.LittleEndian.PutUint64(buffer, uint64(strLen))
 				_, err := dtlFd.Write(buffer)
-				cnt, err := dtlFd.WriteString(strContent)
-				if err != nil || cnt != strLen {
+				n, err := dtlFd.WriteString(strContent)
+				if err != nil || n != strLen {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
+					return 0, 0, 0, err
 				}
 				//存储offset
 				binary.LittleEndian.PutUint64(buffer, uint64(dtloffset))
-				_, err = fwdFd.Write(buffer)
-				if err != nil {
+				n, err = fwdFd.Write(buffer)
+				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
+					return 0, 0, 0, err
 				}
 				dtloffset = dtloffset + DATA_BYTE_CNT + int64(strLen)
 				//fwdIdx.nextDocId++
-				cnt ++
+				cnt++
 			}
 		}
 		//cnt = int(fwdIdx.nextDocId - fwdIdx.startDocId)

@@ -341,6 +341,9 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
+	if offset != 0 || cnt != 5 || nextId != 5 {
+		t.Fatal("Merge Error: wrong number")
+	}
 	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge Offset:", offset, ". Cnt:", cnt, ". NextId:", nextId)
 
 	//Load回来验证
@@ -378,6 +381,9 @@ func TestMergeFwdIndexString(t *testing.T) {
 	offset, cnt, nextId, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.int.fwd.merge.string")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
+	}
+	if offset != 0 || cnt != 4 || nextId != 4 {
+		t.Fatal("Merge Error: wrong number")
 	}
 	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge.string Offset:", offset, ". Cnt:", cnt, ". NextId:", nextId)
 

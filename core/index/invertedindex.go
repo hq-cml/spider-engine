@@ -26,6 +26,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
+	"fmt"
 )
 
 //倒排索引
@@ -200,6 +201,7 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 		if !ok {
 			return nil, false
 		}
+		fmt.Println("A--------", term, offset)
 		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
 		return docNodes, true
@@ -236,6 +238,17 @@ func (rIdx *InvertedIndex) SetIvtMmap(mmap *mmap.Mmap) {
 //设置btree
 func (rIdx *InvertedIndex) SetBtree(tree btree.Btree) {
 	rIdx.btdb = tree
+}
+
+//设置btree
+func (rIdx *InvertedIndex) SetInMemory(in bool) {
+	rIdx.inMemory = in
+}
+
+
+//设置btree
+func (rIdx *InvertedIndex) GetBtree() btree.Btree {
+	return rIdx.btdb
 }
 
 //btree操作,
@@ -377,7 +390,11 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 			return errors.New("Write length wrong")
 		}
 
-		btdb.Set(fieldName, minTerm, uint64(offset))
+		err = btdb.Set(fieldName, minTerm, uint64(offset))
+		if err != nil {
+			log.Errf("Invert --> Merge :: Error:%v, fieldName: %v, term: %v, len(term): %v", err, fieldName, minTerm, len(minTerm))
+			return err
+		}
 		offset = offset + DOCNODE_BYTE_CNT + writeLength
 
 		//如果所有的索引都合并完毕， 则退出
