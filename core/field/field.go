@@ -17,12 +17,12 @@ import (
 //字段的结构定义
 type Field struct {
 	FieldName  string `json:"fieldName"`
-	StartDocId uint32 					 //和它所拥有的正排索引一致
-	NextDocId  uint32 					 //和它所拥有的正排索引一致
+	StartDocId uint32                    //和它所拥有的正排索引一致
+	NextDocId  uint32                    //和它所拥有的正排索引一致
 	IndexType  uint8  `json:"indexType"`
 	inMemory   bool
-	ivtIdx     *index.InvertedIndex      //倒排索引
-	fwdIdx     *index.ForwardIndex       //正排索引
+	IvtIdx     *index.InvertedIndex      //倒排索引
+	FwdIdx     *index.ForwardIndex       //正排索引
 	FwdOffset  uint64 `json:"fwdOffset"` //此正排索引的数据，在文件中的起始偏移
 	DocCnt     uint32 `json:"docCnt"`    //正排索引文档个数
 	btdb       btree.Btree
@@ -44,7 +44,7 @@ func NewEmptyFakeField(fieldname string, start uint32, IndexType uint8, docCnt u
 		StartDocId: start,
 		NextDocId:  start,
 		IndexType:  IndexType,
-		fwdIdx:     fwdIdx,    //主要是为了这个假索引
+		FwdIdx:     fwdIdx,    //主要是为了这个假索引
 	}
 }
 
@@ -68,8 +68,8 @@ func NewEmptyField(fieldName string, start uint32, indexType uint8) *Field {
 		NextDocId:  start,
 		IndexType:  indexType,
 		inMemory:   true,
-		ivtIdx:     ivtIdx,
-		fwdIdx:     fwdIdx,
+		IvtIdx:     ivtIdx,
+		FwdIdx:     fwdIdx,
 		FwdOffset:  0,
 		DocCnt:     0,
 		btdb:       nil,
@@ -100,22 +100,24 @@ func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset 
 		inMemory:   false,
 		DocCnt:     fwdDocCnt,
 		FwdOffset:  fwdOffset,
-		ivtIdx:     ivtIdx,
-		fwdIdx:     fwdIdx,
+		IvtIdx:     ivtIdx,
+		FwdIdx:     fwdIdx,
 		btdb:       btree,
 	}
 }
 
 //增加一个doc
+//Note:
+//只有内存态的字段才能增加Doc
 //TODO 如何保证一致性？？？
 func (fld *Field) AddDocument(docId uint32, content string) error {
 
-	if docId != fld.NextDocId || fld.inMemory == false || fld.fwdIdx == nil {
-		log.Errf("AddDocument :: Wrong docId %v fld.NextDocId %v fld.profile %v", docId, fld.NextDocId, fld.fwdIdx)
+	if docId != fld.NextDocId || fld.inMemory == false || fld.FwdIdx == nil {
+		log.Errf("AddDocument :: Wrong docId %v fld.NextDocId %v fld.profile %v", docId, fld.NextDocId, fld.FwdIdx)
 		return errors.New("[ERROR] Wrong docId")
 	}
 
-	if err := fld.fwdIdx.AddDocument(docId, content); err != nil {
+	if err := fld.FwdIdx.AddDocument(docId, content); err != nil {
 		log.Errf("Field --> AddDocument :: Add Document Error %v", err)
 		return err
 	}
@@ -123,14 +125,14 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 	//数字型和时间型不能加倒排索引
 	if fld.IndexType != index.IDX_TYPE_NUMBER &&
 		fld.IndexType != index.IDX_TYPE_DATE &&
-		fld.ivtIdx != nil {
-		if err := fld.ivtIdx.AddDocument(docId, content); err != nil {
+		fld.IvtIdx != nil {
+		if err := fld.IvtIdx.AddDocument(docId, content); err != nil {
 			log.Errf("Field --> AddDocument :: Add Invert Document Error %v", err)
 			// return err
 			//TODO 一致性？？
 		}
 	}
-
+	fld.DocCnt++
 	fld.NextDocId++
 	return nil
 }
@@ -139,10 +141,10 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 //Note:
 //只更新正排索引，倒排索引在上层通过bitmap来更新
 func (fld *Field) UpdateDocument(docid uint32, content string) error {
-	if fld.fwdIdx == nil {
+	if fld.FwdIdx == nil {
 		return errors.New("fwdIdx is nil")
 	}
-	if err := fld.fwdIdx.UpdateDocument(docid, content); err != nil {
+	if err := fld.FwdIdx.UpdateDocument(docid, content); err != nil {
 		log.Errf("Field --> UpdateDocument :: Update Document Error %v", err)
 		return err
 	}
@@ -153,11 +155,11 @@ func (fld *Field) UpdateDocument(docid uint32, content string) error {
 //给定一个查询词query，找出doc的列表
 //Note：这个就是利用倒排索引
 func (fld *Field) Query(key interface{}) ([]basic.DocNode, bool) {
-	if fld.ivtIdx == nil {
+	if fld.IvtIdx == nil {
 		return nil, false
 	}
 
-	return fld.ivtIdx.QueryTerm(fmt.Sprintf("%v", key))
+	return fld.IvtIdx.QueryTerm(fmt.Sprintf("%v", key))
 }
 
 //获取字符值
@@ -165,9 +167,9 @@ func (fld *Field) Query(key interface{}) ([]basic.DocNode, bool) {
 func (fld *Field) GetString(docId uint32) (string, bool) {
 	//Pos是docId在本索引中的位置
 	pos := docId - fld.StartDocId
-
-	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.fwdIdx != nil {
-		return fld.fwdIdx.GetString(pos)
+	fmt.Println("C------", pos, docId, fld.StartDocId)
+	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
+		return fld.FwdIdx.GetString(pos)
 	}
 
 	return "", false
@@ -175,37 +177,37 @@ func (fld *Field) GetString(docId uint32) (string, bool) {
 
 //销毁字段
 func (fld *Field) Destroy() error {
-	if fld.fwdIdx != nil {
-		fld.fwdIdx.Destroy()
+	if fld.FwdIdx != nil {
+		fld.FwdIdx.Destroy()
 	}
 
-	if fld.ivtIdx != nil {
-		fld.ivtIdx.Destroy()
+	if fld.IvtIdx != nil {
+		fld.IvtIdx.Destroy()
 	}
 	return nil
 }
 
 func (fld *Field) SetBaseMmap(mmap *mmap.Mmap) {
-	if fld.fwdIdx != nil {
-		fld.fwdIdx.SetBaseMmap(mmap)
+	if fld.FwdIdx != nil {
+		fld.FwdIdx.SetBaseMmap(mmap)
 	}
 }
 
 func (fld *Field) SetExtMmap(mmap *mmap.Mmap) {
-	if fld.fwdIdx != nil {
-		fld.fwdIdx.SetExtMmap(mmap)
+	if fld.FwdIdx != nil {
+		fld.FwdIdx.SetExtMmap(mmap)
 	}
 }
 
 func (fld *Field) SetIvtMmap(mmap *mmap.Mmap) {
-	if fld.ivtIdx != nil {
-		fld.ivtIdx.SetIvtMmap(mmap)
+	if fld.IvtIdx != nil {
+		fld.IvtIdx.SetIvtMmap(mmap)
 	}
 }
 
 func (fld *Field) SetBtree(btdb btree.Btree) {
-	if fld.ivtIdx != nil {
-		fld.ivtIdx.SetBtree(btdb)
+	if fld.IvtIdx != nil {
+		fld.IvtIdx.SetBtree(btdb)
 	}
 }
 
@@ -217,15 +219,15 @@ func (fld *Field) SetMmap(base, ext, ivt *mmap.Mmap) {
 
 //过滤（针对的是正排索引）
 func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbers []int64, str string) bool {
-	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.fwdIdx != nil {
+	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
 
 		//Pos是docId在本索引中的位置
 		pos := docId - fld.StartDocId
 
 		if len(numbers) == 0 {
-			return fld.fwdIdx.Filter(pos, filterType, start, end, str)
+			return fld.FwdIdx.Filter(pos, filterType, start, end, str)
 		} else {
-			return fld.fwdIdx.FilterNums(pos, filterType, numbers)
+			return fld.FwdIdx.FilterNums(pos, filterType, numbers)
 		}
 	}
 	return false
@@ -238,19 +240,19 @@ func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbe
 func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 
 	var err error
-	if fld.fwdIdx != nil {
+	if fld.FwdIdx != nil {
 		//落地, 并设置了field的信息
-		fld.FwdOffset, fld.DocCnt, err = fld.fwdIdx.Persist(partitionPathName)
+		fld.FwdOffset, fld.DocCnt, err = fld.FwdIdx.Persist(partitionPathName)
 		if err != nil {
 			log.Errf("Field --> Persist :: Error %v", err)
 			return err
 		}
 	}
 
-	if fld.ivtIdx != nil {
+	if fld.IvtIdx != nil {
 		//落地, 并设置了btdb
 		fld.btdb = btdb
-		err = fld.ivtIdx.Persist(partitionPathName, fld.btdb)
+		err = fld.IvtIdx.Persist(partitionPathName, fld.btdb)
 		if err != nil {
 			log.Errf("Field --> Persist :: Error %v", err)
 			return err
@@ -264,7 +266,7 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 //字段归并
 //TODO 这些操作, 完全不闭合, 而且还依赖顺序, 后续要大改
 //TODO 目前只能合并出完整的磁盘版本, 但是filed并不能直接用
-func MergePersistField(fields []*Field, segmentName string, btree btree.Btree) (uint64, uint32, uint32, error) {
+func MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) (uint64, uint32, uint32, error) {
 	//一些校验, index的类型，顺序必须完整正确
 	if fields == nil || len(fields) == 0 {
 		return 0, 0, 0, errors.New("Nil []*Field")
@@ -278,25 +280,26 @@ func MergePersistField(fields []*Field, segmentName string, btree btree.Btree) (
 	//合并正排索引
 	fwds := make([]*index.ForwardIndex, 0)
 	for _, fd := range fields {
-		fwds = append(fwds, fd.fwdIdx)
+		fwds = append(fwds, fd.FwdIdx)
 	}
-	offset, docCnt, nextId, err = index.MergePersistFwdIndex(fwds, segmentName)
+	offset, docCnt, nextId, err = index.MergePersistFwdIndex(fwds, partitionName)
+	fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
 	if err != nil {
 		log.Errf("Field --> mergeField :: Serialization Error %v", err)
 		return 0, 0, 0, err
 	}
 
 	//如果有倒排索引，则合并
-	if fields[0].ivtIdx != nil {
+	if fields[0].IvtIdx != nil {
 		ivts := make([]*index.InvertedIndex, 0)
 		for _, fd := range fields {
-			if fd.ivtIdx != nil {
-				ivts = append(ivts, fd.ivtIdx)
+			if fd.IvtIdx != nil {
+				ivts = append(ivts, fd.IvtIdx)
 			} else {
 				log.Infof("invert is nil ")
 			}
 		}
-		err := index.MergePersistIvtIndex(ivts, segmentName, btree)
+		err := index.MergePersistIvtIndex(ivts, partitionName, btdb)
 		if  err != nil {
 			//如果此处出错，则会不一致...
 			log.Errf("MergePersistIvtIndex Error: ", err, ". Danger!!!!")
