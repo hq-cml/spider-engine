@@ -56,6 +56,7 @@ func InitLog(path string, level string) {
 		Logger:log.New(f, "", log.LstdFlags),
 		level: levelInt,
 	}
+	//spiderLog.Logger.SetFlags(log.Ldate | log.Lshortfile)
 }
 
 func Debugf(format string, v ...interface{}) {

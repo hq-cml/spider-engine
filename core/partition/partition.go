@@ -299,10 +299,8 @@ func (part *Partition) GetDocument(docid uint32) (map[string]string, bool) {
 	}
 
 	//获取
-	fmt.Println("B-----", docid, part.StartDocId, part.NextDocId)
 	ret := make(map[string]string)
 	for fieldName, fld := range part.Fields {
-		fmt.Println("E------", fieldName, fld.FieldName)
 		ret[fieldName], _ = fld.GetString(docid)
 	}
 	return ret, true
@@ -408,6 +406,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	log.Infof("MergePartitions [%v] Start", part.PartitionName)
 	btdbname := part.PartitionName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if part.btdb == nil {
+		fmt.Println("1111-----------")
 		part.btdb = btree.NewBtree("", btdbname)
 	}
 

@@ -167,10 +167,7 @@ func (fld *Field) Query(key interface{}) ([]basic.DocNode, bool) {
 func (fld *Field) GetString(docId uint32) (string, bool) {
 	//Pos是docId在本索引中的位置
 	pos := docId - fld.StartDocId
-	fmt.Println("C------", pos, docId, fld.StartDocId)
 	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
-		a, b := fld.FwdIdx.GetString(pos)
-		fmt.Println("U-------", fld.FieldName, a, b, fld.FwdIdx)
 		return fld.FwdIdx.GetString(pos)
 	}
 
@@ -299,6 +296,7 @@ func MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) 
 				ivts = append(ivts, fd.IvtIdx)
 			} else {
 				log.Infof("invert is nil ")
+				panic("invert is nil")
 			}
 		}
 		err := index.MergePersistIvtIndex(ivts, partitionName, btdb)

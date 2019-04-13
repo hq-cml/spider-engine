@@ -200,7 +200,7 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 		if !ok {
 			return nil, false
 		}
-		
+
 		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
 		return docNodes, true
@@ -287,8 +287,8 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 	indexType := rIndexes[0].indexType
 	fieldName := rIndexes[0].fieldName
 	for _, v := range rIndexes {
-		if v.indexType != indexType || v.fieldName != fieldName {
-			return errors.New("Indexes not consistent")
+		if v.indexType != indexType || v.fieldName != fieldName || v.inMemory {
+			return errors.New("Indexes not consistent or must be disk status")
 		}
 	}
 
@@ -307,7 +307,7 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 	tmpIvts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
 		if ivt.btdb == nil {
-			continue
+			panic("Error")
 		}
 		term, _, ok := ivt.GetFristKV()
 		if !ok {
@@ -321,7 +321,6 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 			nodes: nodes,
 		})
 	}
-
 	//补齐树
 	if !btdb.HasTree(fieldName) {
 		btdb.AddTree(fieldName)

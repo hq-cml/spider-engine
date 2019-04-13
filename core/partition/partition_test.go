@@ -219,7 +219,8 @@ func TestPartitionMerge(t *testing.T) {
 	part1.AddDocument(5, user5)
 
 	//新建的两个分区落地
-	part0.Persist()  //TODO 为何一定要落地先??
+	//一定要落地先一次，两个分区的btdb才能被正确设置，否则无法进行合并
+	part0.Persist()
 	part1.Persist()
 	part0.btdb.Display(TEST_FIELD1)
 	part1.btdb.Display(TEST_FIELD1)
@@ -302,7 +303,7 @@ func TestPartitionMerge(t *testing.T) {
 }
 
 func TestLoadMerge(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2, err := LoadPartition(patitionName)
 	if err != nil {

@@ -246,7 +246,6 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 			return "", false
 		}
 		extOffset := fwdIdx.baseMmap.ReadUInt64(realOffset)
-		fmt.Println("V------------", realOffset, extOffset)
 		if (int(extOffset) >= len(fwdIdx.extMmap.DataBytes)) {
 			return "", false
 		}
@@ -458,7 +457,6 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				strContent, _ := idx.GetString(i)
-				fmt.Println("W--------", strContent, extOffset)
 				strLen := len(strContent)
 				binary.LittleEndian.PutUint64(buffer, uint64(strLen))
 				_, err := extFd.Write(buffer)
