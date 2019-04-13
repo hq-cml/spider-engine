@@ -44,9 +44,9 @@ type InvertedIndex struct {
 const DOCNODE_BYTE_CNT = 8
 
 //新建空的倒排索引
-func NewEmptyInvertedIndex(indexType uint8, startDocId uint32, fieldName string) *InvertedIndex {
+func NewEmptyInvertedIndex(indexType uint8, nextDocId uint32, fieldName string) *InvertedIndex {
 	rIdx := &InvertedIndex{
-		nextDocId: startDocId,
+		nextDocId: nextDocId,
 		fieldName: fieldName,
 		indexType: indexType,
 		termMap:   make(map[string][]basic.DocNode),
@@ -60,10 +60,11 @@ func NewEmptyInvertedIndex(indexType uint8, startDocId uint32, fieldName string)
 //从磁盘加载倒排索引
 //这里并未真的从磁盘加载，mmap和btdb都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 //如果mmap自己创建的话，会造成多个mmap实例对应同一个磁盘文件，这样会造成不确定性(mmmap头部有隐藏信息字段)，也不易于维护
-func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtMmap *mmap.Mmap) *InvertedIndex {
+func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtMmap *mmap.Mmap, nextDocId uint32) *InvertedIndex {
 	rIdx := &InvertedIndex{
 		indexType: indexType,
 		fieldName: fieldname,
+		nextDocId: nextDocId,
 		inMemory:  false,       //加载的索引都是磁盘态的
 		ivtMmap:   ivtMmap,
 		btdb:      btdb,
@@ -113,79 +114,6 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	rIdx.nextDocId++
 
 	log.Debugf("InvertedIndex AddDocument --> DocId: %v ,Content: %v\n", docId, content)
-	return nil
-}
-
-//持久化倒排索引
-//落地 termMap落地到倒排文件; term进入B+tree
-//倒排文件格式:
-//  顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
-//B+树:
-//  key是term, val则是term在倒排文件中的offset
-//
-//Note:
-// 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
-// 这里一个设计的问题，函数并未自动加载回mmap，但是设置了btdb
-func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) error {
-
-	//打开倒排文件, 获取文件大小作为初始偏移
-	idxFileName := partitionPathName + basic.IDX_FILENAME_SUFFIX_INVERT
-	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644) //追加打开file
-	if err != nil {
-		return err
-	}
-	defer idxFd.Close()
-	fi, err := idxFd.Stat()
-	if err != nil {
-		return err
-	}
-	offset := int(fi.Size()) //当前偏移量, 即文件最后位置
-
-	//开始文件写入
-	rIdx.btdb = btdb //TODO 能否不是传进来的？？
-	if !rIdx.btdb.HasTree(rIdx.fieldName) {
-		rIdx.btdb.AddTree(rIdx.fieldName)
-	}
-	for term, docNodeList := range rIdx.termMap {
-		//先写入长度, 占8个字节
-		nodeCnt := len(docNodeList)
-		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
-		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
-		n, err := idxFd.Write(lenBuffer)
-		if err != nil || n != DOCNODE_BYTE_CNT {
-			log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
-			return errors.New("Write Error")
-		}
-
-		//再写入node list
-		buffer := new(bytes.Buffer)
-		err = binary.Write(buffer, binary.LittleEndian, docNodeList)
-		if err != nil {
-			log.Errf("Persist :: Error %v", err)
-			return err
-		}
-		writeLength, err := idxFd.Write(buffer.Bytes())
-		if err != nil || writeLength != nodeCnt * basic.DOC_NODE_SIZE{
-			log.Errf("Write err, %v, %v, %v",err, writeLength, nodeCnt * basic.DOC_NODE_SIZE)
-			return errors.New("Write Error")
-		}
-
-		//B+树录入
-		err = rIdx.btdb.Set(rIdx.fieldName, term, uint64(offset))
-		if err != nil {
-			log.Errf("Persist :: Error %v", err)
-			//造成不一致了哦，或者说写脏了一块数据，但是以后也不会被引用到，因为btree里面没落盘
-			return err
-		}
-		offset = offset + DOCNODE_BYTE_CNT + writeLength
-	}
-
-	//内存态 => 磁盘态
-	rIdx.termMap = nil
-	rIdx.inMemory = false
-	rIdx.nextDocId = 0
-
-	log.Debugf("Persist :: Writing to File : [%v%v] ", partitionPathName, basic.IDX_FILENAME_SUFFIX_INVERT)
 	return nil
 }
 
@@ -270,6 +198,79 @@ func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, bool) {
 	return rIdx.btdb.GetNextKV(rIdx.fieldName, key)
 }
 
+//持久化倒排索引
+//落地 termMap落地到倒排文件; term进入B+tree
+//倒排文件格式:
+//  顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
+//B+树:
+//  key是term, val则是term在倒排文件中的offset
+//
+//Note:
+// 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
+// 这里一个设计的问题，函数并未自动加载回mmap，但是设置了btdb
+func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) error {
+
+	//打开倒排文件, 获取文件大小作为初始偏移
+	idxFileName := partitionPathName + basic.IDX_FILENAME_SUFFIX_INVERT
+	idxFd, err := os.OpenFile(idxFileName, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644) //追加打开file
+	if err != nil {
+		return err
+	}
+	defer idxFd.Close()
+	fi, err := idxFd.Stat()
+	if err != nil {
+		return err
+	}
+	offset := int(fi.Size()) //当前偏移量, 即文件最后位置
+
+	//开始文件写入
+	if !btdb.HasTree(rIdx.fieldName) {
+		btdb.AddTree(rIdx.fieldName)
+	}
+	for term, docNodeList := range rIdx.termMap {
+		//先写入长度, 占8个字节
+		nodeCnt := len(docNodeList)
+		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
+		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
+		n, err := idxFd.Write(lenBuffer)
+		if err != nil || n != DOCNODE_BYTE_CNT {
+			log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
+			return errors.New("Write Error")
+		}
+
+		//再写入node list
+		buffer := new(bytes.Buffer)
+		err = binary.Write(buffer, binary.LittleEndian, docNodeList)
+		if err != nil {
+			log.Errf("Persist :: Error %v", err)
+			return err
+		}
+		writeLength, err := idxFd.Write(buffer.Bytes())
+		if err != nil || writeLength != nodeCnt * basic.DOC_NODE_SIZE{
+			log.Errf("Write err, %v, %v, %v",err, writeLength, nodeCnt * basic.DOC_NODE_SIZE)
+			return errors.New("Write Error")
+		}
+
+		//B+树录入
+		err = btdb.Set(rIdx.fieldName, term, uint64(offset))
+		if err != nil {
+			log.Errf("Persist :: Error %v", err)
+			//造成不一致了哦，或者说写脏了一块数据，但是以后也不会被引用到，因为btree里面没落盘
+			return err
+		}
+		offset = offset + DOCNODE_BYTE_CNT + writeLength
+	}
+
+	//绑定btdb，内存态 => 磁盘态
+	rIdx.btdb = btdb
+	rIdx.termMap = nil
+	rIdx.inMemory = false
+	//rIdx.nextDocId = 0
+
+	log.Debugf("Persist :: Writing to File : [%v%v] ", partitionPathName, basic.IDX_FILENAME_SUFFIX_INVERT)
+	return nil
+}
+
 //临时结构，辅助Merge
 type tmpMerge struct {
 	over   bool
@@ -278,18 +279,26 @@ type tmpMerge struct {
 	nodes []basic.DocNode
 }
 
-//多路归并, 将多个反向索引进行合并成为一个大的反向索引
-//只会提供merge并落地的功能，不会重新加载mmap
-func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, btdb btree.Btree) error {
-	//校验
+//多路归并, 将多个反向索引进行合并成为一个大的反向索引， 将这一切作用在接收者上面
+//Note:
+// 一个设计的问题，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
+// 所以mmap并不会加载回来，但是btdb和inMemory参数被加载回来了
+func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, btdb btree.Btree) error {
+	//一些校验
 	if rIndexes == nil || len(rIndexes) == 0 {
 		return errors.New("Nil []*InvertedIndex")
 	}
-	indexType := rIndexes[0].indexType
-	fieldName := rIndexes[0].fieldName
+	indexType := rIdx.indexType
+	fieldName := rIdx.fieldName
 	for _, v := range rIndexes {
 		if v.indexType != indexType || v.fieldName != fieldName || v.inMemory {
 			return errors.New("Indexes not consistent or must be disk status")
+		}
+	}
+	l := len(rIndexes)
+	for i:=0; i<(l-1); i++ { //倒排索引合并顺序并不是必须的， 这里主要是为了获取最大的nextDocId
+		if rIndexes[i].nextDocId > rIndexes[i+1].nextDocId {
+			return errors.New("Indexes order wrong")
 		}
 	}
 
@@ -374,7 +383,7 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
 		n, err := fd.Write(lenBuffer)
 		if err != nil || n != DOCNODE_BYTE_CNT {
-			log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
+			log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
 			return errors.New("Write Error")
 		}
 		buffer := new(bytes.Buffer)
@@ -408,6 +417,12 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 			break
 		}
 	}
+
+	//绑定btdb，内存态 => 磁盘态
+	rIdx.btdb = btdb
+	rIdx.termMap = nil
+	rIdx.inMemory = false
+	rIdx.nextDocId = rIndexes[len(rIndexes)-1].nextDocId
 
 	return nil
 }

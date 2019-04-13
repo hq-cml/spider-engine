@@ -121,10 +121,10 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引1 => 落地索引1 => 再加载索引1
 	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree1.Close()
-	rIdx1 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 1, TEST_TREE)
-	rIdx1.AddDocument(1, "c;f")
-	rIdx1.AddDocument(2, "a;c")
-	rIdx1.AddDocument(3, "f;a")
+	rIdx1 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
+	rIdx1.AddDocument(0, "c;f")
+	rIdx1.AddDocument(1, "a;c")
+	rIdx1.AddDocument(2, "f;a")
 	r, _ := json.Marshal(rIdx1.termMap)
 	rIdx1.Persist("/tmp/spider/Partition_1", tree1) //落地
 	t.Log(string(r))
@@ -136,10 +136,10 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引2 => 落地索引2 => 再加载索引2
 	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree2.Close()
-	rIdx2 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 4, TEST_TREE)
-	rIdx2.AddDocument(4, "b;d")
-	rIdx2.AddDocument(5, "d;c")
-	rIdx2.AddDocument(6, "b;c")
+	rIdx2 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 3, TEST_TREE)
+	rIdx2.AddDocument(3, "b;d")
+	rIdx2.AddDocument(4, "d;c")
+	rIdx2.AddDocument(5, "b;c")
 	r, _ = json.Marshal(rIdx2.termMap)
 	rIdx2.Persist("/tmp/spider/Partition_2", tree2) //落地
 	t.Log(string(r))
@@ -151,10 +151,10 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引3 => 落地索引3 => 再加载索引3
 	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree3.Close()
-	rIdx3 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 7, TEST_TREE)
-	rIdx3.AddDocument(7, "c;e")
-	rIdx3.AddDocument(8, "a;e")
-	rIdx3.AddDocument(9, "c;a")
+	rIdx3 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 6, TEST_TREE)
+	rIdx3.AddDocument(6, "c;e")
+	rIdx3.AddDocument(7, "a;e")
+	rIdx3.AddDocument(8, "c;a")
 	r, _ = json.Marshal(rIdx3.termMap)
 	rIdx3.Persist("/tmp/spider/Partition_3", tree3) //落地
 	t.Log(string(r))
@@ -163,10 +163,11 @@ func TestMergeIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//合并 => 加载回来 => 读一下试一下
+	//合并 => 读一下试一下
 	tree := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree.Close()
-	err = MergePersistIvtIndex([]*InvertedIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Partition", tree)
+	rIdx0 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
+	err = rIdx0.MergePersistIvtIndex([]*InvertedIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Partition", tree)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +175,23 @@ func TestMergeIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rIdx := LoadInvertedIndex(tree, IDX_TYPE_STRING_LIST, TEST_TREE, ivtMmap)
-	term, _, ok := rIdx.btdb.GetFristKV(TEST_TREE)
+	rIdx0.SetIvtMmap(ivtMmap) //必须设置mmap
+	term, _, ok := rIdx0.btdb.GetFristKV(TEST_TREE)
+	for ok {
+		nodes, exist := rIdx0.QueryTerm(term)
+		if !exist {
+			t.Fatal("Wrong exist", term)
+		}
+		n, _ := json.Marshal(nodes)
+		t.Log("从磁盘访问 ", term ,": ", string(n))
+
+		term, _, ok = rIdx0.btdb.GetNextKV(TEST_TREE, term)
+	}
+	t.Log("NextId:", rIdx0.nextDocId)
+
+	//加载回来 => 读一下试一下
+	rIdx := LoadInvertedIndex(tree, IDX_TYPE_STRING_LIST, TEST_TREE, ivtMmap, 9)
+	term, _, ok = rIdx.btdb.GetFristKV(TEST_TREE)
 	for ok {
 		nodes, exist := rIdx.QueryTerm(term)
 		if !exist {
@@ -186,6 +202,7 @@ func TestMergeIndex(t *testing.T) {
 
 		term, _, ok = rIdx.btdb.GetNextKV(TEST_TREE, term)
 	}
+	t.Log("NextId:", rIdx.nextDocId)
 
 	t.Log("\n\n")
 }

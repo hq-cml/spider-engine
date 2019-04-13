@@ -343,7 +343,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 			binary.LittleEndian.PutUint64(buffer, uint64(num))
 			n, err := fwdFd.Write(buffer)
 			if err != nil || n != DATA_BYTE_CNT {
-				log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+				log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
 				return 0, 0, errors.New("Write Error")
 			}
 		}
@@ -368,7 +368,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 			binary.LittleEndian.PutUint64(buffer, uint64(strLen))
 			n, err := extFd.Write(buffer)
 			if err != nil || n != DATA_BYTE_CNT {
-				log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+				log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
 				return 0, 0, errors.New("Write Error")
 			}
 			n, err = extFd.WriteString(str)
@@ -379,7 +379,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 			binary.LittleEndian.PutUint64(buffer, uint64(extOffset))
 			n, err = fwdFd.Write(buffer)
 			if err != nil || n != DATA_BYTE_CNT {
-				log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+				log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
 				return 0, 0, errors.New("Write Error")
 			}
 			extOffset = extOffset + DATA_BYTE_CNT + int64(strLen)
@@ -441,7 +441,7 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 				binary.LittleEndian.PutUint64(buffer, uint64(val))
 				n, err := fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
-					log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
 					return 0, 0, 0, errors.New("Write Error")
 				}
 				if err != nil {
@@ -472,7 +472,7 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 				binary.LittleEndian.PutUint64(buffer, uint64(strLen))
 				n, err := extFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
-					log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
 					return 0, 0, 0, errors.New("Write Error")
 				}
 				n, err = extFd.WriteString(strContent)
@@ -484,7 +484,7 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 				binary.LittleEndian.PutUint64(buffer, uint64(extOffset))
 				n, err = fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
-					log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
 					return 0, 0, 0, errors.New("Write Error")
 				}
 				extOffset = extOffset + DATA_BYTE_CNT + int64(strLen)
