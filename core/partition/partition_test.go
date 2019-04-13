@@ -298,6 +298,8 @@ func TestPartitionMerge(t *testing.T) {
 	}
 	t.Log(s2)
 
+	t.Log(helper.JsonEncode(part2.BasicFields))
+
 	t.Log("\n\n")
 
 }
@@ -365,6 +367,6 @@ func TestLoadMerge(t *testing.T) {
 		t.Fatal("Error")
 	}
 	t.Log(s2)
-
+	t.Log(helper.JsonEncode(part2.BasicFields))
 	t.Log("\n\n")
 }

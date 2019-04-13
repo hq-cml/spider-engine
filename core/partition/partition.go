@@ -399,19 +399,17 @@ func (part *Partition) Persist() error {
 
 //将分区合并然后落地
 //Note:
-// 这个和底层的MergePersist有不同, 函数有接受者, 初始是一个骨架,
-// 函数会完整的填充接收者, 加载btdb和mmap, 使之成为一个可用的磁盘态分区
+// 这个和底层的MergePersist有不同, 因为四个文件是按照分区级别公用，所以函数会完整的填充接收者
+// 接受者初始是一个骨架，加载btdb和mmap以及其他控制字段，使之成为一个可用的磁盘态分区
 func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 
 	log.Infof("MergePartitions [%v] Start", part.PartitionName)
 	btdbname := part.PartitionName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if part.btdb == nil {
-		fmt.Println("1111-----------")
 		part.btdb = btree.NewBtree("", btdbname)
 	}
 
 	//逐个字段进行merge
-	//TODO 理论上各个字段的nextId, docId应该相同, 但是fwdOffset应该不同, 待测试
 	for fieldName, basicField := range part.BasicFields {
 		fs := make([]*field.Field, 0)
 		for _, pt := range parts {
@@ -424,33 +422,30 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 				fs = append(fs, fakefield)
 			}
 		}
-		offset, cnt, nextId, err := field.MergePersistField(fs, part.PartitionName, part.btdb)
+		err := part.Fields[fieldName].MergePersistField(fs, part.PartitionName, part.btdb)
 		if err != nil {
 			log.Errln("MergePartitions Error:", err)
 			return err
 		}
 
-		basicField.FwdOffset = offset
-		basicField.DocCnt = cnt
+		basicField.FwdOffset = part.Fields[fieldName].FwdOffset
+		basicField.DocCnt = part.Fields[fieldName].DocCnt
 		part.BasicFields[fieldName] = basicField
 
-		part.Fields[fieldName].FwdOffset = offset
-		part.Fields[fieldName].DocCnt = cnt
-		part.Fields[fieldName].NextDocId = nextId
+		//part.Fields[fieldName].FwdOffset = offset
+		//part.Fields[fieldName].DocCnt = cnt
+		//part.Fields[fieldName].NextDocId = nextId
 		//加载回btdb(因为底层的mergePersistField很单纯, 不会做加载回来的操作)
 		//TODO 放回去吧
-		part.Fields[fieldName].SetBtree(part.btdb)
-		if part.Fields[fieldName].IvtIdx != nil {
-			part.Fields[fieldName].IvtIdx.SetInMemory(false)
-		}
-		part.Fields[fieldName].FwdIdx.SetInMemory(false)
-		part.Fields[fieldName].FwdIdx.SetFwdOffset(offset)
-		part.Fields[fieldName].FwdIdx.SetDocCnt(cnt)
-		part.Fields[fieldName].StartDocId = parts[0].StartDocId
+		//part.Fields[fieldName].SetBtree(part.btdb)
+		//if part.Fields[fieldName].IvtIdx != nil {
+		//	part.Fields[fieldName].IvtIdx.SetInMemory(false)
+		//}
+		//part.Fields[fieldName].FwdIdx.SetInMemory(false)
+		//part.Fields[fieldName].FwdIdx.SetFwdOffset(offset)
+		//part.Fields[fieldName].FwdIdx.SetDocCnt(cnt)
+		//part.Fields[fieldName].StartDocId = parts[0].StartDocId
 	}
-
-	//内存态 => 磁盘态
-	part.inMemory = false
 
 	//加载回mmap
 	var err error
@@ -472,6 +467,9 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	for name := range part.Fields {
 		part.Fields[name].SetMmap(part.baseMmap, part.extMmap, part.ivtMmap)
 	}
+
+	//内存态 => 磁盘态
+	part.inMemory = false
 
 	//最后设置一下startId和nextDocId
 	part.StartDocId = parts[0].StartDocId
