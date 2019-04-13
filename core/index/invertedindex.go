@@ -26,6 +26,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
+	"fmt"
 )
 
 //倒排索引
@@ -125,7 +126,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 //Note:
 // 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
 // 这里一个设计的问题，函数并未自动加载回mmap，但是设置了btdb
-func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) error {
+func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) error {
 
 	//打开倒排文件, 获取文件大小作为初始偏移
 	idxFileName := partitionPathName + basic.IDX_FILENAME_SUFFIX_INVERT
@@ -141,7 +142,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) e
 	offset := int(fi.Size()) //当前偏移量, 即文件最后位置
 
 	//开始文件写入
-	rIdx.btdb = tree //TODO 能否不是传进来的？？
+	rIdx.btdb = btdb //TODO 能否不是传进来的？？
 	if !rIdx.btdb.HasTree(rIdx.fieldName) {
 		rIdx.btdb.AddTree(rIdx.fieldName)
 	}
@@ -150,7 +151,11 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) e
 		nodeCnt := len(docNodeList)
 		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
 		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
-		idxFd.Write(lenBuffer)
+		n, err := idxFd.Write(lenBuffer)
+		if err != nil || n != DOCNODE_BYTE_CNT {
+			log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
+			return errors.New("Write Error")
+		}
 
 		//再写入node list
 		buffer := new(bytes.Buffer)
@@ -160,13 +165,9 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, tree btree.Btree) e
 			return err
 		}
 		writeLength, err := idxFd.Write(buffer.Bytes())
-		if err != nil {
-			log.Errf("Persist :: Error %v", err)
-			return err
-		}
-		if writeLength != nodeCnt * basic.DOC_NODE_SIZE {
-			log.Errf("Write length wrong %v, %v", writeLength, nodeCnt * basic.DOC_NODE_SIZE)
-			return errors.New("Write length wrong")
+		if err != nil || writeLength != nodeCnt * basic.DOC_NODE_SIZE{
+			log.Errf("Write err, %v, %v, %v",err, writeLength, nodeCnt * basic.DOC_NODE_SIZE)
+			return errors.New("Write Error")
 		}
 
 		//B+树录入
@@ -371,7 +372,11 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 		nodeCnt := len(value)
 		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
 		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
-		fd.Write(lenBuffer)
+		n, err := fd.Write(lenBuffer)
+		if err != nil || n != DOCNODE_BYTE_CNT {
+			log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
+			return errors.New("Write Error")
+		}
 		buffer := new(bytes.Buffer)
 		err = binary.Write(buffer, binary.LittleEndian, value)
 		if err != nil {
@@ -379,13 +384,9 @@ func MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, b
 			return err
 		}
 		writeLength, err := fd.Write(buffer.Bytes())
-		if err != nil {
-			log.Errf("Invert --> Merge :: Error %v", err)
-			return err
-		}
-		if writeLength != nodeCnt * basic.DOC_NODE_SIZE {
-			log.Errf("Write length wrong %v, %v", writeLength, nodeCnt * basic.DOC_NODE_SIZE)
-			return errors.New("Write length wrong")
+		if err != nil || writeLength != nodeCnt * basic.DOC_NODE_SIZE{
+			log.Errf("Write err, %v, %v, %v",err, writeLength, nodeCnt * basic.DOC_NODE_SIZE)
+			return errors.New("Write Error")
 		}
 
 		err = btdb.Set(fieldName, minTerm, uint64(offset))

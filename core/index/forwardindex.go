@@ -330,7 +330,10 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 		return 0, 0, err
 	}
 	defer fwdFd.Close()
-	fi, _ := fwdFd.Stat()
+	fi, err := fwdFd.Stat()
+	if err != nil {
+		return 0, 0, err
+	}
 	offset := fi.Size()
 
 	var cnt int
@@ -338,9 +341,10 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, num := range fwdIdx.memoryNum {
 			binary.LittleEndian.PutUint64(buffer, uint64(num))
-			_, err = fwdFd.Write(buffer)
-			if err != nil {
-				log.Errf("NumberForward --> Persist :: Write Error %v", err)
+			n, err := fwdFd.Write(buffer)
+			if err != nil || n != DATA_BYTE_CNT {
+				log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+				return 0, 0, errors.New("Write Error")
 			}
 		}
 
@@ -362,16 +366,21 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 			//ext写入内容
 			strLen := len(str)
 			binary.LittleEndian.PutUint64(buffer, uint64(strLen))
-			_, err := extFd.Write(buffer)
-			n, err := extFd.WriteString(str)
+			n, err := extFd.Write(buffer)
+			if err != nil || n != DATA_BYTE_CNT {
+				log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+				return 0, 0, errors.New("Write Error")
+			}
+			n, err = extFd.WriteString(str)
 			if err != nil || n != strLen {
 				log.Errf("StringForward --> Persist :: Write Error %v", err)
 			}
 			//fwd写入offset
 			binary.LittleEndian.PutUint64(buffer, uint64(extOffset))
-			_, err = fwdFd.Write(buffer)
-			if err != nil {
-				log.Errf("StringForward --> Persist --> Serialization :: Write Error %v", err)
+			n, err = fwdFd.Write(buffer)
+			if err != nil || n != DATA_BYTE_CNT {
+				log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+				return 0, 0, errors.New("Write Error")
 			}
 			extOffset = extOffset + DATA_BYTE_CNT + int64(strLen)
 
@@ -393,7 +402,6 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
 func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (uint64, uint32, uint32, error) {
-	//fmt.Println("C-------", len(idxList))
 	//一些校验, index的类型，顺序必须完整正确
 	if idxList == nil || len(idxList) == 0 {
 		return 0, 0, 0, errors.New("Nil []*ForwardIndex")
@@ -431,8 +439,11 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				val, _ := idx.GetInt(i)
 				binary.LittleEndian.PutUint64(buffer, uint64(val))
-				_, err := fwdFd.Write(buffer)
-				//fmt.Println("D--------",pflFileName,  n, val)
+				n, err := fwdFd.Write(buffer)
+				if err != nil || n != DATA_BYTE_CNT {
+					log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+					return 0, 0, 0, errors.New("Write Error")
+				}
 				if err != nil {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
 					return 0, 0, 0, err
@@ -459,8 +470,12 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 				strContent, _ := idx.GetString(i)
 				strLen := len(strContent)
 				binary.LittleEndian.PutUint64(buffer, uint64(strLen))
-				_, err := extFd.Write(buffer)
-				n, err := extFd.WriteString(strContent)
+				n, err := extFd.Write(buffer)
+				if err != nil || n != DATA_BYTE_CNT {
+					log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+					return 0, 0, 0, errors.New("Write Error")
+				}
+				n, err = extFd.WriteString(strContent)
 				if err != nil || n != strLen {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
 					return 0, 0, 0, err
@@ -469,8 +484,8 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 				binary.LittleEndian.PutUint64(buffer, uint64(extOffset))
 				n, err = fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
-					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
-					return 0, 0, 0, err
+					log.Errf(fmt.Sprint("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
+					return 0, 0, 0, errors.New("Write Error")
 				}
 				extOffset = extOffset + DATA_BYTE_CNT + int64(strLen)
 				//fwdIdx.nextDocId++
