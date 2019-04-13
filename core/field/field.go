@@ -87,7 +87,7 @@ func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset 
 		fieldtype == index.IDX_TYPE_STRING_LIST ||
 		fieldtype == index.IDX_TYPE_STRING_SINGLE ||
 		fieldtype == index.GATHER_TYPE {
-		ivtIdx = index.LoadInvertedIndex(btree, fieldtype, fieldname, ivtMmap)
+		ivtIdx = index.LoadInvertedIndex(btree, fieldtype, fieldname, ivtMmap, next)
 	}
 
 	fwdIdx := index.LoadForwardIndex(fieldtype, baseMmap, extMmap, fwdOffset, fwdDocCnt, start, next)
@@ -263,17 +263,12 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 }
 
 //字段归并
-//TODO 这些操作, 完全不闭合, 而且还依赖顺序, 后续要大改
-//TODO 目前只能合并出完整的磁盘版本, 但是filed并不能直接用
-func MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) (uint64, uint32, uint32, error) {
+//和底层逻辑一直，同样mmap不会加载，其他控制数据包括btdb会加载
+func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) (error) {
 	//一些校验, index的类型，顺序必须完整正确
 	if fields == nil || len(fields) == 0 {
-		return 0, 0, 0, errors.New("Nil []*Field")
+		return errors.New("Nil []*Field")
 	}
-
-	var offset uint64
-	var docCnt uint32
-	var nextId uint32
 	var err error
 
 	//合并正排索引
@@ -281,11 +276,11 @@ func MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) 
 	for _, fd := range fields {
 		fwds = append(fwds, fd.FwdIdx)
 	}
-	offset, docCnt, nextId, err = index.MergePersistFwdIndex(fwds, partitionName)
+	err = fld.FwdIdx.MergePersistFwdIndex(fwds, partitionName)
 	//fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
 	if err != nil {
 		log.Errf("Field --> mergeField :: Serialization Error %v", err)
-		return 0, 0, 0, err
+		return err
 	}
 
 	//如果有倒排索引，则合并
@@ -299,15 +294,22 @@ func MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) 
 				panic("invert is nil")
 			}
 		}
-		err := index.MergePersistIvtIndex(ivts, partitionName, btdb)
+		err := fld.IvtIdx.MergePersistIvtIndex(ivts, partitionName, btdb)
 		if  err != nil {
 			//如果此处出错，则会不一致...
 			log.Errf("MergePersistIvtIndex Error: ", err, ". Danger!!!!")
-			return 0, 0, 0, err
+			return err
 		}
 	}
 
-	return offset, docCnt, nextId, nil
+	//加载回控制数据
+	fld.btdb = btdb
+	fld.FwdOffset = fld.FwdIdx.GetFwdOffset()
+	fld.DocCnt = fld.FwdIdx.GetDocCnt()
+	fld.StartDocId = fld.FwdIdx.GetStartId()
+	fld.NextDocId = fld.FwdIdx.GetNextId()
+
+	return nil
 }
 
 

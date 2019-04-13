@@ -308,12 +308,20 @@ func (fwdIdx *ForwardIndex) SetInMemory(in bool) {
 	fwdIdx.inMemory = in
 }
 
-func (fwdIdx *ForwardIndex) SetFwdOffset(i uint64) {
-	fwdIdx.fwdOffset = i
+func (fwdIdx *ForwardIndex) GetStartId() uint32{
+	return fwdIdx.startDocId
 }
 
-func (fwdIdx *ForwardIndex) SetDocCnt(i uint32) {
-	fwdIdx.docCnt = i
+func (fwdIdx *ForwardIndex) GetNextId() uint32{
+	return fwdIdx.nextDocId
+}
+
+func (fwdIdx *ForwardIndex) GetFwdOffset() uint64{
+	return fwdIdx.fwdOffset
+}
+
+func (fwdIdx *ForwardIndex) GetDocCnt() uint32 {
+	return fwdIdx.docCnt
 }
 
 //落地正排索引

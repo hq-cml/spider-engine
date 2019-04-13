@@ -146,9 +146,9 @@ func TestPrepareMerge(t *testing.T) {
 	field1.AddDocument(0, "我爱北京天安门")
 	field1.AddDocument(1, "天安门上太阳升")
 
-	field2 := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
-	field2.AddDocument(0, "火红的太阳")
-	field2.AddDocument(1, "火红的萨日朗")
+	field2 := NewEmptyField(TEST_FIELD, 2, index.IDX_TYPE_STRING_SEG)
+	field2.AddDocument(2, "火红的太阳")
+	field2.AddDocument(3, "火红的萨日朗")
 
 	//准备落地
 	treedb1 := btree.NewBtree("xx", "/tmp/spider/spider1" + basic.IDX_FILENAME_SUFFIX_BTREE)
@@ -161,6 +161,7 @@ func TestPrepareMerge(t *testing.T) {
 	if err := field2.Persist("/tmp/spider/Segment2", treedb2); err != nil {
 		t.Fatal("Wrong:", err)
 	}
+	t.Log("\n\n")
 }
 
 //将两个filed合并
@@ -203,13 +204,62 @@ func TestMerge(t *testing.T) {
 	//准备合并
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
-
-	offset, cnt, nextId, err := MergePersistField([]*Field{field1, field2}, "/tmp/spider/segment", treedb)
+	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
+	err = field.MergePersistField([]*Field{field1, field2}, "/tmp/spider/segment", treedb)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("Offset:", offset, "Cnt:", cnt, ". NextId:", nextId)
+	t.Log("Offset:", field.FwdOffset, "Cnt:", field.DocCnt, ". StartId:", field.StartDocId, ". NextId:", field.NextDocId)
 
+	//合并完毕后进行测试
+	//从磁盘加载mmap
+	ivtMmap, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mmp1, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	mmp2, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	field.SetMmap(mmp1, mmp2, ivtMmap)
+
+	field.btdb.Display(TEST_FIELD)
+
+	//测试query
+	tmp, b := field.Query("天安门")
+	if !b {
+		t.Fatal("Wrong")
+	}
+	t.Log(helper.JsonEncode(tmp))
+	if len(tmp) != 2 {
+		t.Fatal("Wrong")
+	}
+	tmp, b = field.Query("火红")
+	if !b {
+		t.Fatal("Wrong")
+	}
+	t.Log(helper.JsonEncode(tmp))
+	if len(tmp) != 2 {
+		t.Fatal("Wrong")
+	}
+
+	//测试get
+	s, b := field.GetString(2)
+	if !b {
+		t.Fatal("Wrong")
+	}
+	if s != "火红的太阳" {
+		t.Fatal("Wrong")
+	}
+
+	_, b = field.GetString(4)
+	if b {
+		t.Fatal("Wrong")
+	}
 	t.Log("\n\n")
 }
 
