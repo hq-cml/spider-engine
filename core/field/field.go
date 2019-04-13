@@ -17,15 +17,15 @@ import (
 //字段的结构定义
 type Field struct {
 	FieldName  string `json:"fieldName"`
-	StartDocId uint32                    //和它所拥有的正排索引一致
-	NextDocId  uint32                    //和它所拥有的正排索引一致
+	StartDocId uint32 `json:"startDocId"`                  //和它所拥有的正排索引一致
+	NextDocId  uint32 `json:"startDocId"`
 	IndexType  uint8  `json:"indexType"`
 	inMemory   bool
-	IvtIdx     *index.InvertedIndex      //倒排索引
-	FwdIdx     *index.ForwardIndex       //正排索引
+	IvtIdx     *index.InvertedIndex    `json:"-"`  //倒排索引
+	FwdIdx     *index.ForwardIndex      `json:"-"` //正排索引
 	FwdOffset  uint64 `json:"fwdOffset"` //此正排索引的数据，在文件中的起始偏移
 	DocCnt     uint32 `json:"docCnt"`    //正排索引文档个数
-	btdb       btree.Btree
+	btdb       btree.Btree  `json:"-"`
 }
 
 // 字段的最基本描述信息，用于分区的落盘
@@ -169,6 +169,8 @@ func (fld *Field) GetString(docId uint32) (string, bool) {
 	pos := docId - fld.StartDocId
 	fmt.Println("C------", pos, docId, fld.StartDocId)
 	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
+		a, b := fld.FwdIdx.GetString(pos)
+		fmt.Println("U-------", fld.FieldName, a, b, fld.FwdIdx)
 		return fld.FwdIdx.GetString(pos)
 	}
 
@@ -283,7 +285,7 @@ func MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) 
 		fwds = append(fwds, fd.FwdIdx)
 	}
 	offset, docCnt, nextId, err = index.MergePersistFwdIndex(fwds, partitionName)
-	fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
+	//fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
 	if err != nil {
 		log.Errf("Field --> mergeField :: Serialization Error %v", err)
 		return 0, 0, 0, err

@@ -26,7 +26,6 @@ import (
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
-	"fmt"
 )
 
 //倒排索引
@@ -201,7 +200,7 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 		if !ok {
 			return nil, false
 		}
-		fmt.Println("A--------", term, offset)
+		
 		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
 		return docNodes, true

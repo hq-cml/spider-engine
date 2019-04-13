@@ -185,7 +185,6 @@ func TestPartitionMerge(t *testing.T) {
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	//新增字段
 	part0.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
 	part0.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
 	part0.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
@@ -206,7 +205,6 @@ func TestPartitionMerge(t *testing.T) {
 	if part1.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	//新增字段
 	part1.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
 	part1.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
 	part1.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
@@ -220,7 +218,7 @@ func TestPartitionMerge(t *testing.T) {
 	part1.AddDocument(4, user4)
 	part1.AddDocument(5, user5)
 
-
+	//新建的两个分区落地
 	part0.Persist()  //TODO 为何一定要落地先??
 	part1.Persist()
 	part0.btdb.Display(TEST_FIELD1)
@@ -230,12 +228,11 @@ func TestPartitionMerge(t *testing.T) {
 	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, nil)
 	defer part2.Close()
-
-	//新增字段
 	part2.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
 	part2.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
 	part2.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
 
+	//合并
 	err = part2.MergePersistPartitions([]*Partition{part0, part1})
 	if err != nil {
 		t.Fatal(err)
@@ -282,12 +279,21 @@ func TestPartitionMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	d, _ := part2.GetDocument(2)
+	d, ok := part2.GetDocument(2)
+	if !ok {
+		t.Fatal("Shuold exist")
+	}
+	if d[TEST_FIELD2] != "25" {
+		t.Fatal("Error")
+	}
 	t.Log(helper.JsonEncode(d))
 
 	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
 	if !ok {
 		t.Fatal("Shuold exist")
+	}
+	if s2 != "喜欢美食,也喜欢文艺" {
+		t.Fatal("Error")
 	}
 	t.Log(s2)
 
@@ -295,18 +301,69 @@ func TestPartitionMerge(t *testing.T) {
 
 }
 
-//func TestLoadMerge(t *testing.T) {
-//	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
-//	part, err := LoadPartition(patitionName)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	list, exist := part.Query(TEST_FIELD3, "美食")
-//	if !exist {
-//		t.Fatal("Should exist!!")
-//	}
-//	if len(list) != 3 {
-//		t.Fatal("Should 3!!")
-//	}
-//	t.Log(helper.JsonEncode(list))
-//}
+func TestLoadMerge(t *testing.T) {
+	t.Skip()
+	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
+	part2, err := LoadPartition(patitionName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//测试Load回来的结果
+	list, exist := part2.Query(TEST_FIELD3, "美食")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 3 {
+		t.Fatal("Should 3!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.Query(TEST_FIELD3, "喜欢")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 6 {
+		t.Fatal("Should 6!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.Query(TEST_FIELD3, "游泳")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 1!!")
+	}
+
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.Query(TEST_FIELD1, "李八")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 1!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	d, ok := part2.GetDocument(2)
+	if !ok {
+		t.Fatal("Shuold exist")
+	}
+	if d[TEST_FIELD2] != "25" {
+		t.Fatal("Error")
+	}
+	t.Log(helper.JsonEncode(d))
+
+	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
+	if !ok {
+		t.Fatal("Shuold exist")
+	}
+	if s2 != "喜欢美食,也喜欢文艺" {
+		t.Fatal("Error")
+	}
+	t.Log(s2)
+
+	t.Log("\n\n")
+}

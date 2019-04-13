@@ -93,6 +93,17 @@ func LoadForwardIndex(indexType uint8, baseMmap, extMmap *mmap.Mmap,
 	}
 }
 
+func (fwdIdx *ForwardIndex)String() string {
+	return fmt.Sprintf("FwdIndex-- Start:%v, Next:%v, InMem:%v, Type:%v, Offset:%v, Cnt:%v, Fake:%v",
+		fwdIdx.startDocId,
+		fwdIdx.nextDocId,
+		fwdIdx.inMemory,
+		fwdIdx.indexType,
+		fwdIdx.fwdOffset,
+		fwdIdx.docCnt,
+		fwdIdx.fake,
+	)
+}
 //增加一个doc文档
 //Note：
 // 增加文档，只会出现在最新的一个分区（即都是内存态的），所以只会操作内存态的
@@ -235,6 +246,7 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 			return "", false
 		}
 		extOffset := fwdIdx.baseMmap.ReadUInt64(realOffset)
+		fmt.Println("V------------", realOffset, extOffset)
 		if (int(extOffset) >= len(fwdIdx.extMmap.DataBytes)) {
 			return "", false
 		}
@@ -295,6 +307,14 @@ func (fwdIdx *ForwardIndex) SetExtMmap(mmap *mmap.Mmap) {
 
 func (fwdIdx *ForwardIndex) SetInMemory(in bool) {
 	fwdIdx.inMemory = in
+}
+
+func (fwdIdx *ForwardIndex) SetFwdOffset(i uint64) {
+	fwdIdx.fwdOffset = i
+}
+
+func (fwdIdx *ForwardIndex) SetDocCnt(i uint32) {
+	fwdIdx.docCnt = i
 }
 
 //落地正排索引
@@ -425,36 +445,36 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 		//cnt = int(fwdIdx.nextDocId - fwdIdx.startDocId)
 	} else {
 		//打开dtl文件
-		dtlFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, partitionPathName)
-		dtlFd, err := os.OpenFile(dtlFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+		extFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, partitionPathName)
+		extFd, err := os.OpenFile(extFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		defer dtlFd.Close()
-		fi, _ = dtlFd.Stat()
-		dtloffset := fi.Size()
+		defer extFd.Close()
+		fi, _ = extFd.Stat()
+		extOffset := fi.Size()
 
 		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
 				strContent, _ := idx.GetString(i)
-				fmt.Println("W--------", strContent)
+				fmt.Println("W--------", strContent, extOffset)
 				strLen := len(strContent)
 				binary.LittleEndian.PutUint64(buffer, uint64(strLen))
-				_, err := dtlFd.Write(buffer)
-				n, err := dtlFd.WriteString(strContent)
+				_, err := extFd.Write(buffer)
+				n, err := extFd.WriteString(strContent)
 				if err != nil || n != strLen {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
 					return 0, 0, 0, err
 				}
 				//存储offset
-				binary.LittleEndian.PutUint64(buffer, uint64(dtloffset))
+				binary.LittleEndian.PutUint64(buffer, uint64(extOffset))
 				n, err = fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
 					return 0, 0, 0, err
 				}
-				dtloffset = dtloffset + DATA_BYTE_CNT + int64(strLen)
+				extOffset = extOffset + DATA_BYTE_CNT + int64(strLen)
 				//fwdIdx.nextDocId++
 				cnt++
 			}

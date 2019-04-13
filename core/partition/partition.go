@@ -232,8 +232,8 @@ func (part *Partition) UpdateDocument(docId uint32, content map[string]string) e
 
 //关闭Partition
 func (part *Partition) Close() error {
-	for _, field := range part.Fields {
-		field.Destroy()
+	for _, fld := range part.Fields {
+		fld.Destroy()
 	}
 
 	//统一unmmap掉mmap
@@ -295,16 +295,15 @@ func (part *Partition) GetFieldValue(docId uint32, fieldName string) (string, bo
 func (part *Partition) GetDocument(docid uint32) (map[string]string, bool) {
 	//校验
 	if docid < part.StartDocId || docid >= part.NextDocId {
-		fmt.Println("A-----", docid, part.StartDocId, part.NextDocId)
 		return nil, false
 	}
 
 	//获取
 	fmt.Println("B-----", docid, part.StartDocId, part.NextDocId)
 	ret := make(map[string]string)
-	for fieldName, field := range part.Fields {
-		fmt.Println("E------", fieldName)
-		ret[fieldName], _ = field.GetString(docid)
+	for fieldName, fld := range part.Fields {
+		fmt.Println("E------", fieldName, fld.FieldName)
+		ret[fieldName], _ = fld.GetString(docid)
 	}
 	return ret, true
 }
@@ -412,7 +411,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		part.btdb = btree.NewBtree("", btdbname)
 	}
 
-	//挨个字段进行merge
+	//逐个字段进行merge
 	//TODO 理论上各个字段的nextId, docId应该相同, 但是fwdOffset应该不同, 待测试
 	for fieldName, basicField := range part.BasicFields {
 		fs := make([]*field.Field, 0)
@@ -446,6 +445,8 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 			part.Fields[fieldName].IvtIdx.SetInMemory(false)
 		}
 		part.Fields[fieldName].FwdIdx.SetInMemory(false)
+		part.Fields[fieldName].FwdIdx.SetFwdOffset(offset)
+		part.Fields[fieldName].FwdIdx.SetDocCnt(cnt)
 		part.Fields[fieldName].StartDocId = parts[0].StartDocId
 	}
 
