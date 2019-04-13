@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"time"
 	"errors"
+	"math"
 	"github.com/hq-cml/spider-engine/core/partition"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
@@ -27,92 +28,59 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/core/field"
-	"math"
 )
 
+//表的原则：
+// 主键和其他字段不同，单独用一个btree实例存储，不分区
+// 最新的文档增加只会操作内存态分区，到达阈值后回落地或者和其他分区合并落地
+// 文档的删除采用假删除，通过bitmap标记
 type Table struct {
-	Name           string                      `json:"name"`
-	Path           string                      `json:"pathname"`
-	FieldSummaries map[string]field.BasicField `json:"fields"`
-	PrimaryKey     string                      `json:"primarykey"`
-	StartDocId     uint32                      `json:"startdocid"`
-	NextDocId      uint32                      `json:"nextdocid"`
-	PrefixSegment  uint64                      `json:"prefixsegment"`
-	PartitionNames []string                    `json:"partitionnames"`
+	TableName      string                      `json:"tableName"`
+	Path           string                      `json:"pathName"`
+	BasicFields    map[string]field.BasicField `json:"fields"`
+	PrimaryKey     string                      `json:"primaryKey"`
+	StartDocId     uint32                      `json:"startDocId"`
+	NextDocId      uint32                      `json:"nextDocId"`
+	Prefix         uint64                      `json:"prefix"`
+	PartitionNames []string                    `json:"partitionNames"`
 
-	partitions    []*partition.Partition
-
-	primaryBtdb    btree.Btree          //文件部分倒排索引（用于主键）
-	primaryMap    map[string]string     //内存部分倒排索引（用于主键），主键不会重复，所以直接map[string]string
-
-	memPartition  *partition.Partition
-
-	bitmap        *bitmap.Bitmap
-	mutex sync.Mutex //锁，当分区持久化到或者合并时使用或者新建分区时使用
+	memPartition   *partition.Partition         //内存态的分区
+	partitions     []*partition.Partition       //磁盘态的分区列表
+	primaryBtdb    btree.Btree                  //主键倒排索引（内存态）
+	primaryMap     map[string]string            //主键倒排索引（磁盘态），主键不会重复，直接map[string]string
+	bitmap         *bitmap.Bitmap               //用于文档删除标记
+	mutex 		   sync.Mutex					//锁，当分区持久化到或者合并时使用或者新建分区时使用
 }
 
-//关闭
-func (tbl *Table) Close() error {
-
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
-	log.Infof("Close Table [%v]", tbl.Name)
-
-	if tbl.memPartition != nil {
-		tbl.memPartition.Close()
-	}
-
-	for _, seg := range tbl.partitions {
-		seg.Close()
-	}
-
-	if tbl.primaryBtdb != nil {
-		tbl.primaryBtdb.Close()
-	}
-
-	if tbl.bitmap != nil {
-		tbl.bitmap.Close()
-	}
-
-	log.Infof("Close Table [%v] Finish", tbl.Name)
-	return nil
-}
-
-//产生内存Partition
+//产出一块空的内存分区
 func (tbl *Table) generateMemPartition() {
-	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
-	var summaries []field.BasicField
-	for _, f := range tbl.FieldSummaries {
-		if f.IndexType != index.IDX_TYPE_PK { //TODO why??
-			summaries = append(summaries, f)
+	segmentname := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+	var basicFields []field.BasicField
+	for _, f := range tbl.BasicFields {
+		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
+			basicFields = append(basicFields, f)
 		}
 	}
 
-	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(segmentname, tbl.NextDocId, summaries)
-	tbl.PrefixSegment++
+	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(segmentname, tbl.NextDocId, basicFields)
+	tbl.Prefix++
 }
 
 //新建空表
-func NewEmptyTable(name, path string) *Table {
-	var mu sync.Mutex
+func NewEmptyTable(path, name string) *Table {
+	if string(path[len(path)-1]) != "/" {
+		path = path + "/"
+	}
 	table := Table{
-		Name:           name,
-		StartDocId:     0,
-		NextDocId:      0,
-		PrefixSegment:  1000,
+		TableName:      name,
 		PartitionNames: make([]string, 0),
-		PrimaryKey:     "",
 		partitions:     make([]*partition.Partition, 0),
-		memPartition:   nil,
-		primaryBtdb:    nil,
-		bitmap:         nil,
 		Path:           path,
-		FieldSummaries: make(map[string]field.BasicField),
-		mutex:          mu,
+		BasicFields:    make(map[string]field.BasicField),
 		primaryMap:     make(map[string]string),
 	}
 
-	btmpName := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
+	btmpName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_BITMAP)
 	table.bitmap = bitmap.NewBitmap(btmpName, false)
 
 	return &table
@@ -120,17 +88,13 @@ func NewEmptyTable(name, path string) *Table {
 
 //从文件加载表
 func LoadTable(name, path string) (*Table, error) {
-	var mu sync.Mutex
-	tbl := Table{
-		mutex: 			mu,
-	}
-
-	metaFileName := path + name + basic.IDX_FILENAME_SUFFIX_META
+	tbl := Table{}
+	metaFileName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_META)
 	buffer, err := helper.ReadFile(metaFileName)
 	if err != nil {
 		return nil, err
 	}
-	//TODO ?? 是否会覆盖掉mutex
+	//json.Unmarshal仅会覆盖大写的公开字段，小写字段包括锁都不受影响
 	err = json.Unmarshal(buffer, &tbl)
 	if err != nil {
 		return nil, err
@@ -141,7 +105,7 @@ func LoadTable(name, path string) (*Table, error) {
 		tbl.partitions = append(tbl.partitions, segment)
 	}
 
-	//新建空的分区
+	//产出一块空的内存分区
 	tbl.generateMemPartition()
 
 	//读取bitmap
@@ -149,26 +113,26 @@ func LoadTable(name, path string) (*Table, error) {
 	tbl.bitmap = bitmap.NewBitmap(btmpPath, true)
 
 	if tbl.PrimaryKey != "" {
-		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_BTREE)
+		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.primaryBtdb = btree.NewBtree("", primaryname)
 	}
 
-	log.Infof("Load Table %v success", tbl.Name)
+	log.Infof("Load Table %v success", tbl.TableName)
 	return &tbl, nil
 }
 
 //TODO 为什么这里添加列， 只有内存分区那一块有效，其他的分支只是增加一个分区？？
 func (tbl *Table) AddField(summary field.BasicField) error {
 
-	if _, ok := tbl.FieldSummaries[summary.FieldName]; ok {
+	if _, ok := tbl.BasicFields[summary.FieldName]; ok {
 		log.Warnf("Field %v have Exist ", summary.FieldName)
 		return nil
 	}
 
-	tbl.FieldSummaries[summary.FieldName] = summary
+	tbl.BasicFields[summary.FieldName] = summary
 	if summary.IndexType == index.IDX_TYPE_PK {
 		tbl.PrimaryKey = summary.FieldName
-		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_BTREE)
+		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.primaryBtdb = btree.NewBtree("", primaryname)
 		tbl.primaryBtdb.AddTree(summary.FieldName)
 	} else {
@@ -204,7 +168,7 @@ func (tbl *Table) AddField(summary field.BasicField) error {
 
 func (tbl *Table) DeleteField(fieldname string) error {
 
-	if _, ok := tbl.FieldSummaries[fieldname]; !ok {
+	if _, ok := tbl.BasicFields[fieldname]; !ok {
 		log.Warnf("Field %v not found ", fieldname)
 		return nil
 	}
@@ -217,7 +181,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
 
-	delete(tbl.FieldSummaries, fieldname)
+	delete(tbl.BasicFields, fieldname)
 
 	if tbl.memPartition == nil {
 		//tbl.memPartition.DeleteField(fieldname) //panic
@@ -246,7 +210,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 }
 
 func (tbl *Table) StoreMeta() error {
-	metaFileName := fmt.Sprintf("%v%v%s", tbl.Path, tbl.Name, basic.IDX_FILENAME_SUFFIX_META)
+	metaFileName := fmt.Sprintf("%v%v%s", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_META)
 	data := helper.JsonEncode(tbl)
 	if data != "" {
 		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
@@ -268,7 +232,7 @@ func (tbl *Table) StoreMeta() error {
 
 func (tbl *Table) AddOrUpdateDoc(content map[string]string, updateType uint8) (uint32, error) {
 
-	if len(tbl.FieldSummaries) == 0 {
+	if len(tbl.BasicFields) == 0 {
 		log.Errf("No Field or Partiton is nil")
 		return 0, errors.New("no field or segment is nil")
 	}
@@ -421,16 +385,16 @@ func (tbl *Table) MergePartitions() error {
 	todoPartitions := tbl.partitions[startIdx:]
 
 
-	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.Name, tbl.PrefixSegment)
+	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.TableName, tbl.Prefix)
 	var summaries []field.BasicField
-	for _, f := range tbl.FieldSummaries {
+	for _, f := range tbl.BasicFields {
 		if f.IndexType != index.IDX_TYPE_PK { //TODO why??
 			summaries = append(summaries, f)
 		}
 	}
 
 	tmpPartition := partition.NewEmptyPartitionWithBasicFields(segmentname, tbl.NextDocId, summaries)
-	tbl.PrefixSegment++  //TODO 要新增吗
+	tbl.Prefix++ //TODO 要新增吗
 	if err := tbl.StoreMeta(); err != nil {
 		return err
 	}
@@ -459,19 +423,46 @@ func (tbl *Table) MergePartitions() error {
 	return tbl.StoreMeta()
 }
 
-func (tbl *Table) SearchUnitDocIds(querys []basic.SearchQuery, filteds []basic.SearchFilted) ([]basic.DocNode, bool) {
+//关闭一张表
+func (tbl *Table) Close() error {
 
-	docids := make([]basic.DocNode, 0)
-	for _, prt := range tbl.partitions {
-		docids, _ = prt.SearchUnitDocIds(querys, filteds, tbl.bitmap, docids)
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+	log.Infof("Close Table [%v]", tbl.TableName)
+
+	if tbl.memPartition != nil {
+		tbl.memPartition.Close()
 	}
 
-	if len(docids) > 0 {
-		return docids, true
+	for _, seg := range tbl.partitions {
+		seg.Close()
 	}
 
-	return nil, false
+	if tbl.primaryBtdb != nil {
+		tbl.primaryBtdb.Close()
+	}
+
+	if tbl.bitmap != nil {
+		tbl.bitmap.Close()
+	}
+
+	log.Infof("Close Table [%v] Finish", tbl.TableName)
+	return nil
 }
+
+//func (tbl *Table) SearchUnitDocIds(querys []basic.SearchQuery, filteds []basic.SearchFilted) ([]basic.DocNode, bool) {
+//
+//	docids := make([]basic.DocNode, 0)
+//	for _, prt := range tbl.partitions {
+//		docids, _ = prt.SearchUnitDocIds(querys, filteds, tbl.bitmap, docids)
+//	}
+//
+//	if len(docids) > 0 {
+//		return docids, true
+//	}
+//
+//	return nil, false
+//}
 
 //TODO 有点奇怪, 再细化拆解
 var GetDocIDsChan chan []basic.DocNode
