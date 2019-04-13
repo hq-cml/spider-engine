@@ -389,7 +389,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 	}
 
 	//当前偏移量, 即文件最后位置
-	fwdIdx.fwdOffset = uint64(offset) //TODO 此处到底要不要设置
+	fwdIdx.fwdOffset = uint64(offset)
 	fwdIdx.docCnt = uint32(cnt)
 
 	//内存态 => 磁盘态
@@ -401,23 +401,26 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 
 //归并索引
 //正排索引的归并, 不存在倒排那种归并排序的问题, 因为每个索引内部按offset有序, 每个索引之间又是整体有序
-func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (uint64, uint32, uint32, error) {
+//此外，和倒排合另一个区别是正排可以支持内存态的索引的合并，尽管这没什么鸟用（高层只会合并磁盘态的索引）
+//Note:
+// 一个设计的问题，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
+// 所以mmap并不会加载回来，但是其他几个控制字段nextId， docCnt，offset被加载回来了
+func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) error {
 	//一些校验, index的类型，顺序必须完整正确
 	if idxList == nil || len(idxList) == 0 {
-		return 0, 0, 0, errors.New("Nil []*ForwardIndex")
+		return errors.New("Nil []*ForwardIndex")
 	}
-	indexType := idxList[0].indexType
+	indexType := fwdIdx.indexType
 	l := len(idxList)
 	for i:=0; i<(l-1); i++ {
 		if idxList[i].indexType != idxList[i+1].indexType {
-			return 0, 0, 0, errors.New("Indexes not consistent")
+			return errors.New("Indexes not consistent")
 		}
 
 		if idxList[i].nextDocId != idxList[i+1].startDocId {
-			return 0, 0, 0, errors.New("Indexes order wrong")
+			return errors.New("Indexes order wrong")
 		}
 	}
-	nextId := idxList[l-1].nextDocId;
 
 	//打开正排文件
 	pflFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, partitionPathName)
@@ -425,12 +428,11 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 	var err error
 	fwdFd, err = os.OpenFile(pflFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return 0, 0, 0, err
+		return err
 	}
 	defer fwdFd.Close()
 	fi, _ := fwdFd.Stat()
 	offset := fi.Size()
-	//fwdIdx.fwdOffset = uint64(offset)
 
 	cnt := 0
 	if indexType == IDX_TYPE_NUMBER || indexType == IDX_TYPE_DATE {
@@ -442,23 +444,21 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 				n, err := fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
-					return 0, 0, 0, errors.New("Write Error")
+					return errors.New("Write Error")
 				}
 				if err != nil {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
-					return 0, 0, 0, err
+					return err
 				}
-				//fwdIdx.nextDocId++
 				cnt ++
 			}
 		}
-		//cnt = int(fwdIdx.nextDocId - fwdIdx.startDocId)
 	} else {
 		//打开dtl文件
 		extFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, partitionPathName)
 		extFd, err := os.OpenFile(extFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
-			return 0, 0, 0, err
+			return err
 		}
 		defer extFd.Close()
 		fi, _ = extFd.Stat()
@@ -473,31 +473,37 @@ func MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (ui
 				n, err := extFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
-					return 0, 0, 0, errors.New("Write Error")
+					return errors.New("Write Error")
 				}
 				n, err = extFd.WriteString(strContent)
 				if err != nil || n != strLen {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
-					return 0, 0, 0, err
+					return err
 				}
 				//存储offset
 				binary.LittleEndian.PutUint64(buffer, uint64(extOffset))
 				n, err = fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
-					return 0, 0, 0, errors.New("Write Error")
+					return errors.New("Write Error")
 				}
 				extOffset = extOffset + DATA_BYTE_CNT + int64(strLen)
-				//fwdIdx.nextDocId++
 				cnt++
 			}
 		}
-		//cnt = int(fwdIdx.nextDocId - fwdIdx.startDocId)
 	}
-	//fwdIdx.inMemory = false
-	//fwdIdx.memoryStr = nil
-	//fwdIdx.memoryNum = nil
-	return uint64(offset), uint32(cnt), nextId, nil
+
+	//当前偏移量, 即文件最后位置
+	fwdIdx.fwdOffset = uint64(offset)
+	fwdIdx.docCnt = uint32(cnt)
+	fwdIdx.startDocId = idxList[0].startDocId
+	fwdIdx.nextDocId = idxList[l-1].nextDocId
+
+	//内存态 => 磁盘态
+	fwdIdx.inMemory = false
+	fwdIdx.memoryStr = nil
+	fwdIdx.memoryNum = nil
+	return nil
 }
 
 //从numbers判断pos指定的数,如果

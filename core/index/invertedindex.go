@@ -283,6 +283,8 @@ type tmpMerge struct {
 //Note:
 // 一个设计的问题，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 // 所以mmap并不会加载回来，但是btdb和inMemory参数被加载回来了
+//
+// 倒排索引只能合并磁盘态的，因为这里面涉及到term的顺序，要依赖B+树，所以内存态的索引不支持
 func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partitionPathName string, btdb btree.Btree) error {
 	//一些校验
 	if rIndexes == nil || len(rIndexes) == 0 {

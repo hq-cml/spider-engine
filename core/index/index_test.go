@@ -354,23 +354,41 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err := idx2.AddDocument(3, "123"); err != nil {t.Fatal("add Error:", err) }
 	if err := idx2.AddDocument(4, "456"); err != nil {t.Fatal("add Error:", err) }
 
-	offset, cnt, nextId, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
+	idx0 := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 9999) //9999没用，会被覆盖
+	err := idx0.MergePersistFwdIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
-	if offset != 0 || cnt != 5 || nextId != 5 {
+	if idx0.startDocId !=0 || idx0.fwdOffset != 0 || idx0.docCnt != 5 || idx0.nextDocId != 5 {
 		t.Fatal("Merge Error: wrong number")
 	}
-	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge Offset:", offset, ". Cnt:", cnt, ". NextId:", nextId)
-
-	//Load回来验证
 	mmp, err := mmap.NewMmap("/tmp/spider/Partition.int.fwd.merge"+basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
+	idx0.SetBaseMmap(mmp)
+	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge. start:" ,
+		idx0.startDocId ,"Offset:", idx0.fwdOffset, ". Cnt:", idx0.docCnt, ". NextId:", idx0.nextDocId)
+	//合并完毕立刻验证
+	iv, b := idx0.GetInt(0)
+	if !b || iv != 100 {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("0: ", iv)
+
+	iv, b = idx0.GetInt(3)
+	if !b || iv != 123 {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("3: ", iv)
+
+
+	//Load回来验证
 	idx := NewEmptyForwardIndex(IDX_TYPE_NUMBER, 0)
-	idx = LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 0, 0, 5)
-	iv, b := idx.GetInt(0)
+	idx = LoadForwardIndex(IDX_TYPE_NUMBER, mmp, nil, 0, 5, 0, 5)
+	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge. start:" ,
+		idx.startDocId ,"Offset:", idx.fwdOffset, ". Cnt:", idx.docCnt, ". NextId:", idx.nextDocId)
+	iv, b = idx.GetInt(0)
 	if !b || iv != 100 {
 		t.Fatal("Sth wrong", iv)
 	}
@@ -381,6 +399,7 @@ func TestMergeFwdIndex(t *testing.T) {
 		t.Fatal("Sth wrong", iv)
 	}
 	t.Log("3: ", iv)
+
 
 	t.Log("\n\n")
 }
@@ -394,27 +413,44 @@ func TestMergeFwdIndexString(t *testing.T) {
 	idx2.AddDocument(2, "ghi")
 	idx2.AddDocument(3, "jkl")
 
-	idx := NewEmptyForwardIndex(IDX_TYPE_STRING, 0)
-	offset, cnt, nextId, err := MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.int.fwd.merge.string")
+	idx0 := NewEmptyForwardIndex(IDX_TYPE_STRING, 9999) //9999没用，会被覆盖
+
+	err := idx0.MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.string.fwd.merge")
 	if err != nil {
 		t.Fatal("Merge Error:", err)
 	}
-	if offset != 0 || cnt != 4 || nextId != 4 {
+	t.Log("Merge ", "/tmp/spider/Partition.string.fwd.merge. start:" ,
+		idx0.startDocId ,"Offset:", idx0.fwdOffset, ". Cnt:", idx0.docCnt, ". NextId:", idx0.nextDocId)
+	if idx0.startDocId !=0 || idx0.fwdOffset != 0 || idx0.docCnt != 4 || idx0.nextDocId != 4 {
 		t.Fatal("Merge Error: wrong number")
 	}
-	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge.string Offset:", offset, ". Cnt:", cnt, ". NextId:", nextId)
+	mmp1, err := mmap.NewMmap("/tmp/spider/Partition.string.fwd.merge" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	idx0.SetBaseMmap(mmp1)
+	mmp2, err := mmap.NewMmap("/tmp/spider/Partition.string.fwd.merge" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	if err != nil {
+		t.Fatal("Load Error:", err)
+	}
+	idx0.SetExtMmap(mmp2)
+
+	//合并完毕直接验证
+	iv, b := idx0.GetString(0)
+	if !b || iv != "abc" {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("0: ", iv)
+
+	iv, b = idx0.GetString(3)
+	if !b || iv != "jkl" {
+		t.Fatal("Sth wrong", iv)
+	}
+	t.Log("3: ", iv)
 
 	//Load回来验证
-	mmp1, err := mmap.NewMmap("/tmp/spider/Partition.int.fwd.merge.string" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
-	if err != nil {
-		t.Fatal("Load Error:", err)
-	}
-	mmp2, err := mmap.NewMmap("/tmp/spider/Partition.int.fwd.merge.string" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
-	if err != nil {
-		t.Fatal("Load Error:", err)
-	}
-	idx = LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0, 0, 4)
-	iv, b := idx.GetString(0)
+	idx := LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 4, 0, 4)
+	iv, b = idx.GetString(0)
 	if !b || iv != "abc" {
 		t.Fatal("Sth wrong", iv)
 	}
