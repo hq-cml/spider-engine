@@ -540,8 +540,6 @@ func (tbl *Table) MergePartitions() error {
 	return tbl.StoreMeta()
 }
 
-
-//TODO 有点奇怪, 再细化拆解
 var GetDocIDsChan chan []basic.DocNode
 var GiveDocIDsChan chan []basic.DocNode
 
