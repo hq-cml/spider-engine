@@ -44,12 +44,12 @@ type Table struct {
 	Prefix         uint64                      `json:"prefix"`
 	PartitionNames []string                    `json:"partitionNames"`
 
-	memPartition   *partition.Partition         //内存态的分区
-	partitions     []*partition.Partition       //磁盘态的分区列表
-	primaryBtdb    btree.Btree                  //主键倒排索引（内存态）
-	primaryMap     map[string]string            //主键倒排索引（磁盘态），主键不会重复，直接map[string]string
-	bitmap         *bitmap.Bitmap               //用于文档删除标记
-	mutex 		   sync.Mutex					//锁，当分区持久化到或者合并时使用或者新建分区时使用
+	memPartition   *partition.Partition   //内存态的分区
+	partitions     []*partition.Partition //磁盘态的分区列表
+	primaryBtdb    btree.Btree            //主键专用倒排索引（内存态）
+	primaryMap     map[string]string      //主键专用倒排索引（磁盘态），主键不会重复，直接map[string]string
+	bitMap         *bitmap.Bitmap         //用于文档删除标记
+	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用
 }
 
 //产出一块空的内存分区
@@ -80,13 +80,14 @@ func NewEmptyTable(path, name string) *Table {
 		primaryMap:     make(map[string]string),
 	}
 
+	//bitmap文件新建
 	btmpName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_BITMAP)
-	table.bitmap = bitmap.NewBitmap(btmpName, false)
+	table.bitMap = bitmap.NewBitmap(btmpName, false)
 
 	return &table
 }
 
-//从文件加载表
+//从文件加载一张表
 func LoadTable(name, path string) (*Table, error) {
 	tbl := Table{}
 	metaFileName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_META)
@@ -100,18 +101,24 @@ func LoadTable(name, path string) (*Table, error) {
 		return nil, err
 	}
 
-	for _, segmentname := range tbl.PartitionNames {
-		segment := partition.LoadPartition(segmentname)
+	//分别加载各个分区
+	for _, partitionName := range tbl.PartitionNames {
+		segment, err := partition.LoadPartition(partitionName)
+		if err != nil {
+			log.Errf("partition.LoadPartition Error:%v", err)
+			return nil, err
+		}
 		tbl.partitions = append(tbl.partitions, segment)
 	}
 
 	//产出一块空的内存分区
 	tbl.generateMemPartition()
 
-	//读取bitmap
+	//加载bitmap
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
-	tbl.bitmap = bitmap.NewBitmap(btmpPath, true)
+	tbl.bitMap = bitmap.NewBitmap(btmpPath, true)
 
+	//如果表存在主键，则直接加载主键专用btree
 	if tbl.PrimaryKey != "" {
 		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.primaryBtdb = btree.NewBtree("", primaryname)
@@ -121,94 +128,7 @@ func LoadTable(name, path string) (*Table, error) {
 	return &tbl, nil
 }
 
-//TODO 为什么这里添加列， 只有内存分区那一块有效，其他的分支只是增加一个分区？？
-func (tbl *Table) AddField(summary field.BasicField) error {
-
-	if _, ok := tbl.BasicFields[summary.FieldName]; ok {
-		log.Warnf("Field %v have Exist ", summary.FieldName)
-		return nil
-	}
-
-	tbl.BasicFields[summary.FieldName] = summary
-	if summary.IndexType == index.IDX_TYPE_PK {
-		tbl.PrimaryKey = summary.FieldName
-		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
-		tbl.primaryBtdb = btree.NewBtree("", primaryname)
-		tbl.primaryBtdb.AddTree(summary.FieldName)
-	} else {
-		tbl.mutex.Lock()
-		defer tbl.mutex.Unlock()
-
-		if tbl.memPartition == nil {
-
-			tbl.generateMemPartition()
-
-		} else if tbl.memPartition.IsEmpty() {
-			err := tbl.memPartition.AddField(summary)
-			if err != nil {
-				log.Errf("Add Field Error  %v", err)
-				return err
-			}
-		} else {
-			tmpsegment := tbl.memPartition
-			if err := tmpsegment.Persist(); err != nil {
-				return err
-			}
-			tbl.partitions = append(tbl.partitions, tmpsegment)
-			tbl.PartitionNames = make([]string, 0)
-			for _, prt := range tbl.partitions {
-				tbl.PartitionNames = append(tbl.PartitionNames, prt.PartitionName)
-			}
-
-			tbl.generateMemPartition()
-		}
-	}
-	return tbl.StoreMeta()
-}
-
-func (tbl *Table) DeleteField(fieldname string) error {
-
-	if _, ok := tbl.BasicFields[fieldname]; !ok {
-		log.Warnf("Field %v not found ", fieldname)
-		return nil
-	}
-
-	if fieldname == tbl.PrimaryKey {
-		log.Warnf("Field %v is primaryBtdb key can not delete ", fieldname)
-		return nil
-	}
-
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
-
-	delete(tbl.BasicFields, fieldname)
-
-	if tbl.memPartition == nil {
-		//tbl.memPartition.DeleteField(fieldname) //panic
-		return tbl.StoreMeta()
-	}
-
-	if tbl.memPartition.IsEmpty() {
-		tbl.memPartition.DeleteField(fieldname)
-		return tbl.StoreMeta()
-	}
-
-	//TODO 这里为何不 tbl.memPartition.DeleteField(fieldname)
-	tmpsegment := tbl.memPartition
-	if err := tmpsegment.Persist(); err != nil {
-		return err
-	}
-	tbl.partitions = append(tbl.partitions, tmpsegment)
-	tbl.PartitionNames = make([]string, 0)
-	for _, seg := range tbl.partitions {
-		tbl.PartitionNames = append(tbl.PartitionNames, seg.PartitionName)
-	}
-
-	tbl.generateMemPartition()
-
-	return tbl.StoreMeta()
-}
-
+//落地表的元信息
 func (tbl *Table) StoreMeta() error {
 	metaFileName := fmt.Sprintf("%v%v%s", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_META)
 	data := helper.JsonEncode(tbl)
@@ -220,15 +140,120 @@ func (tbl *Table) StoreMeta() error {
 		return errors.New("Json error")
 	}
 
-	startTime := time.Now()
-	log.Debugf("Start muti set %v", startTime)
-	tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
-	endTime := time.Now()
-	log.Debugf("Cost  muti set  %v", endTime.Sub(startTime))
-	tbl.primaryMap = make(map[string]string)
+	//将内存态的主键，全部落盘到btree
+	if tbl.PrimaryKey != "" {
+		tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
+		tbl.primaryMap = make(map[string]string)
+	}
+	return nil
+}
+
+//新增字段
+//Note:
+// 新增的字段只会在最新的空分区生效，如果新增的时候有非空的分区，会先落地，然后产出新分区
+// 分区的变动，会锁表
+func (tbl *Table) AddField(basicField field.BasicField) error {
+	//校验
+	if _, exist := tbl.BasicFields[basicField.FieldName]; exist {
+		log.Warnf("Field %v have Exist ", basicField.FieldName)
+		return errors.New(fmt.Sprintf("Field %v have Exist ", basicField.FieldName))
+	}
+
+	//实施新增
+	tbl.BasicFields[basicField.FieldName] = basicField
+	if basicField.IndexType == index.IDX_TYPE_PK {
+		//主键新增单独处理
+		if tbl.PrimaryKey != "" {
+			return errors.New("Primary key has exist!")
+		}
+		tbl.PrimaryKey = basicField.FieldName
+		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
+		tbl.primaryBtdb = btree.NewBtree("", primaryname)
+		tbl.primaryBtdb.AddTree(basicField.FieldName)
+	} else {
+		//锁表
+		tbl.mutex.Lock()
+		defer tbl.mutex.Unlock()
+
+		if tbl.memPartition == nil {
+			//如果内存分区为nil，则直接新增一个内存分区，新增出来的分区已经包含了新的新增字段
+			tbl.generateMemPartition()
+
+		} else if tbl.memPartition.IsEmpty() {
+			//如果内存分区为空架子，则直接在内存分区新增字段
+			err := tbl.memPartition.AddField(basicField)
+			if err != nil {
+				log.Errf("Add Field Error  %v", err)
+				return err
+			}
+		} else {
+			//将当前的内存分区落地，然后新建内存分区，新增出来的分区已经包含了新的新增字段
+			tmpPartition := tbl.memPartition
+			//分区落地
+			if err := tmpPartition.Persist(); err != nil {
+				return err
+			}
+			//归档分区
+			tbl.partitions = append(tbl.partitions, tmpPartition)
+			tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PartitionName)
+			//新分区（包含新字段）生成
+			tbl.generateMemPartition()
+		}
+	}
+
+	//元信息落地
+	err := tbl.StoreMeta()
+	if err != nil {
+		return errors.New("StoreMeta Error:" + err.Error())
+	}
 
 	return nil
 }
+
+//删除分区
+func (tbl *Table) DeleteField(fieldname string) error {
+	//校验
+	if _, exist := tbl.BasicFields[fieldname]; !exist {
+		log.Warnf("Field %v not found ", fieldname)
+		return nil
+	}
+	if fieldname == tbl.PrimaryKey {
+		log.Warnf("Field %v is primaryBtdb key can not delete ", fieldname)
+		return nil
+	}
+
+	//锁表
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+
+	delete(tbl.BasicFields, fieldname)
+
+	if tbl.memPartition == nil {
+		//啥也不需要干
+		log.Info("Delete field. memPartition is nil. do nothing~")
+	} else if tbl.memPartition.IsEmpty() {
+		//删除内存分区的字段
+		tbl.memPartition.DeleteField(fieldname)
+	} else {
+		//当前内存分区先落地
+		tmpPartition := tbl.memPartition
+		if err := tmpPartition.Persist(); err != nil {
+			return err
+		}
+		tbl.partitions = append(tbl.partitions, tmpPartition)
+		tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PartitionName)
+		//产出新的分区(字段已删除）
+		tbl.generateMemPartition()
+	}
+
+	//元信息落地
+	err := tbl.StoreMeta()
+	if err != nil {
+		return errors.New("StoreMeta Error:" + err.Error())
+	}
+	return nil
+}
+
 
 func (tbl *Table) AddOrUpdateDoc(content map[string]string, updateType uint8) (uint32, error) {
 
@@ -279,7 +304,7 @@ func (tbl *Table) AddOrUpdateDoc(content map[string]string, updateType uint8) (u
 		//先删除docId
 		oldDocid, founddoc := tbl.findPrimaryDockId(content[tbl.PrimaryKey])
 		if founddoc {
-			tbl.bitmap.Set(uint64(oldDocid.Docid))
+			tbl.bitMap.Set(uint64(oldDocid.Docid))
 		}
 
 		//再新增docId
@@ -355,7 +380,7 @@ func (tbl *Table) DeleteDocument(pk string) bool {
 
 	docId, found := tbl.findPrimaryDockId(pk)
 	if found {
-		return tbl.bitmap.Set(uint64(docId.Docid))
+		return tbl.bitMap.Set(uint64(docId.Docid))
 	}
 	return false
 }
@@ -442,8 +467,8 @@ func (tbl *Table) Close() error {
 		tbl.primaryBtdb.Close()
 	}
 
-	if tbl.bitmap != nil {
-		tbl.bitmap.Close()
+	if tbl.bitMap != nil {
+		tbl.bitMap.Close()
 	}
 
 	log.Infof("Close Table [%v] Finish", tbl.TableName)
@@ -454,7 +479,7 @@ func (tbl *Table) Close() error {
 //
 //	docids := make([]basic.DocNode, 0)
 //	for _, prt := range tbl.partitions {
-//		docids, _ = prt.SearchUnitDocIds(querys, filteds, tbl.bitmap, docids)
+//		docids, _ = prt.SearchUnitDocIds(querys, filteds, tbl.bitMap, docids)
 //	}
 //
 //	if len(docids) > 0 {
@@ -510,12 +535,12 @@ func (tbl *Table) SearchDocIds(querys []basic.SearchQuery, filteds []basic.Searc
 
 	if len(querys) == 0 || querys == nil {
 		for _, prt := range tbl.partitions {
-			docids, _ = prt.SearchDocs(basic.SearchQuery{}, filteds, tbl.bitmap, docids)
+			docids, _ = prt.SearchDocs(basic.SearchQuery{}, filteds, tbl.bitMap, docids)
 		}
 		if len(docids) > 0 {
 			for _, doc := range docids {
-				if tbl.bitmap.GetBit(uint64(doc.Docid)) == 1 {
-					log.Infof("bitmap is 1 %v", doc.Docid)
+				if tbl.bitMap.GetBit(uint64(doc.Docid)) == 1 {
+					log.Infof("bitMap is 1 %v", doc.Docid)
 				}
 			}
 			return docids, true
@@ -526,7 +551,7 @@ func (tbl *Table) SearchDocIds(querys []basic.SearchQuery, filteds []basic.Searc
 
 	if len(querys) >= 1 {
 		for _, prt := range tbl.partitions {
-			docids, _ = prt.SearchDocs(querys[0], filteds, tbl.bitmap, docids)
+			docids, _ = prt.SearchDocs(querys[0], filteds, tbl.bitMap, docids)
 		}
 	}
 
@@ -542,7 +567,7 @@ func (tbl *Table) SearchDocIds(querys []basic.SearchQuery, filteds []basic.Searc
 
 		subdocids := <- GetDocIDsChan
 		for _, prt := range tbl.partitions {
-			subdocids, _ = prt.SearchDocs(query, filteds, tbl.bitmap, subdocids)
+			subdocids, _ = prt.SearchDocs(query, filteds, tbl.bitMap, subdocids)
 		}
 
 		//tbl.Logger.Info("[INFO] key[%v] doclens:%v", query.Value, len(subdocids))

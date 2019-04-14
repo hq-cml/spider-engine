@@ -30,6 +30,9 @@ func Exist(path string) bool {
 	return true
 }
 
+// 写文件
+// Note：
+//   覆盖写，不是追加写
 func WriteToFile(data []byte, filePath string) error {
 	fout, err := os.Create(filePath)
 	if err != nil {
@@ -42,5 +45,4 @@ func WriteToFile(data []byte, filePath string) error {
 		return err
 	}
 	return nil
-
 }
