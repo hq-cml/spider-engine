@@ -31,7 +31,7 @@ func SplitWholeWords(docId uint32, content string) map[string]basic.DocNode {
 
 	m := map[string]basic.DocNode {
 		content: basic.DocNode {
-			Docid: docId,
+			DocId: docId,
 		},
 	}
 	return m
@@ -43,7 +43,7 @@ func SplitSemicolonWords(docId uint32, content string) map[string]basic.DocNode 
 	m := map[string]basic.DocNode {}
 	for _, term := range terms {
 		node := basic.DocNode {
-			Docid: docId,
+			DocId: docId,
 		}
 		m[term] = node
 	}
@@ -61,7 +61,7 @@ func SplitRuneWords(docId uint32, content string) map[string]basic.DocNode {
 	m := map[string]basic.DocNode {}
 	for term := range uniqMap {
 		node := basic.DocNode {
-			Docid: docId,
+			DocId:  docId,
 			Weight: 0,
 		}
 		m[string(term)] = node
@@ -86,7 +86,7 @@ func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 	m := map[string]basic.DocNode {}
 	for term, tf := range uniqMap {
 		node := basic.DocNode {
-			Docid: docId,
+			DocId:  docId,
 			Weight: uint32((float32(tf)/float32(totalTerm)) * 10000), //TODO 这个10000是个魔幻数字
 		}
 		m[term] = node

@@ -149,7 +149,7 @@ func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
 }
 
 //索引销毁
-//TODO 过于简单？？
+// Note: 只销毁内存部分，mmap和btdb因为是公用，需要在高层统一销毁
 func (rIdx *InvertedIndex) Destroy() error {
 	rIdx.termMap = nil
 	return nil

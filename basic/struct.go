@@ -3,7 +3,7 @@ package basic
 import "unsafe"
 
 type DocNode struct {
-	Docid  uint32
+	DocId  uint32
 	Weight uint32
 }
 
@@ -36,8 +36,8 @@ const (
 )
 
 const (
-	UPDATE_TYPE_ADD uint8 = 1
-	UPDATE_TYPE_MODIFY uint8 = 2
+	MODIFY_TYPE_ADD    uint8 = 1
+	MODIFY_TYPE_UPDATE uint8 = 2
 )
 
 /*************************************************************************

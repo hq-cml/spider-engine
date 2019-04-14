@@ -109,7 +109,6 @@ func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset 
 //增加一个doc
 //Note:
 //只有内存态的字段才能增加Doc
-//TODO 如何保证一致性？？？
 func (fld *Field) AddDocument(docId uint32, content string) error {
 
 	if docId != fld.NextDocId || fld.inMemory == false || fld.FwdIdx == nil {

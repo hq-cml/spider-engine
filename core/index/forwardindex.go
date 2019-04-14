@@ -289,7 +289,7 @@ func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 }
 
 //销毁
-//TODO 过于简单？？
+// Note: 只销毁内存部分，mmap因为是公用，需要在高层统一销毁
 func (fwdIdx *ForwardIndex) Destroy() error {
 	fwdIdx.memoryNum = nil
 	fwdIdx.memoryStr = nil

@@ -17,7 +17,6 @@ import (
 	"sync"
 	"fmt"
 	"encoding/json"
-	"time"
 	"errors"
 	"math"
 	"github.com/hq-cml/spider-engine/core/partition"
@@ -37,7 +36,7 @@ import (
 type Table struct {
 	TableName      string                      `json:"tableName"`
 	Path           string                      `json:"pathName"`
-	BasicFields    map[string]field.BasicField `json:"fields"`
+	BasicFields    map[string]field.BasicField `json:"fields"`      //包括了主键
 	PrimaryKey     string                      `json:"primaryKey"`
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
@@ -51,6 +50,10 @@ type Table struct {
 	bitMap         *bitmap.Bitmap         //用于文档删除标记
 	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用
 }
+
+const (
+	PRIMARY_KEY_MEM_MAXCNT = 50000
+)
 
 //产出一块空的内存分区
 func (tbl *Table) generateMemPartition() {
@@ -254,87 +257,144 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	return nil
 }
 
+//获取
+func (tbl *Table) GetDoc(docid uint32) (map[string]string, bool) {
+	//校验
+	if docid < tbl.StartDocId || docid >= tbl.NextDocId {
+		return nil, false
+	}
+	for _, prt := range tbl.partitions {
+		if docid >= prt.StartDocId && docid < prt.NextDocId {
+			return prt.GetDocument(docid)
+		}
+	}
+	return nil, false
+}
 
-func (tbl *Table) AddOrUpdateDoc(content map[string]string, updateType uint8) (uint32, error) {
+//删除
+//标记假删除
+func (tbl *Table) DeleteDoc(pk string) bool {
+	docId, found := tbl.findPrimaryDockId(pk)
+	if found {
+		return tbl.bitMap.Set(uint64(docId.DocId))
+	}
+	return false
+}
 
+//新增
+func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
+	//校验
 	if len(tbl.BasicFields) == 0 {
-		log.Errf("No Field or Partiton is nil")
-		return 0, errors.New("no field or segment is nil")
+		log.Errf("Field or Partiton is nil")
+		return 0, errors.New("field or partition is nil")
 	}
 
-	//如果memPart为空，则新建
+	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
 		tbl.generateMemPartition()
-		if err := tbl.StoreMeta(); err != nil {
-			tbl.mutex.Unlock()
-			return 0, err
-		}
+		//意义何在？
+		//if err := tbl.StoreMeta(); err != nil {
+		//	tbl.mutex.Unlock()
+		//	return 0, err
+		//}
 		tbl.mutex.Unlock()
 	}
 
 	newDocId := tbl.NextDocId
 	tbl.NextDocId++
 
-	if updateType == basic.UPDATE_TYPE_ADD {
-		//直接添加主键，不检查
-		if tbl.PrimaryKey != "" {
-			tbl.primaryMap[content[tbl.PrimaryKey]] = fmt.Sprintf("%v", newDocId)
-			//if err := tbl.changePrimaryDocId(content[tbl.PrimaryKey], newDocId); err != nil {
-			//	return 0, err
-			//}
-			if tbl.NextDocId%50000 == 0 {
-				startTime := time.Now()
-				log.Debugf("start muti set %v", startTime)
-				tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
-				endTime := time.Now()
-				log.Debugf("[INFO] cost  muti set  %v", endTime.Sub(startTime))
-				tbl.primaryMap = make(map[string]string)
-			}
-		}
-		//无主键的表直接添加
-		return newDocId, tbl.memPartition.AddDocument(newDocId, content)
-	} else {
-		//
-		if _, hasPrimary := content[tbl.PrimaryKey]; !hasPrimary {
-			log.Errf("Primary Key Not Found %v", tbl.PrimaryKey)
-			return 0, errors.New("No Primary Key")
-		}
+	//如果存在主键，直接添加不检查
+	if tbl.PrimaryKey != "" {
+		tbl.primaryMap[content[tbl.PrimaryKey]] = fmt.Sprintf("%v", newDocId)
 
-		//先删除docId
-		oldDocid, founddoc := tbl.findPrimaryDockId(content[tbl.PrimaryKey])
-		if founddoc {
-			tbl.bitMap.Set(uint64(oldDocid.Docid))
+		if tbl.NextDocId % PRIMARY_KEY_MEM_MAXCNT == 0 {
+			tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
+			tbl.primaryMap = make(map[string]string)
 		}
-
-		//再新增docId
-		if err := tbl.changePrimaryDocId(content[tbl.PrimaryKey], newDocId); err != nil {
-			return 0, err
-		}
-		//实质内容本质上还是新增，主键不变，但是doc变了
-		return newDocId, tbl.memPartition.AddDocument(newDocId, content)
 	}
+	//其他字段新增Doc
+	//TODO 这里主键又在底层新增了一次？？
+	err := tbl.memPartition.AddDocument(newDocId, content)
+	if err != nil {
+		log.Errf("tbl.memPartition.AddDocument Error:%v", err)
+		return 0, err
+	}
+	return newDocId, nil
 }
 
-func (tbl *Table) changePrimaryDocId(key string, docid uint32) error {
-
-	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, uint64(docid))
-
-	if err != nil {
-		log.Errf("[ERROR] update Put key error  %v", err)
-		return err
+//变更文档
+// Note:
+// 如果表没有主键，则不支持变更
+// 本质上还是新增，主键不变，但是doc变了
+func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
+	//校验
+	if len(tbl.BasicFields) == 0 {
+		log.Errf("Field or Partiton is nil")
+		return 0, errors.New("field or partition is nil")
+	}
+	//如果表没有主键，则不支持变更
+	if tbl.PrimaryKey == "" {
+		return 0, errors.New("No Primary Key")
+	}
+	if _, exist := content[tbl.PrimaryKey]; !exist {
+		log.Errf("Primary Key Not Found %v", tbl.PrimaryKey)
+		return 0, errors.New(fmt.Sprintf("Primary Key Not Found %v", tbl.PrimaryKey))
 	}
 
+	//如果内存分区为空，则新建
+	if tbl.memPartition == nil {
+		tbl.mutex.Lock()
+		tbl.generateMemPartition()
+		//意义何在？
+		//if err := tbl.StoreMeta(); err != nil {
+		//	tbl.mutex.Unlock()
+		//	return 0, err
+		//}
+		tbl.mutex.Unlock()
+	}
+
+	//本质上仍然是新增文档
+	newDocId := tbl.NextDocId
+	tbl.NextDocId++
+
+	//先标记删除oldDocId
+	oldDocid, found := tbl.findPrimaryDockId(content[tbl.PrimaryKey])
+	if found {
+		tbl.bitMap.Set(uint64(oldDocid.DocId))
+	}
+
+	//再新增docId
+	if err := tbl.changePrimaryDocId(content[tbl.PrimaryKey], newDocId); err != nil {
+		return 0, err
+	}
+
+	//实质内容本质上还是新增，主键不变，但是doc变了
+	err := tbl.memPartition.AddDocument(newDocId, content)
+	if err != nil {
+		log.Errf("tbl.memPartition.AddDocument Error:%v", err)
+		return 0, err
+	}
+	return newDocId, nil
+}
+
+//内部变更篡改了docId
+func (tbl *Table) changePrimaryDocId(key string, docId uint32) error {
+	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, uint64(docId))
+	if err != nil {
+		log.Errf("Update Put key error  %v", err)
+		return err
+	}
 	return nil
 }
 
+//根据主键找到内部的docId
 func (tbl *Table) findPrimaryDockId(key string) (basic.DocNode, bool) {
-
 	val, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
-	if !ok /*|| val >= uint64(tbl.memPartition.StartDocId)*/ {
+	if !ok {
 		return basic.DocNode{}, false
 	}
-	return basic.DocNode{Docid: uint32(val)}, true
+	return basic.DocNode{DocId: uint32(val)}, true
 }
 
 //将内存分区落盘
@@ -347,42 +407,65 @@ func (tbl *Table) SyncMemoryPartition() error {
 	defer tbl.mutex.Unlock()
 
 	//memPartition为空， 则退出
-	if tbl.memPartition.NextDocId == tbl.memPartition.StartDocId {
+	if tbl.memPartition.IsEmpty() {
 		return nil
 	}
 
 	//持久化内存分区
-	if err := tbl.memPartition.Persist(); err != nil {
-		log.Errf("SyncMemoryPartition Error %v", err)
+	// 这么整没必要
+	//if err := tbl.memPartition.Persist(); err != nil {
+	//	log.Errf("SyncMemoryPartition Error %v", err)
+	//	return err
+	//}
+	//partitionName := tbl.memPartition.PartitionName
+	//tbl.memPartition.Close()
+	//tbl.memPartition = nil
+	//newPartition, _ := partition.LoadPartition(partitionName)
+	//tbl.partitions = append(tbl.partitions, newPartition)
+	//tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
+
+	//分区落地
+	tmpPartition := tbl.memPartition
+	if err := tmpPartition.Persist(); err != nil {
 		return err
 	}
-	partitionName := tbl.memPartition.PartitionName
-	tbl.memPartition.Close()
+	//归档分区
+	tbl.partitions = append(tbl.partitions, tmpPartition)
+	tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PartitionName)
 	tbl.memPartition = nil
-	newPartition := partition.LoadPartition(partitionName)
-	tbl.partitions = append(tbl.partitions, newPartition)
-	tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
 
 	return tbl.StoreMeta()
 }
 
-func (tbl *Table) GetDocument(docid uint32) (map[string]string, bool) {
+//关闭一张表
+func (tbl *Table) Close() error {
+	//锁表
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+	log.Infof("Close Table [%v] Begin", tbl.TableName)
 
+	//关闭内存分区
+	if tbl.memPartition != nil {
+		tbl.memPartition.Close()
+	}
+
+	//逐个关闭磁盘分区
 	for _, prt := range tbl.partitions {
-		if docid >= prt.StartDocId && docid < prt.NextDocId {
-			return prt.GetDocument(docid)
-		}
+		prt.Close()
 	}
-	return nil, false
-}
 
-func (tbl *Table) DeleteDocument(pk string) bool {
-
-	docId, found := tbl.findPrimaryDockId(pk)
-	if found {
-		return tbl.bitMap.Set(uint64(docId.Docid))
+	//关闭主键btdb
+	if tbl.primaryBtdb != nil {
+		tbl.primaryBtdb.Close()
 	}
-	return false
+
+	//关闭btmp
+	if tbl.bitMap != nil {
+		tbl.bitMap.Close()
+	}
+
+	log.Infof("Close Table [%v] Finish", tbl.TableName)
+	return nil
 }
 
 func (tbl *Table) MergePartitions() error {
@@ -448,46 +531,6 @@ func (tbl *Table) MergePartitions() error {
 	return tbl.StoreMeta()
 }
 
-//关闭一张表
-func (tbl *Table) Close() error {
-
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
-	log.Infof("Close Table [%v]", tbl.TableName)
-
-	if tbl.memPartition != nil {
-		tbl.memPartition.Close()
-	}
-
-	for _, seg := range tbl.partitions {
-		seg.Close()
-	}
-
-	if tbl.primaryBtdb != nil {
-		tbl.primaryBtdb.Close()
-	}
-
-	if tbl.bitMap != nil {
-		tbl.bitMap.Close()
-	}
-
-	log.Infof("Close Table [%v] Finish", tbl.TableName)
-	return nil
-}
-
-//func (tbl *Table) SearchUnitDocIds(querys []basic.SearchQuery, filteds []basic.SearchFilted) ([]basic.DocNode, bool) {
-//
-//	docids := make([]basic.DocNode, 0)
-//	for _, prt := range tbl.partitions {
-//		docids, _ = prt.SearchUnitDocIds(querys, filteds, tbl.bitMap, docids)
-//	}
-//
-//	if len(docids) > 0 {
-//		return docids, true
-//	}
-//
-//	return nil, false
-//}
 
 //TODO 有点奇怪, 再细化拆解
 var GetDocIDsChan chan []basic.DocNode
@@ -507,7 +550,7 @@ func InteractionWithStartAndDf(a []basic.DocNode, b []basic.DocNode, start int, 
 	idf := math.Log10(float64(maxdoc) / float64(df))
 	for ia < lena && ib < lenb {
 
-		if a[ia].Docid == b[ib].Docid {
+		if a[ia].DocId == b[ib].DocId {
 			a[lenc] = a[ia]
 			//uint32((float64(a[ia].Weight) / 10000 * idf ) * 10000)
 			a[lenc].Weight += uint32(float64(a[ia].Weight) * idf)
@@ -518,7 +561,7 @@ func InteractionWithStartAndDf(a []basic.DocNode, b []basic.DocNode, start int, 
 			//c = append(c, a[ia])
 		}
 
-		if a[ia].Docid < b[ib].Docid {
+		if a[ia].DocId < b[ib].DocId {
 			ia++
 		} else {
 			ib++
@@ -539,8 +582,8 @@ func (tbl *Table) SearchDocIds(querys []basic.SearchQuery, filteds []basic.Searc
 		}
 		if len(docids) > 0 {
 			for _, doc := range docids {
-				if tbl.bitMap.GetBit(uint64(doc.Docid)) == 1 {
-					log.Infof("bitMap is 1 %v", doc.Docid)
+				if tbl.bitMap.GetBit(uint64(doc.DocId)) == 1 {
+					log.Infof("bitMap is 1 %v", doc.DocId)
 				}
 			}
 			return docids, true

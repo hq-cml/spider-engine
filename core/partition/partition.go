@@ -237,7 +237,7 @@ func (part *Partition) Close() error {
 		fld.Destroy()
 	}
 
-	//统一unmmap掉mmap
+	//统一unmmap掉
 	if part.ivtMmap != nil {
 		if err := part.ivtMmap.Unmap(); err != nil {log.Errf("Unmap Error:", err)}
 	}
@@ -247,6 +247,7 @@ func (part *Partition) Close() error {
 	if part.extMmap != nil {
 		if err := part.extMmap.Unmap(); err != nil {log.Errf("Unmap Error:", err)}
 	}
+	//统一关闭btdb
 	if part.btdb != nil {
 		if err := part.btdb.Close(); err != nil {log.Errf("Btree Close Error:", err)}
 	}
@@ -293,16 +294,16 @@ func (part *Partition) GetFieldValue(docId uint32, fieldName string) (string, bo
 }
 
 //获取整篇文档详情，全部字段
-func (part *Partition) GetDocument(docid uint32) (map[string]string, bool) {
+func (part *Partition) GetDocument(docId uint32) (map[string]string, bool) {
 	//校验
-	if docid < part.StartDocId || docid >= part.NextDocId {
+	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
 	}
 
 	//获取
 	ret := make(map[string]string)
 	for fieldName, fld := range part.Fields {
-		ret[fieldName], _ = fld.GetString(docid)
+		ret[fieldName], _ = fld.GetString(docId)
 	}
 	return ret, true
 }
@@ -502,7 +503,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 	//先用query查询, 如果为空, 则取出所有未删除的节点
 	if query.Value == "" {
 		for i := part.StartDocId; i < part.NextDocId; i++ {
-			retDocs = append(retDocs, basic.DocNode{Docid: i})
+			retDocs = append(retDocs, basic.DocNode{DocId: i})
 		}
 	} else {
 		var match bool
@@ -517,7 +518,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 		idx := 0
 		for _, doc := range retDocs{
 			//保留未删除的
-			if bitmap.GetBit(uint64(doc.Docid)) == 0 {
+			if bitmap.GetBit(uint64(doc.DocId)) == 0 {
 				retDocs[idx] = doc
 				idx++
 			}
@@ -532,7 +533,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 			match := true
 			//必须全部的过滤器都满足
 			for _, filter := range filters {
-				if !part.Fields[filter.FieldName].Filter(doc.Docid, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr) {
+				if !part.Fields[filter.FieldName].Filter(doc.DocId, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr) {
 					match = false
 					break
 				}
@@ -565,7 +566,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 //	//fmt.Printf("a:%v,b:%v,c:%v\n",lena,lenb,lenc)
 //	for ia < lena && ib < lenb {
 //
-//		if a[ia].Docid == b[ib].Docid {
+//		if a[ia].DocId == b[ib].DocId {
 //			a[lenc] = a[ia]
 //			lenc++
 //			ia++
@@ -574,7 +575,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 //			//c = append(c, a[ia])
 //		}
 //
-//		if a[ia].Docid < b[ib].Docid {
+//		if a[ia].DocId < b[ib].DocId {
 //			ia++
 //		} else {
 //			ib++
@@ -597,7 +598,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 //	if len(querys) == 0 || querys == nil {
 //		docids := make([]basic.DocNode, 0)
 //		for i := prt.StartDocId; i < prt.NextDocId; i++ {
-//			docids = append(docids, basic.DocNode{Docid: i})
+//			docids = append(docids, basic.DocNode{DocId: i})
 //		}
 //		indocids = append(indocids, docids...)
 //	} else {
@@ -630,7 +631,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 //	if filteds == nil && bitmap != nil {
 //		for _, docid := range indocids[start:] {
 //			//去掉bitmap删除的
-//			if bitmap.GetBit(uint64(docid.Docid)) == 0 {
+//			if bitmap.GetBit(uint64(docid.DocId)) == 0 {
 //				indocids[index] = docid
 //				index++
 //			}
@@ -647,8 +648,8 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 //		match := true
 //		for _, filter := range filteds {
 //			if _, hasField := prt.Fields[filter.FieldName]; hasField {
-//				if (bitmap != nil && bitmap.GetBit(uint64(docidinfo.Docid)) == 1) ||
-//					(!prt.Fields[filter.FieldName].Filter(docidinfo.Docid, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr)) {
+//				if (bitmap != nil && bitmap.GetBit(uint64(docidinfo.DocId)) == 1) ||
+//					(!prt.Fields[filter.FieldName].Filter(docidinfo.DocId, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr)) {
 //					match = false
 //					break
 //				}
