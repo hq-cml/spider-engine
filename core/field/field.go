@@ -268,6 +268,12 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 	if fields == nil || len(fields) == 0 {
 		return errors.New("Nil []*Field")
 	}
+	l := len(fields)
+	for i:=0; i<(l-1); i++ {
+		if fields[i].NextDocId != fields[i+1].StartDocId {
+			return errors.New("Indexes order wrong")
+		}
+	}
 	var err error
 
 	//合并正排索引

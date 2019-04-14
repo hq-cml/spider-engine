@@ -36,15 +36,15 @@ import (
 type Table struct {
 	TableName      string                      `json:"tableName"`
 	Path           string                      `json:"pathName"`
-	BasicFields    map[string]field.BasicField `json:"fields"`      //包括了主键
+	BasicFields    map[string]field.BasicField `json:"fields"`      //包括主键
 	PrimaryKey     string                      `json:"primaryKey"`
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
 	Prefix         uint64                      `json:"prefix"`
-	PartitionNames []string                    `json:"partitionNames"`
+	PartitionNames []string                    `json:"partitionNames"` //磁盘态的分区列表名------不包括主键！！！
 
 	memPartition   *partition.Partition   //内存态的分区
-	partitions     []*partition.Partition //磁盘态的分区列表
+	partitions     []*partition.Partition //磁盘态的分区列表------不包括主键！！！
 	primaryBtdb    btree.Btree            //主键专用倒排索引（内存态）
 	primaryMap     map[string]string      //主键专用倒排索引（磁盘态），主键不会重复，直接map[string]string
 	bitMap         *bitmap.Bitmap         //用于文档删除标记
@@ -57,7 +57,7 @@ const (
 
 //产出一块空的内存分区
 func (tbl *Table) generateMemPartition() {
-	segmentname := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
 		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
@@ -65,7 +65,7 @@ func (tbl *Table) generateMemPartition() {
 		}
 	}
 
-	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(segmentname, tbl.NextDocId, basicFields)
+	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(partitionName, tbl.NextDocId, basicFields)
 	tbl.Prefix++
 }
 
@@ -468,17 +468,20 @@ func (tbl *Table) Close() error {
 	return nil
 }
 
+//合并表内分区
 func (tbl *Table) MergePartitions() error {
-
-	var startIdx int = -1
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
-
+	//校验
 	if len(tbl.partitions) == 1 {
 		return nil
 	}
 
-	//找到第一个待不符合规范，即要合并的partition
+	var startIdx int = -1
+
+	//锁表
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+
+	//找到第一个个数不符合规范，即要合并的partition
 	for idx := range tbl.partitions {
 		if tbl.partitions[idx].NextDocId - tbl.partitions[idx].StartDocId < partition.PARTITION_MAX_DOC_CNT {
 			startIdx = idx
@@ -489,45 +492,51 @@ func (tbl *Table) MergePartitions() error {
 	if startIdx == -1 {
 		return nil
 	}
-
 	todoPartitions := tbl.partitions[startIdx:]
+	if len(todoPartitions) == 1 {
+		log.Infof("No nessary to merge!")
+		return nil
+	}
 
-
-	segmentname := fmt.Sprintf("%v%v_%v", tbl.Path, tbl.TableName, tbl.Prefix)
-	var summaries []field.BasicField
+	//开始合并
+	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+	tbl.Prefix++
+	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
-		if f.IndexType != index.IDX_TYPE_PK { //TODO why??
-			summaries = append(summaries, f)
+		//主键分区是独立的存在，没必要参与到分区合并中
+		if f.IndexType != index.IDX_TYPE_PK {
+			basicFields = append(basicFields, f)
 		}
 	}
 
-	tmpPartition := partition.NewEmptyPartitionWithBasicFields(segmentname, tbl.NextDocId, summaries)
-	tbl.Prefix++ //TODO 要新增吗
-	if err := tbl.StoreMeta(); err != nil {
-		return err
-	}
+	//生成内存分区骨架，开始合并
+	tmpPartition := partition.NewEmptyPartitionWithBasicFields(partitionName, tbl.NextDocId, basicFields)
+	//if err := tbl.StoreMeta(); err != nil {
+	//	return err
+	//}
 	err := tmpPartition.MergePersistPartitions(todoPartitions)
 	if err != nil {
 		log.Errf("MergePartitions Error: %s", err)
 		return err
 	}
 
-	//tmpname:=tmpPartition.PartitionName
-	tmpPartition.Close()
-	tmpPartition = nil
+	//没必要
+	//tmpPartition.Close()
+	//tmpPartition = nil
+	////Load回来
+	//tmpPartition = partition.LoadPartition(partitionName)
 
+	//清理旧的分区
 	for _, prt := range todoPartitions {
 		prt.Destroy()
 	}
-
-	//Load回来
-	tmpPartition = partition.LoadPartition(segmentname)
-	//截断后面的临时part
+	//截断后面的没用的分区
 	tbl.partitions = tbl.partitions[:startIdx]
 	tbl.PartitionNames = tbl.PartitionNames[:startIdx]
-	//追加上
+
+	//追加上有用的分区
 	tbl.partitions = append(tbl.partitions, tmpPartition)
-	tbl.PartitionNames = append(tbl.PartitionNames, segmentname)
+	tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
 	return tbl.StoreMeta()
 }
 

@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	PARTITION_MAX_DOC_CNT = 1000000   //10w个文档，组成一个partition
+	PARTITION_MAX_DOC_CNT = 1000000   //10w个文档，分区合并的一个参考值
 )
 
 // Segment description:段结构
@@ -407,6 +407,13 @@ func (part *Partition) Persist() error {
 // 这个和底层的MergePersist有不同, 因为四个文件是按照分区级别公用，所以函数会完整的填充接收者
 // 接受者初始是一个骨架，加载btdb和mmap以及其他控制字段，使之成为一个可用的磁盘态分区
 func (part *Partition) MergePersistPartitions(parts []*Partition) error {
+	//一些校验，顺序必须正确
+	l := len(parts)
+	for i:=0; i<(l-1); i++ {
+		if parts[i].NextDocId != parts[i+1].StartDocId {
+			return errors.New("Partitions order wrong")
+		}
+	}
 
 	log.Infof("MergePartitions [%v] Start", part.PartitionName)
 	btdbname := part.PartitionName + basic.IDX_FILENAME_SUFFIX_BTREE
@@ -436,20 +443,6 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		basicField.FwdOffset = part.Fields[fieldName].FwdOffset
 		basicField.DocCnt = part.Fields[fieldName].DocCnt
 		part.BasicFields[fieldName] = basicField
-
-		//part.Fields[fieldName].FwdOffset = offset
-		//part.Fields[fieldName].DocCnt = cnt
-		//part.Fields[fieldName].NextDocId = nextId
-		//加载回btdb(因为底层的mergePersistField很单纯, 不会做加载回来的操作)
-		//TODO 放回去吧
-		//part.Fields[fieldName].SetBtree(part.btdb)
-		//if part.Fields[fieldName].IvtIdx != nil {
-		//	part.Fields[fieldName].IvtIdx.SetInMemory(false)
-		//}
-		//part.Fields[fieldName].FwdIdx.SetInMemory(false)
-		//part.Fields[fieldName].FwdIdx.SetFwdOffset(offset)
-		//part.Fields[fieldName].FwdIdx.SetDocCnt(cnt)
-		//part.Fields[fieldName].StartDocId = parts[0].StartDocId
 	}
 
 	//加载回mmap
@@ -476,9 +469,9 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	//内存态 => 磁盘态
 	part.inMemory = false
 
-	//最后设置一下startId和nextDocId
+	//最后设置startId和nextDocId
 	part.StartDocId = parts[0].StartDocId
-	part.NextDocId = parts[len(parts)-1].NextDocId
+	part.NextDocId = parts[l-1].NextDocId
 
 	log.Infof("MergePartitions [%v] Finish", part.PartitionName)
 	return part.StoreMeta()
