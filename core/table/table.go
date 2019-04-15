@@ -12,13 +12,12 @@ package table
  * 一张表，必须拥有自己的主键，主键是锁定文档的唯一Key，而不是docId
  * 一个文档如果编辑，那么底层docId可能发生变化，但是Key是不变的
  */
-
 import (
 	"sync"
 	"fmt"
 	"encoding/json"
 	"errors"
-	"math"
+	//"math"
 	"github.com/hq-cml/spider-engine/core/partition"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
@@ -27,6 +26,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/core/field"
+	"strconv"
 )
 
 //表的原则：
@@ -41,10 +41,10 @@ type Table struct {
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
 	Prefix         uint64                      `json:"prefix"`
-	PartitionNames []string                    `json:"partitionNames"` //磁盘态的分区列表名------不包括主键！！！
+	PartitionNames []string                    `json:"partitionNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
-	memPartition   *partition.Partition   //内存态的分区
-	partitions     []*partition.Partition //磁盘态的分区列表------不包括主键！！！
+	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
+	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键！！！
 	primaryBtdb    btree.Btree            //主键专用倒排索引（内存态）
 	primaryMap     map[string]string      //主键专用倒排索引（磁盘态），主键不会重复，直接map[string]string
 	bitMap         *bitmap.Bitmap         //用于文档删除标记
@@ -52,22 +52,8 @@ type Table struct {
 }
 
 const (
-	PRIMARY_KEY_MEM_MAXCNT = 50000
+	PRIMARY_KEY_MEM_MAXCNT = 50000   //TODO 放小了测试
 )
-
-//产出一块空的内存分区
-func (tbl *Table) generateMemPartition() {
-	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
-	var basicFields []field.BasicField
-	for _, f := range tbl.BasicFields {
-		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
-			basicFields = append(basicFields, f)
-		}
-	}
-
-	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(partitionName, tbl.NextDocId, basicFields)
-	tbl.Prefix++
-}
 
 //新建空表
 func NewEmptyTable(path, name string) *Table {
@@ -84,10 +70,24 @@ func NewEmptyTable(path, name string) *Table {
 	}
 
 	//bitmap文件新建
-	btmpName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_BITMAP)
+	btmpName := fmt.Sprintf("%v%v%v", path, name, basic.IDX_FILENAME_SUFFIX_BITMAP)
 	table.bitMap = bitmap.NewBitmap(btmpName, false)
 
 	return &table
+}
+
+//产出一块空的内存分区
+func (tbl *Table) generateMemPartition() {
+	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+	var basicFields []field.BasicField
+	for _, f := range tbl.BasicFields {
+		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
+			basicFields = append(basicFields, f)
+		}
+	}
+
+	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(partitionName, tbl.NextDocId, basicFields)
+	tbl.Prefix++
 }
 
 //从文件加载一张表
@@ -258,14 +258,21 @@ func (tbl *Table) DeleteField(fieldname string) error {
 }
 
 //获取
-func (tbl *Table) GetDoc(docid uint32) (map[string]string, bool) {
+func (tbl *Table) GetDoc(docId uint32) (map[string]string, bool) {
 	//校验
-	if docid < tbl.StartDocId || docid >= tbl.NextDocId {
+	if docId < tbl.StartDocId || docId >= tbl.NextDocId {
 		return nil, false
 	}
+
+	//如果在内存分区, 则从内存分区获取
+	if docId >= tbl.memPartition.StartDocId && docId <  tbl.memPartition.NextDocId {
+		return  tbl.memPartition.GetDocument(docId)
+	}
+
+	//否则尝试从磁盘分区获取
 	for _, prt := range tbl.partitions {
-		if docid >= prt.StartDocId && docid < prt.NextDocId {
-			return prt.GetDocument(docid)
+		if docId >= prt.StartDocId && docId < prt.NextDocId {
+			return prt.GetDocument(docId)
 		}
 	}
 	return nil, false
@@ -314,7 +321,6 @@ func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
 		}
 	}
 	//其他字段新增Doc
-	//TODO 这里主键又在底层新增了一次？？
 	err := tbl.memPartition.AddDocument(newDocId, content)
 	if err != nil {
 		log.Errf("tbl.memPartition.AddDocument Error:%v", err)
@@ -380,6 +386,7 @@ func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 
 //内部变更篡改了docId
 func (tbl *Table) changePrimaryDocId(key string, docId uint32) error {
+	//TODO 先检测map
 	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, uint64(docId))
 	if err != nil {
 		log.Errf("Update Put key error  %v", err)
@@ -390,8 +397,20 @@ func (tbl *Table) changePrimaryDocId(key string, docId uint32) error {
 
 //根据主键找到内部的docId
 func (tbl *Table) findPrimaryDockId(key string) (basic.DocNode, bool) {
+	//现在内存map中找
+	if v, exist := tbl.primaryMap[key]; exist {
+		val , err := strconv.Atoi(v)
+		if err != nil {
+			log.Errf("AA------%v", err)
+			return basic.DocNode{}, false
+		}
+		return basic.DocNode{DocId: uint32(val)}, true
+	}
+
+	//再在磁盘btree中找
 	val, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
 	if !ok {
+		log.Errf("BB------")
 		return basic.DocNode{}, false
 	}
 	return basic.DocNode{DocId: uint32(val)}, true
@@ -539,7 +558,7 @@ func (tbl *Table) MergePartitions() error {
 	tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
 	return tbl.StoreMeta()
 }
-
+/*
 var GetDocIDsChan chan []basic.DocNode
 var GiveDocIDsChan chan []basic.DocNode
 
@@ -636,3 +655,4 @@ func (tbl *Table) SearchDocIds(querys []basic.SearchQuery, filteds []basic.Searc
 	return nil, false
 
 }
+*/

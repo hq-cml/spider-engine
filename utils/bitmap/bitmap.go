@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	BitmapMaxMax = (0x01 << 63) -1 //最大容忍值, 超过这个直接报错( 因为int64, 符号位占用1位, 所以63
+	BitmapMaxMax = (0x01 << 63) -1 //最大容忍值, 超过这个直接报错( 因为int64, 符号位占用1位, 所以63. 其实也不可能有这么大的文件啊...
 	BitmapMaxNum = 0x01 << 32      //2^32个bit位, 能够表示2^32个槽位, 即 0 - 2^32-1 的数字范围
 	BYTE_SIZE = 8				   //一个字节占bit数
 )
@@ -23,7 +23,7 @@ type Bitmap struct {
 	FirstOneIdx int64 //Bitmap被设置为1的最大值（方便遍历），初始值是负数！！
 }
 
-// NewBitmap 使用默认容量实例化一个 Bitmap
+// NewBitmap 使用默认容量实例化一个Bitmap
 func NewBitmap(indexname string, loadFile bool) *Bitmap {
 	return NewBitmapSize(BitmapMaxNum, indexname, loadFile)
 }
