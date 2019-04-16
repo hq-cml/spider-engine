@@ -75,7 +75,7 @@ func TestNewTableAndPersist(t *testing.T) {
 	t.Log("Add DocId:", docId)
 
 
-	//测试搜索
+	//测试倒排搜索(内存)
 	docNode, exist := table.findPrimaryDockId("10002")
 	if !exist {
 		t.Fatal("Should exist")
@@ -84,6 +84,7 @@ func TestNewTableAndPersist(t *testing.T) {
 		t.Fatal("Should is 1")
 	}
 
+	//测试正排获取(内存)
 	docId = docNode.DocId
 	t.Log("Get doc ", docId)
 	content,exist := table.GetDoc(docId)
@@ -92,6 +93,38 @@ func TestNewTableAndPersist(t *testing.T) {
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
+	//测试落地
+	err = table.Persist()
+	if err != nil {
+		t.Fatal("Persist Error:", err)
+	}
+	table.Close()
+
+	t.Log("\n\n")
+}
+
+func TestLoad(t *testing.T) {
+	table, err := LoadTable("/tmp/spider", TEST_TABLE)
+	if err != nil {
+		t.Fatal("LoadTable Error:", err)
+	}
+	//测试倒排搜索
+	docNode, exist := table.findPrimaryDockId("10002")
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	if docNode.DocId != 1 {
+		t.Fatal("Should is 1")
+	}
+
+	//测试正排获取
+	docId := docNode.DocId
+	t.Log("Get doc ", docId)
+	content,exist := table.GetDoc(docId)
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	t.Log("User[10002]:", helper.JsonEncode(content))
 
 	t.Log("\n\n")
 }

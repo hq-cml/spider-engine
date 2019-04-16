@@ -91,7 +91,10 @@ func (tbl *Table) generateMemPartition() {
 }
 
 //从文件加载一张表
-func LoadTable(name, path string) (*Table, error) {
+func LoadTable(path, name string) (*Table, error) {
+	if string(path[len(path)-1]) != "/" {
+		path = path + "/"
+	}
 	tbl := Table{}
 	metaFileName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_META)
 	buffer, err := helper.ReadFile(metaFileName)
@@ -401,7 +404,6 @@ func (tbl *Table) findPrimaryDockId(key string) (basic.DocNode, bool) {
 	if v, exist := tbl.primaryMap[key]; exist {
 		val , err := strconv.Atoi(v)
 		if err != nil {
-			log.Errf("AA------%v", err)
 			return basic.DocNode{}, false
 		}
 		return basic.DocNode{DocId: uint32(val)}, true
@@ -410,14 +412,13 @@ func (tbl *Table) findPrimaryDockId(key string) (basic.DocNode, bool) {
 	//再在磁盘btree中找
 	val, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
 	if !ok {
-		log.Errf("BB------")
 		return basic.DocNode{}, false
 	}
 	return basic.DocNode{DocId: uint32(val)}, true
 }
 
 //将内存分区落盘
-func (tbl *Table) SyncMemoryPartition() error {
+func (tbl *Table) Persist() error {
 
 	if tbl.memPartition == nil {
 		return nil
