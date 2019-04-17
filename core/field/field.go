@@ -215,22 +215,6 @@ func (fld *Field) SetMmap(base, ext, ivt *mmap.Mmap) {
 	fld.SetIvtMmap(ivt)
 }
 
-//过滤（针对的是正排索引）
-func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbers []int64, str string) bool {
-	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
-
-		//Pos是docId在本索引中的位置
-		pos := docId - fld.StartDocId
-
-		if len(numbers) == 0 {
-			return fld.FwdIdx.Filter(pos, filterType, start, end, str)
-		} else {
-			return fld.FwdIdx.FilterNums(pos, filterType, numbers)
-		}
-	}
-	return false
-}
-
 //落地持久化
 //Note:
 // 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
