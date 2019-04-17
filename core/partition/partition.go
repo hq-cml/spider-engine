@@ -269,16 +269,6 @@ func (part *Partition) Destroy() error {
 	return nil
 }
 
-//查询
-func (part *Partition) Query(fieldName string, key interface{}) ([]basic.DocNode, bool) {
-	if _, exist := part.Fields[fieldName]; !exist {
-		log.Errf("Field [%v] not found", fieldName)
-		return nil, false
-	}
-
-	return part.Fields[fieldName].Query(key)
-}
-
 //获取详情，单个字段
 func (part *Partition) GetFieldValue(docId uint32, fieldName string) (string, bool) {
 	//校验
@@ -477,12 +467,26 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	return part.StoreMeta()
 }
 
-//搜索
-//根据query搜索结果, 再通过bitmap进行过滤
+//查询
+func (part *Partition) Query(fieldName string, key interface{}) ([]basic.DocNode, bool) {
+	if _, exist := part.Fields[fieldName]; !exist {
+		log.Errf("Field [%v] not found", fieldName)
+		return nil, false
+	}
+
+	return part.Fields[fieldName].Query(key)
+}
+
+//搜索, 如果keyWord为空, 则取出所有未删除的节点
+//根据搜索结果, 再通过bitmap进行过滤
 func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap) ([]basic.DocNode, bool) {
+	if _, exist := part.Fields[fieldName]; !exist {
+		log.Errf("Field [%v] not found", fieldName)
+		return nil, false
+	}
 
 	retDocs := []basic.DocNode{}
-	//先用query查询, 如果为空, 则取出所有未删除的节点
+	//如果keyWord为空, 则取出所有未删除的节点
 	if keyWord == "" {
 		for i := part.StartDocId; i < part.NextDocId; i++ {
 			retDocs = append(retDocs, basic.DocNode{DocId: i})
