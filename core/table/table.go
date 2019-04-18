@@ -263,40 +263,24 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	return nil
 }
 
-//获取
-func (tbl *Table) GetDoc(docId uint32) (map[string]string, bool) {
-	//校验
-	if docId < tbl.StartDocId || docId >= tbl.NextDocId {
+//获取文档
+func (tbl *Table) GetDoc(primaryKey string) (map[string]string, bool) {
+	docNode, exist := tbl.findDocIdByPrimaryKey(primaryKey)
+	if !exist {
 		return nil, false
 	}
-	fieldNames := []string{}
-	for _, v := range tbl.BasicFields {
-		fieldNames = append(fieldNames, v.FieldName)
-	}
 
-	//如果在内存分区, 则从内存分区获取
-	if tbl.memPartition != nil &&
-		(docId >= tbl.memPartition.StartDocId && docId <  tbl.memPartition.NextDocId) {
-		return  tbl.memPartition.GetValueWithFields(docId, fieldNames)
-	}
-
-	//否则尝试从磁盘分区获取
-	for _, prt := range tbl.partitions {
-		if docId >= prt.StartDocId && docId < prt.NextDocId {
-			return prt.GetValueWithFields(docId, fieldNames)
-		}
-	}
-	return nil, false
+	return tbl.getDoc(docNode.DocId)
 }
 
 //删除
 //标记假删除
-func (tbl *Table) DeleteDoc(pk string) bool {
-	docId, found := tbl.findPrimaryDockId(pk)
+func (tbl *Table) DeleteDoc(primaryKey string) bool {
+	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
 	if found {
 		return tbl.bitMap.Set(uint64(docId.DocId))
 	}
-	return false
+	return true
 }
 
 //新增
@@ -376,13 +360,13 @@ func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 	tbl.NextDocId++
 
 	//先标记删除oldDocId
-	oldDocid, found := tbl.findPrimaryDockId(content[tbl.PrimaryKey])
+	oldDocid, found := tbl.findDocIdByPrimaryKey(content[tbl.PrimaryKey])
 	if found {
 		tbl.bitMap.Set(uint64(oldDocid.DocId))
 	}
 
 	//再新增docId
-	if err := tbl.changePrimaryDocId(content[tbl.PrimaryKey], newDocId); err != nil {
+	if err := tbl.changeDocIdByPrimaryKey(content[tbl.PrimaryKey], newDocId); err != nil {
 		return 0, err
 	}
 
@@ -395,9 +379,41 @@ func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 	return newDocId, nil
 }
 
+
+//内部获取
+func (tbl *Table) getDoc(docId uint32) (map[string]string, bool) {
+	//校验
+	if docId < tbl.StartDocId || docId >= tbl.NextDocId {
+		return nil, false
+	}
+	fieldNames := []string{}
+	for _, v := range tbl.BasicFields {
+		fieldNames = append(fieldNames, v.FieldName)
+	}
+
+	//如果在内存分区, 则从内存分区获取
+	if tbl.memPartition != nil &&
+		(docId >= tbl.memPartition.StartDocId && docId <  tbl.memPartition.NextDocId) {
+		return  tbl.memPartition.GetValueWithFields(docId, fieldNames)
+	}
+
+	//否则尝试从磁盘分区获取
+	for _, prt := range tbl.partitions {
+		if docId >= prt.StartDocId && docId < prt.NextDocId {
+			return prt.GetValueWithFields(docId, fieldNames)
+		}
+	}
+	return nil, false
+}
+
 //内部变更篡改了docId
-func (tbl *Table) changePrimaryDocId(key string, docId uint32) error {
-	//TODO 先检测map
+func (tbl *Table) changeDocIdByPrimaryKey(key string, docId uint32) error {
+	if _, exist := tbl.primaryMap[key]; exist {
+		val := strconv.Itoa(int(docId))
+		tbl.primaryMap[key] = val
+		return nil
+	}
+
 	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, uint64(docId))
 	if err != nil {
 		log.Errf("Update Put key error  %v", err)
@@ -407,21 +423,29 @@ func (tbl *Table) changePrimaryDocId(key string, docId uint32) error {
 }
 
 //根据主键找到内部的docId
-func (tbl *Table) findPrimaryDockId(key string) (basic.DocNode, bool) {
+func (tbl *Table) findDocIdByPrimaryKey(key string) (basic.DocNode, bool) {
 	//现在内存map中找
+	var val int
+	var err error
+
 	if v, exist := tbl.primaryMap[key]; exist {
-		val , err := strconv.Atoi(v)
+		val , err = strconv.Atoi(v)
 		if err != nil {
 			return basic.DocNode{}, false
 		}
-		return basic.DocNode{DocId: uint32(val)}, true
+	} else {
+		//再在磁盘btree中找
+		vv, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
+		if !ok {
+			return basic.DocNode{}, false
+		}
+		val = int(vv)
 	}
 
-	//再在磁盘btree中找
-	val, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
-	if !ok {
+	if tbl.bitMap.GetBit(uint64(val)) == 1 {
 		return basic.DocNode{}, false
 	}
+
 	return basic.DocNode{DocId: uint32(val)}, true
 }
 

@@ -81,7 +81,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 
 	//测试倒排搜索(内存)
 	t.Log("Before Persist")
-	docNode, exist := table.findPrimaryDockId("10002")
+	docNode, exist := table.findDocIdByPrimaryKey("10002")
 	if !exist {
 		t.Fatal("Should exist")
 	}
@@ -98,7 +98,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	//测试正排获取(内存)
 	docId = docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist := table.GetDoc(docId)
+	content,exist := table.getDoc(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -114,7 +114,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 
 	//测试落地后能否直接从磁盘读取
 	t.Log("After Persist")
-	docNode, exist = table.findPrimaryDockId("10002")
+	docNode, exist = table.findDocIdByPrimaryKey("10002")
 	if !exist {
 		t.Fatal("Should exist")
 	}
@@ -129,7 +129,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	t.Log(helper.JsonEncode(ids))
 	docId = docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist = table.GetDoc(docId)
+	content,exist = table.getDoc(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -149,7 +149,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	if err != nil {
 		t.Fatal("DeleteField Error:", err)
 	}
-	content,exist = table.GetDoc(docId)
+	content,exist = table.getDoc(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -180,7 +180,7 @@ func TestLoad(t *testing.T) {
 		t.Fatal("LoadTable Error:", err)
 	}
 	//测试倒排搜索(磁盘)
-	docNode, exist := table.findPrimaryDockId("10002")
+	docNode, exist := table.findDocIdByPrimaryKey("10002")
 	if !exist {
 		t.Fatal("Should exist")
 	}
@@ -198,12 +198,12 @@ func TestLoad(t *testing.T) {
 	if !ok {
 		t.Fatal("Can't find")
 	}
-	t.Log("唐伯虎", helper.JsonEncode(ids))
+	t.Log("唐伯虎", helper.JsonEncode(ids)) //测试最后一个由Persist落地的文档
 
 	//测试正排搜索(磁盘)
 	docId := docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist := table.GetDoc(docId)
+	content,exist := table.getDoc(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -212,18 +212,93 @@ func TestLoad(t *testing.T) {
 
 	docId = 4
 	t.Log("Get doc ", docId)
-	content,exist = table.GetDoc(docId)
+	content,exist = table.getDoc(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
 	}
 	t.Log("User[10005]:", helper.JsonEncode(content))
 
-	//测试编辑, 删除文档
+	//测试编辑
+	content = map[string]string{TEST_FIELD0: "10005",TEST_FIELD1: "唐伯虎",	TEST_FIELD2: "33",TEST_FIELD3: "喜欢秋香"}
+	docId, err = table.UpdateDoc(content)
+	if err != nil {
+		t.Fatal("UpdateDoc error:", err)
+	}
+	if docId != 5 {
+		t.Fatal("Error")
+	}
+	docNode, exist = table.findDocIdByPrimaryKey("10005") //找回来试试
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	t.Log(helper.JsonEncode(docNode))
+	content,exist = table.getDoc(docNode.DocId)
+	if !exist {
+		t.Fatal("Should exist")
+		table.Close()
+	}
+	t.Log(helper.JsonEncode(content))
 
-
+	//测试删除
+	b := table.DeleteDoc("10005")
+	if !b {
+		t.Fatal("DeleteDoc Err")
+	}
+	docNode, exist = table.findDocIdByPrimaryKey("10005") //找回来试试
+	if exist {
+		t.Fatal("Should not exist")
+	} else {
+		t.Log("10005 is delete")
+	}
 
 	//关闭
 	table.Close()
 	t.Log("\n\n")
+}
+
+//再次Load回来测试, 看看上面的编辑和删除是否生效
+func TestLoadAgain(t *testing.T) {
+	table, err := LoadTable("/tmp/spider", TEST_TABLE)
+	if err != nil {
+		t.Fatal("LoadTable Error:", err)
+	}
+
+	//测试倒排搜索(磁盘)
+	docNode, exist := table.findDocIdByPrimaryKey("10002")
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	if docNode.DocId != 1 {
+		t.Fatal("Should is 1")
+	}
+
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	if !ok {
+		t.Fatal("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	if ok {
+		t.Fatal("should not find")
+	}
+	t.Log("唐伯虎", helper.JsonEncode(ids)) //测试最后一个由Persist落地的文档
+
+	//测试正排搜索(磁盘)
+	docId := docNode.DocId
+	t.Log("Get doc ", docId)
+	content,exist := table.getDoc(docId)
+	if !exist {
+		t.Fatal("Should exist")
+		table.Close()
+	}
+	t.Log("User[10002]:", helper.JsonEncode(content))
+
+	_, exist = table.GetDoc("10005") //找回来试试
+	if exist {
+		t.Fatal("Should not exist")
+	} else {
+		t.Log("10005 is delete")
+	}
 }

@@ -129,7 +129,7 @@ func (bm *Bitmap) Clear(idx uint64) bool {
 func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 	index, pos := idx / BYTE_SIZE, idx % BYTE_SIZE
 
-	if bm.MaxNum < int64(idx) {
+	if int64(idx) > bm.MaxNum {
 		return false
 	}
 

@@ -500,7 +500,6 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 			return retDocs, false
 		}
 	}
-
 	//再用bitmap去掉已删除的数据
 	if bitmap != nil {
 		idx := 0
@@ -514,5 +513,5 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		retDocs = retDocs[:idx]
 	}
 
-	return retDocs, true
+	return retDocs, len(retDocs)>0
 }
