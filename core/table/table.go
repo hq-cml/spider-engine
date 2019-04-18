@@ -501,6 +501,7 @@ func (tbl *Table) Close() error {
 
 	//关闭主键btdb
 	if tbl.primaryBtdb != nil {
+		tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
 		tbl.primaryBtdb.Close()
 	}
 
@@ -537,6 +538,7 @@ func (tbl *Table) MergePartitions() error {
 	if startIdx == -1 {
 		return nil
 	}
+	fmt.Println("A-------------", startIdx)
 	todoPartitions := tbl.partitions[startIdx:]
 	if len(todoPartitions) == 1 {
 		log.Infof("No nessary to merge!")

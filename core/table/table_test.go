@@ -301,4 +301,68 @@ func TestLoadAgain(t *testing.T) {
 	} else {
 		t.Log("10005 is delete")
 	}
+
+	//关闭
+	table.Close()
+	t.Log("\n\n")
+}
+
+func TestMerge(t *testing.T) {
+	//加载回来
+	table, err := LoadTable("/tmp/spider", TEST_TABLE)
+	if err != nil {
+		t.Fatal("LoadTable Error:", err)
+	}
+
+	//TODO
+	//合并没考虑到内存分区啊
+	content := map[string]string{TEST_FIELD0: "10005",TEST_FIELD1: "祝枝山",	TEST_FIELD2: "33",TEST_FIELD3: "喜欢石榴"}
+	docId, err := table.AddDoc(content)
+	if err != nil {
+		t.Fatal("UpdateDoc error:", err)
+	}
+
+	//合并!!
+	err = table.MergePartitions()
+	if err != nil {
+		t.Fatal("MergePartitions Error:", err)
+	}
+
+	//测试倒排搜索(磁盘)
+	docNode, exist := table.findDocIdByPrimaryKey("10002")
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	if docNode.DocId != 1 {
+		t.Fatal("Should is 1")
+	}
+
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	if !ok {
+		t.Fatal("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	if ok {
+		t.Fatal("should not find")
+	}
+	t.Log("唐伯虎", helper.JsonEncode(ids)) //测试最后一个由Persist落地的文档
+
+	//测试正排搜索(磁盘)
+	docId = docNode.DocId
+	t.Log("Get doc ", docId)
+	content,exist = table.getDoc(docId)
+	if !exist {
+		t.Fatal("Should exist")
+		table.Close()
+	}
+	t.Log("User[10002]:", helper.JsonEncode(content))
+
+	content, exist = table.GetDoc("10005") //找回来试试
+	if exist {
+		t.Fatal("Should not exist", helper.JsonEncode(content))
+	} else {
+		t.Log("10005 is delete")
+	}
 }
