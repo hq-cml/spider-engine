@@ -217,6 +217,8 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 }
 
 //删除分区
+//本质上也是一种假删除, 只是把tbl.BasicFields对应项删除, 使得上层查询隐藏该字段
+//如果内存分区非空, 则会先落地内存分区
 func (tbl *Table) DeleteField(fieldname string) error {
 	//校验
 	if _, exist := tbl.BasicFields[fieldname]; !exist {
@@ -232,6 +234,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
 
+	//假删除
 	delete(tbl.BasicFields, fieldname)
 
 	if tbl.memPartition == nil {
@@ -266,17 +269,21 @@ func (tbl *Table) GetDoc(docId uint32) (map[string]string, bool) {
 	if docId < tbl.StartDocId || docId >= tbl.NextDocId {
 		return nil, false
 	}
+	fieldNames := []string{}
+	for _, v := range tbl.BasicFields {
+		fieldNames = append(fieldNames, v.FieldName)
+	}
 
 	//如果在内存分区, 则从内存分区获取
 	if tbl.memPartition != nil &&
 		(docId >= tbl.memPartition.StartDocId && docId <  tbl.memPartition.NextDocId) {
-		return  tbl.memPartition.GetDocument(docId)
+		return  tbl.memPartition.GetValueWithFields(docId, fieldNames)
 	}
 
 	//否则尝试从磁盘分区获取
 	for _, prt := range tbl.partitions {
 		if docId >= prt.StartDocId && docId < prt.NextDocId {
-			return prt.GetDocument(docId)
+			return prt.GetValueWithFields(docId, fieldNames)
 		}
 	}
 	return nil, false
@@ -418,7 +425,7 @@ func (tbl *Table) findPrimaryDockId(key string) (basic.DocNode, bool) {
 	return basic.DocNode{DocId: uint32(val)}, true
 }
 
-//将内存分区落盘
+//表落地
 func (tbl *Table) Persist() error {
 
 	if tbl.memPartition == nil {
@@ -427,24 +434,15 @@ func (tbl *Table) Persist() error {
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
 
-	//memPartition为空， 则退出
-	if tbl.memPartition.IsEmpty() {
+	return tbl.persistMemPartition()
+}
+
+//将内存分区落盘
+func (tbl *Table) persistMemPartition() error {
+
+	if tbl.memPartition == nil || tbl.memPartition.IsEmpty() {
 		return nil
 	}
-
-	//持久化内存分区
-	// 这么整没必要
-	//if err := tbl.memPartition.Persist(); err != nil {
-	//	log.Errf("SyncMemoryPartition Error %v", err)
-	//	return err
-	//}
-	//partitionName := tbl.memPartition.PartitionName
-	//tbl.memPartition.Close()
-	//tbl.memPartition = nil
-	//newPartition, _ := partition.LoadPartition(partitionName)
-	//tbl.partitions = append(tbl.partitions, newPartition)
-	//tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
-
 	//分区落地
 	tmpPartition := tbl.memPartition
 	if err := tmpPartition.Persist(); err != nil {
@@ -465,9 +463,11 @@ func (tbl *Table) Close() error {
 	defer tbl.mutex.Unlock()
 	log.Infof("Close Table [%v] Begin", tbl.TableName)
 
-	//关闭内存分区
+	//关闭内存分区(非空则需要先落地)
 	if tbl.memPartition != nil {
-		tbl.memPartition.Close()
+		tbl.persistMemPartition() //内存分区落地
+		//无需再次关闭, 因为已经归档到了磁盘分区了
+		//tbl.memPartition.Close()
 	}
 
 	//逐个关闭磁盘分区

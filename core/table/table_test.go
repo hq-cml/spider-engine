@@ -16,6 +16,7 @@ const TEST_FIELD0 = "user_id"
 const TEST_FIELD1 = "user_name"
 const TEST_FIELD2 = "user_age"
 const TEST_FIELD3 = "user_desc"
+const TEST_FIELD4 = "tobe_del"
 
 func init() {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
@@ -25,7 +26,7 @@ func init() {
 	}
 }
 
-func TestNewTableAndPersist(t *testing.T) {
+func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
 
 	if err := table.AddField(field.BasicField{
@@ -41,34 +42,38 @@ func TestNewTableAndPersist(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD2,
 		IndexType: index.IDX_TYPE_NUMBER,
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD3,
 		IndexType: index.IDX_TYPE_STRING_SEG,
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD4,
+		IndexType: index.IDX_TYPE_NUMBER,
+	}); err != nil {
+		t.Fatal(err)
+	}
 
-	docId, err := table.AddDoc(map[string]string{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: "20",TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+	docId, err := table.AddDoc(map[string]string{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: "20",TEST_FIELD3: "喜欢美食,也喜欢旅游", TEST_FIELD4: "77"})
 	if err != nil {
 		t.Fatal("AddDoc Error:", err)
 	}
 	t.Log("Add DocId:", docId)
 
-	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: "18", TEST_FIELD3: "喜欢电影,也喜欢美食"})
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: "18", TEST_FIELD3: "喜欢电影,也喜欢美食", TEST_FIELD4: "88"})
 	if err != nil {
 		t.Fatal("AddDoc Error:", err)
 	}
 	t.Log("Add DocId:", docId)
 
-	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻",	TEST_FIELD2: "30",TEST_FIELD3: "喜欢养生"})
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻",	TEST_FIELD2: "30",TEST_FIELD3: "喜欢养生", TEST_FIELD4: "99"})
 	if err != nil {
 		t.Fatal("AddDoc Error:", err)
 	}
@@ -131,7 +136,39 @@ func TestNewTableAndPersist(t *testing.T) {
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
-	//关闭
+
+	//再次新增一个文档
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10004",TEST_FIELD1: "爱新觉罗",	TEST_FIELD2: "30",TEST_FIELD3: "喜欢打仗", TEST_FIELD4: "99"})
+	if err != nil {
+		t.Fatal("AddDoc Error:", err)
+	}
+	t.Log("Add DocId:", docId)
+
+	//删除一个分区
+	err = table.DeleteField(TEST_FIELD4)
+	if err != nil {
+		t.Fatal("DeleteField Error:", err)
+	}
+	content,exist = table.GetDoc(docId)
+	if !exist {
+		t.Fatal("Should exist")
+		table.Close()
+	}
+	t.Log("User[10004]:", helper.JsonEncode(content))
+
+	//再次新增一个文档, 应该随着Close落盘固化
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10005",TEST_FIELD1: "唐伯虎",	TEST_FIELD2: "31",TEST_FIELD3: "喜欢书法"})
+	if err != nil {
+		t.Fatal("AddDoc Error:", err)
+	}
+	t.Log("Add DocId:", docId)
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	if !ok {
+		t.Fatal("Can't find")
+	}
+	t.Log("唐伯虎", helper.JsonEncode(ids))
+
+	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
 	table.Close()
 
 	t.Log("\n\n")
@@ -143,7 +180,6 @@ func TestLoad(t *testing.T) {
 		t.Fatal("LoadTable Error:", err)
 	}
 	//测试倒排搜索(磁盘)
-	t.Log("After Persist")
 	docNode, exist := table.findPrimaryDockId("10002")
 	if !exist {
 		t.Fatal("Should exist")
@@ -158,6 +194,12 @@ func TestLoad(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(ids))
 
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	if !ok {
+		t.Fatal("Can't find")
+	}
+	t.Log("唐伯虎", helper.JsonEncode(ids))
+
 	//测试正排搜索(磁盘)
 	docId := docNode.DocId
 	t.Log("Get doc ", docId)
@@ -167,6 +209,19 @@ func TestLoad(t *testing.T) {
 		table.Close()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
+
+	docId = 4
+	t.Log("Get doc ", docId)
+	content,exist = table.GetDoc(docId)
+	if !exist {
+		t.Fatal("Should exist")
+		table.Close()
+	}
+	t.Log("User[10005]:", helper.JsonEncode(content))
+
+	//测试编辑, 删除文档
+
+
 
 	//关闭
 	table.Close()
