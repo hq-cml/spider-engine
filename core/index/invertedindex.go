@@ -198,6 +198,20 @@ func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, bool) {
 	return rIdx.btdb.GetNextKV(rIdx.fieldName, key)
 }
 
+//btree操作
+func (rIdx *InvertedIndex) Walk() error {
+	if rIdx.btdb != nil {
+		return rIdx.btdb.Display(rIdx.fieldName)
+	} else if rIdx.termMap != nil {
+		for k,v := range rIdx.termMap {
+			fmt.Println(k, "----", v)
+		}
+		return nil
+	} else {
+		return errors.New("IvtIndex Nil")
+	}
+}
+
 //持久化倒排索引
 //落地 termMap落地到倒排文件; term进入B+tree
 //倒排文件格式:

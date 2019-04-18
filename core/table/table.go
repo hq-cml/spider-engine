@@ -268,7 +268,8 @@ func (tbl *Table) GetDoc(docId uint32) (map[string]string, bool) {
 	}
 
 	//如果在内存分区, 则从内存分区获取
-	if docId >= tbl.memPartition.StartDocId && docId <  tbl.memPartition.NextDocId {
+	if tbl.memPartition != nil &&
+		(docId >= tbl.memPartition.StartDocId && docId <  tbl.memPartition.NextDocId) {
 		return  tbl.memPartition.GetDocument(docId)
 	}
 
@@ -558,4 +559,31 @@ func (tbl *Table) MergePartitions() error {
 	tbl.partitions = append(tbl.partitions, tmpPartition)
 	tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
 	return tbl.StoreMeta()
+}
+
+//表内搜索
+func (tbl *Table) SearchDocs(fieldName, keyWord string) ([]basic.DocNode, bool) {
+
+	retDocs := []basic.DocNode{}
+	exist := false
+
+	//各个磁盘分区执行搜索
+	for _, prt := range tbl.partitions {
+		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.bitMap)
+		if ok {
+			exist = true
+			retDocs = append(retDocs, ids...)
+		}
+	}
+
+	//内存分区执行搜索
+	if tbl.memPartition != nil {
+		ids, ok := tbl.memPartition.SearchDocs(fieldName, keyWord, tbl.bitMap)
+		if ok {
+			exist = true
+			retDocs = append(retDocs, ids...)
+		}
+	}
+
+	return retDocs, exist
 }

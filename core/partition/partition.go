@@ -468,7 +468,8 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 }
 
 //查询
-func (part *Partition) Query(fieldName string, key interface{}) ([]basic.DocNode, bool) {
+func (part *Partition) query(fieldName string, key interface{}) ([]basic.DocNode, bool) {
+	//校验
 	if _, exist := part.Fields[fieldName]; !exist {
 		log.Errf("Field [%v] not found", fieldName)
 		return nil, false
@@ -480,6 +481,7 @@ func (part *Partition) Query(fieldName string, key interface{}) ([]basic.DocNode
 //搜索, 如果keyWord为空, 则取出所有未删除的节点
 //根据搜索结果, 再通过bitmap进行过滤
 func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap) ([]basic.DocNode, bool) {
+	//校验
 	if _, exist := part.Fields[fieldName]; !exist {
 		log.Errf("Field [%v] not found", fieldName)
 		return nil, false
@@ -493,7 +495,7 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		}
 	} else {
 		var match bool
-		retDocs, match = part.Fields[fieldName].Query(keyWord)
+		retDocs, match = part.query(fieldName, keyWord)
 		if !match {
 			return retDocs, false
 		}

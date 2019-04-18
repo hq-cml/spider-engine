@@ -54,7 +54,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 		t.Fatal("wrong number")
 	}
 
-	list, exist := memPartition.Query(TEST_FIELD3, "美食")
+	list, exist := memPartition.query(TEST_FIELD3, "美食")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -63,7 +63,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = memPartition.Query(TEST_FIELD3, "喜欢")
+	list, exist = memPartition.query(TEST_FIELD3, "喜欢")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -72,7 +72,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = memPartition.Query(TEST_FIELD3, "游泳")
+	list, exist = memPartition.query(TEST_FIELD3, "游泳")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -90,7 +90,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	//持久化落地
 	memPartition.Persist()
 
-	list, exist = memPartition.Query(TEST_FIELD3, "美食")
+	list, exist = memPartition.query(TEST_FIELD3, "美食")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -99,7 +99,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = memPartition.Query(TEST_FIELD3, "喜欢")
+	list, exist = memPartition.query(TEST_FIELD3, "喜欢")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -108,7 +108,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = memPartition.Query(TEST_FIELD3, "游泳")
+	list, exist = memPartition.query(TEST_FIELD3, "游泳")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -137,7 +137,7 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, exist := part.Query(TEST_FIELD3, "美食")
+	list, exist := part.query(TEST_FIELD3, "美食")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -146,7 +146,7 @@ func TestLoad(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part.Query(TEST_FIELD3, "喜欢")
+	list, exist = part.query(TEST_FIELD3, "喜欢")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -155,7 +155,7 @@ func TestLoad(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part.Query(TEST_FIELD3, "游泳")
+	list, exist = part.query(TEST_FIELD3, "游泳")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -243,7 +243,7 @@ func TestPartitionMerge(t *testing.T) {
 
 
 	//合并完毕, 测试合并效果
-	list, exist := part2.Query(TEST_FIELD3, "美食")
+	list, exist := part2.query(TEST_FIELD3, "美食")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -252,7 +252,7 @@ func TestPartitionMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part2.Query(TEST_FIELD3, "喜欢")
+	list, exist = part2.query(TEST_FIELD3, "喜欢")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -261,7 +261,7 @@ func TestPartitionMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part2.Query(TEST_FIELD3, "游泳")
+	list, exist = part2.query(TEST_FIELD3, "游泳")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -271,7 +271,7 @@ func TestPartitionMerge(t *testing.T) {
 
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part2.Query(TEST_FIELD1, "李八")
+	list, exist = part2.query(TEST_FIELD1, "李八")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -313,7 +313,7 @@ func TestLoadMerge(t *testing.T) {
 	}
 
 	//测试Load回来的结果
-	list, exist := part2.Query(TEST_FIELD3, "美食")
+	list, exist := part2.query(TEST_FIELD3, "美食")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -322,7 +322,7 @@ func TestLoadMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part2.Query(TEST_FIELD3, "喜欢")
+	list, exist = part2.query(TEST_FIELD3, "喜欢")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -331,7 +331,7 @@ func TestLoadMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part2.Query(TEST_FIELD3, "游泳")
+	list, exist = part2.query(TEST_FIELD3, "游泳")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
@@ -341,7 +341,7 @@ func TestLoadMerge(t *testing.T) {
 
 	t.Log(helper.JsonEncode(list))
 
-	list, exist = part2.Query(TEST_FIELD1, "李八")
+	list, exist = part2.query(TEST_FIELD1, "李八")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}

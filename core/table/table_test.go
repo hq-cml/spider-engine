@@ -51,12 +51,12 @@ func TestNewTableAndPersist(t *testing.T) {
 
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD3,
-		IndexType: index.IDX_TYPE_STRING_SINGLE,
+		IndexType: index.IDX_TYPE_STRING_SEG,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	docId, err := table.AddDoc(map[string]string{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: "20",TEST_FIELD3: "喜欢登山,也喜欢旅游"})
+	docId, err := table.AddDoc(map[string]string{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: "20",TEST_FIELD3: "喜欢美食,也喜欢旅游"})
 	if err != nil {
 		t.Fatal("AddDoc Error:", err)
 	}
@@ -74,8 +74,8 @@ func TestNewTableAndPersist(t *testing.T) {
 	}
 	t.Log("Add DocId:", docId)
 
-
 	//测试倒排搜索(内存)
+	t.Log("Before Persist")
 	docNode, exist := table.findPrimaryDockId("10002")
 	if !exist {
 		t.Fatal("Should exist")
@@ -84,12 +84,19 @@ func TestNewTableAndPersist(t *testing.T) {
 		t.Fatal("Should is 1")
 	}
 
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	if !ok {
+		t.Fatal("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
 	//测试正排获取(内存)
 	docId = docNode.DocId
 	t.Log("Get doc ", docId)
 	content,exist := table.GetDoc(docId)
 	if !exist {
 		t.Fatal("Should exist")
+		table.Close()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
@@ -97,7 +104,34 @@ func TestNewTableAndPersist(t *testing.T) {
 	err = table.Persist()
 	if err != nil {
 		t.Fatal("Persist Error:", err)
+		table.Close()
 	}
+
+	//测试落地后能否直接从磁盘读取
+	t.Log("After Persist")
+	docNode, exist = table.findPrimaryDockId("10002")
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	if docNode.DocId != 1 {
+		t.Fatal("Should is 1")
+	}
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食")
+	if !ok {
+		t.Fatal("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+	docId = docNode.DocId
+	t.Log("Get doc ", docId)
+	content,exist = table.GetDoc(docId)
+	if !exist {
+		t.Fatal("Should exist")
+		table.Close()
+	}
+	t.Log("User[10002]:", helper.JsonEncode(content))
+
+	//关闭
 	table.Close()
 
 	t.Log("\n\n")
@@ -108,7 +142,8 @@ func TestLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal("LoadTable Error:", err)
 	}
-	//测试倒排搜索
+	//测试倒排搜索(磁盘)
+	t.Log("After Persist")
 	docNode, exist := table.findPrimaryDockId("10002")
 	if !exist {
 		t.Fatal("Should exist")
@@ -117,14 +152,23 @@ func TestLoad(t *testing.T) {
 		t.Fatal("Should is 1")
 	}
 
-	//测试正排获取
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	if !ok {
+		t.Fatal("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//测试正排搜索(磁盘)
 	docId := docNode.DocId
 	t.Log("Get doc ", docId)
 	content,exist := table.GetDoc(docId)
 	if !exist {
 		t.Fatal("Should exist")
+		table.Close()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
+	//关闭
+	table.Close()
 	t.Log("\n\n")
 }
