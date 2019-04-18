@@ -269,16 +269,6 @@ func (part *Partition) Destroy() error {
 	return nil
 }
 
-//查询
-func (part *Partition) Query(fieldName string, key interface{}) ([]basic.DocNode, bool) {
-	if _, exist := part.Fields[fieldName]; !exist {
-		log.Errf("Field [%v] not found", fieldName)
-		return nil, false
-	}
-
-	return part.Fields[fieldName].Query(key)
-}
-
 //获取详情，单个字段
 func (part *Partition) GetFieldValue(docId uint32, fieldName string) (string, bool) {
 	//校验
@@ -477,30 +467,33 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	return part.StoreMeta()
 }
 
-//搜索（单query）
-//根据query搜索结果, 再通过filter进行过滤
-//bitmap从更高层传入
-func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.SearchFilted,
-	bitmap *bitmap.Bitmap) ([]basic.DocNode, bool) {
-
-	retDocs := []basic.DocNode{}
-	//校验
-	if filters != nil && len(filters) > 0 {
-		for _, filter := range filters {
-			if _, hasField := part.Fields[filter.FieldName]; hasField {
-				return retDocs, false
-			}
-		}
+//查询
+func (part *Partition) Query(fieldName string, key interface{}) ([]basic.DocNode, bool) {
+	if _, exist := part.Fields[fieldName]; !exist {
+		log.Errf("Field [%v] not found", fieldName)
+		return nil, false
 	}
 
-	//先用query查询, 如果为空, 则取出所有未删除的节点
-	if query.Value == "" {
+	return part.Fields[fieldName].Query(key)
+}
+
+//搜索, 如果keyWord为空, 则取出所有未删除的节点
+//根据搜索结果, 再通过bitmap进行过滤
+func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap) ([]basic.DocNode, bool) {
+	if _, exist := part.Fields[fieldName]; !exist {
+		log.Errf("Field [%v] not found", fieldName)
+		return nil, false
+	}
+
+	retDocs := []basic.DocNode{}
+	//如果keyWord为空, 则取出所有未删除的节点
+	if keyWord == "" {
 		for i := part.StartDocId; i < part.NextDocId; i++ {
 			retDocs = append(retDocs, basic.DocNode{DocId: i})
 		}
 	} else {
 		var match bool
-		retDocs, match = part.Fields[query.FieldName].Query(query.Value)
+		retDocs, match = part.Fields[fieldName].Query(keyWord)
 		if !match {
 			return retDocs, false
 		}
@@ -517,26 +510,6 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 			}
 		}
 		retDocs = retDocs[:idx]
-	}
-
-	//再使用过滤器
-	if filters != nil && len(filters) > 0 {
-		idx := 0
-		for _, doc := range retDocs {
-			match := true
-			//必须全部的过滤器都满足
-			for _, filter := range filters {
-				if !part.Fields[filter.FieldName].Filter(doc.DocId, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr) {
-					match = false
-					break
-				}
-				log.Debugf("Partition[%v] QUERY  %v", part.PartitionName, doc)
-			}
-			if match {
-				retDocs[idx] = doc
-				idx++
-			}
-		}
 	}
 
 	return retDocs, true
