@@ -98,7 +98,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	//测试正排获取(内存)
 	docId = docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist := table.getDoc(docId)
+	content,exist := table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -129,7 +129,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	t.Log(helper.JsonEncode(ids))
 	docId = docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist = table.getDoc(docId)
+	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -138,7 +138,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 
 
 	//再次新增一个文档
-	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10004",TEST_FIELD1: "爱新觉罗",	TEST_FIELD2: "30",TEST_FIELD3: "喜欢打仗", TEST_FIELD4: "99"})
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10004",TEST_FIELD1: "爱新觉罗", TEST_FIELD2: "30",TEST_FIELD3: "喜欢打仗", TEST_FIELD4: "99"})
 	if err != nil {
 		t.Fatal("AddDoc Error:", err)
 	}
@@ -149,7 +149,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	if err != nil {
 		t.Fatal("DeleteField Error:", err)
 	}
-	content,exist = table.getDoc(docId)
+	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -203,7 +203,7 @@ func TestLoad(t *testing.T) {
 	//测试正排搜索(磁盘)
 	docId := docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist := table.getDoc(docId)
+	content,exist := table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -212,7 +212,7 @@ func TestLoad(t *testing.T) {
 
 	docId = 4
 	t.Log("Get doc ", docId)
-	content,exist = table.getDoc(docId)
+	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -228,12 +228,7 @@ func TestLoad(t *testing.T) {
 	if docId != 5 {
 		t.Fatal("Error")
 	}
-	docNode, exist = table.findDocIdByPrimaryKey("10005") //找回来试试
-	if !exist {
-		t.Fatal("Should exist")
-	}
-	t.Log(helper.JsonEncode(docNode))
-	content,exist = table.getDoc(docNode.DocId)
+	content, exist = table.GetDoc("10005") //找回来试试
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -288,7 +283,7 @@ func TestLoadAgain(t *testing.T) {
 	//测试正排搜索(磁盘)
 	docId := docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist := table.getDoc(docId)
+	content,exist := table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
@@ -314,13 +309,21 @@ func TestMerge(t *testing.T) {
 		t.Fatal("LoadTable Error:", err)
 	}
 
-	//TODO
-	//合并没考虑到内存分区啊
-	content := map[string]string{TEST_FIELD0: "10005",TEST_FIELD1: "祝枝山",	TEST_FIELD2: "33",TEST_FIELD3: "喜欢石榴"}
+	//找一个已经删除的来试试
+	content, exist := table.GetDoc("10005")
+	if exist {
+		t.Fatal("Should not exist", helper.JsonEncode(content))
+	} else {
+		t.Log("10005 is delete")
+	}
+
+	//新增一个试试看
+	content = map[string]string{TEST_FIELD0: "10005",TEST_FIELD1: "祝枝山",	TEST_FIELD2: "33",TEST_FIELD3: "喜欢石榴"}
 	docId, err := table.AddDoc(content)
 	if err != nil {
 		t.Fatal("UpdateDoc error:", err)
 	}
+	t.Log("Add new docId:", docId)
 
 	//合并!!
 	err = table.MergePartitions()
@@ -336,6 +339,15 @@ func TestMerge(t *testing.T) {
 	if docNode.DocId != 1 {
 		t.Fatal("Should is 1")
 	}
+	docId = docNode.DocId
+	t.Log("Get doc ", docId)
+	content,exist = table.getDocByDocId(docId)
+	if !exist {
+		t.Fatal("Should exist")
+		table.Close()
+	}
+	t.Log("User[10002]:", helper.JsonEncode(content))
+
 
 	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
 	if !ok {
@@ -349,20 +361,60 @@ func TestMerge(t *testing.T) {
 	}
 	t.Log("唐伯虎", helper.JsonEncode(ids)) //测试最后一个由Persist落地的文档
 
-	//测试正排搜索(磁盘)
-	docId = docNode.DocId
+	//搜索一个重新增加的doc
+	content, exist = table.GetDoc("10005") //找回来试试
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	t.Log(helper.JsonEncode(content))
+
+	//关闭
+	table.Close()
+	t.Log("\n\n")
+}
+
+//测试被合并之后,再load回来
+func TestMergeThenLoad(t *testing.T) {
+	//加载回来
+	table, err := LoadTable("/tmp/spider", TEST_TABLE)
+	if err != nil {
+		t.Fatal("LoadTable Error:", err)
+	}
+
+	//找一个曾经删除过,后来又加回来的试试看
+	content, exist := table.GetDoc("10005")
+	if !exist {
+		t.Fatal("Should exist", helper.JsonEncode(content))
+	}
+	t.Log(helper.JsonEncode(content))
+
+	//测试倒排搜索(磁盘)
+	docNode, exist := table.findDocIdByPrimaryKey("10002")
+	if !exist {
+		t.Fatal("Should exist")
+	}
+	if docNode.DocId != 1 {
+		t.Fatal("Should is 1")
+	}
+	docId := docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist = table.getDoc(docId)
+	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
 		table.Close()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
-	content, exist = table.GetDoc("10005") //找回来试试
-	if exist {
-		t.Fatal("Should not exist", helper.JsonEncode(content))
-	} else {
-		t.Log("10005 is delete")
+
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	if !ok {
+		t.Fatal("Can't find")
 	}
+	t.Log(helper.JsonEncode(ids))
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	if ok {
+		t.Fatal("should not find")
+	}
+	t.Log("唐伯虎", helper.JsonEncode(ids))
 }

@@ -124,10 +124,11 @@ func LoadTable(path, name string) (*Table, error) {
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
 	tbl.bitMap = bitmap.NewBitmap(btmpPath, true)
 
-	//如果表存在主键，则直接加载主键专用btree
+	//如果表存在主键，则直接加载主键专用btree和内存map
 	if tbl.PrimaryKey != "" {
 		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.primaryBtdb = btree.NewBtree("", primaryname)
+		tbl.primaryMap = make(map[string]string)
 	}
 
 	log.Infof("Load Table %v success", tbl.TableName)
@@ -269,8 +270,12 @@ func (tbl *Table) GetDoc(primaryKey string) (map[string]string, bool) {
 	if !exist {
 		return nil, false
 	}
-
-	return tbl.getDoc(docNode.DocId)
+	tmp, ok := tbl.getDocByDocId(docNode.DocId)
+	if !ok {
+		return nil, false
+	}
+	tmp[tbl.PrimaryKey] = primaryKey
+	return tmp, true
 }
 
 //删除
@@ -306,7 +311,7 @@ func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
 	newDocId := tbl.NextDocId
 	tbl.NextDocId++
 
-	//如果存在主键，直接添加不检查
+	//如果存在主键先添加
 	if tbl.PrimaryKey != "" {
 		tbl.primaryMap[content[tbl.PrimaryKey]] = fmt.Sprintf("%v", newDocId)
 
@@ -379,9 +384,10 @@ func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 	return newDocId, nil
 }
 
-
 //内部获取
-func (tbl *Table) getDoc(docId uint32) (map[string]string, bool) {
+//Note:
+// 不包括主键
+func (tbl *Table) getDocByDocId(docId uint32) (map[string]string, bool) {
 	//校验
 	if docId < tbl.StartDocId || docId >= tbl.NextDocId {
 		return nil, false
@@ -490,8 +496,6 @@ func (tbl *Table) Close() error {
 	//关闭内存分区(非空则需要先落地)
 	if tbl.memPartition != nil {
 		tbl.persistMemPartition() //内存分区落地
-		//无需再次关闭, 因为已经归档到了磁盘分区了
-		//tbl.memPartition.Close()
 	}
 
 	//逐个关闭磁盘分区
@@ -515,6 +519,8 @@ func (tbl *Table) Close() error {
 }
 
 //合并表内分区
+//TODO 合并逻辑还不够智能
+//TODO 合并时机需要自动化
 func (tbl *Table) MergePartitions() error {
 	//校验
 	if len(tbl.partitions) == 1 {
@@ -527,6 +533,11 @@ func (tbl *Table) MergePartitions() error {
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
 
+	//内存分区非空则先落地
+	if tbl.memPartition != nil {
+		tbl.persistMemPartition()
+	}
+
 	//找到第一个个数不符合规范，即要合并的partition
 	for idx := range tbl.partitions {
 		if tbl.partitions[idx].NextDocId - tbl.partitions[idx].StartDocId < partition.PARTITION_MAX_DOC_CNT {
@@ -538,7 +549,6 @@ func (tbl *Table) MergePartitions() error {
 	if startIdx == -1 {
 		return nil
 	}
-	fmt.Println("A-------------", startIdx)
 	todoPartitions := tbl.partitions[startIdx:]
 	if len(todoPartitions) == 1 {
 		log.Infof("No nessary to merge!")
