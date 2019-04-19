@@ -22,6 +22,7 @@ import (
 )
 
 const (
+	PARTITION_MAX_DOC_CNT_TEST = 3    //10w个文档，分区合并的一个参考值
 	PARTITION_MAX_DOC_CNT = 1000000   //10w个文档，分区合并的一个参考值
 )
 

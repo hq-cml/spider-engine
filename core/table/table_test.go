@@ -26,6 +26,7 @@ func init() {
 	}
 }
 
+/*
 func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
 
@@ -417,4 +418,113 @@ func TestMergeThenLoad(t *testing.T) {
 		t.Fatal("should not find")
 	}
 	t.Log("唐伯虎", helper.JsonEncode(ids))
+
+	table.Close()
+	t.Log("\n\n")
 }
+
+*/
+
+//测试碎片化的merge
+func TestMultiMerge(t *testing.T) {
+	//清理目录
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	//新建表
+	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
+
+	//新建字段
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD0,
+		IndexType: index.IDX_TYPE_PK,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD1,
+		IndexType: index.IDX_TYPE_STRING,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD2,
+		IndexType: index.IDX_TYPE_NUMBER,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	//增加doc, 表落地
+	docId, _ := table.AddDoc(map[string]string{TEST_FIELD0: "10001", TEST_FIELD1: "张0",TEST_FIELD2: "20"})
+	docId, _ = table.AddDoc(map[string]string{TEST_FIELD0: "10002", TEST_FIELD1: "李一", TEST_FIELD2: "18"})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10003",TEST_FIELD1: "王二", TEST_FIELD2: "30"})
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10004",TEST_FIELD1: "陈三", TEST_FIELD2: "35"})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10005",TEST_FIELD1: "黄四", TEST_FIELD2: "30"})
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10006",TEST_FIELD1: "何五", TEST_FIELD2: "35"})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10007",TEST_FIELD1: "宋六", TEST_FIELD2: "35"})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10008",TEST_FIELD1: "刘七", TEST_FIELD2: "35"})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10009",TEST_FIELD1: "任八", TEST_FIELD2: "35"})
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10010",TEST_FIELD1: "化九", TEST_FIELD2: "35"})
+	table.Persist()
+
+	docId, err = table.AddDoc(map[string]string{TEST_FIELD0: "10011",TEST_FIELD1: "钟十", TEST_FIELD2: "35"})
+	_ = docId
+	t.Log(table.displayInner())
+
+	//测试一下搜索
+	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七")
+	if !ok {
+		t.Fatal("shuoud exist")
+	}
+	t.Log(helper.JsonEncode(docs))
+
+	user, ok := table.GetDoc("10003")
+	if !ok {
+		t.Fatal("shuoud exist")
+	}
+	t.Log("User[10003]:", helper.JsonEncode(user))
+
+	//合并
+	err = table.MergePartitions()
+	if err != nil {
+		t.Fatal("MergePartitions Err:", err)
+	}
+
+	//再次测试一下搜索
+	docs, ok = table.SearchDocs(TEST_FIELD1, "刘七")
+	if !ok {
+		t.Fatal("shuoud exist")
+	}
+	t.Log(helper.JsonEncode(docs))
+
+	user, ok = table.GetDoc("10003")
+	if !ok {
+		t.Fatal("shuoud exist")
+	}
+	t.Log("User[10003]:", helper.JsonEncode(user))
+	t.Log(table.displayInner())
+
+	//关闭
+	table.Close()
+	t.Log("\n\n")
+}
+
+
