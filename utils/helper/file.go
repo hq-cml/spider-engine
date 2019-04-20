@@ -30,6 +30,15 @@ func Exist(path string) bool {
 	return true
 }
 
+// 判断所给路径是否为文件夹
+func IsDir(path string) bool {
+	s, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return s.IsDir()
+}
+
 // 写文件
 // Note：
 //   覆盖写，不是追加写

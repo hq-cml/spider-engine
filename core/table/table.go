@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"encoding/json"
 	"errors"
-	//"math"
+	"strconv"
 	"github.com/hq-cml/spider-engine/core/partition"
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
@@ -26,7 +26,6 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/core/field"
-	"strconv"
 )
 
 //表的原则：
@@ -47,8 +46,8 @@ type Table struct {
 	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键！！！
 	primaryBtdb    btree.Btree            //主键专用倒排索引（内存态）
 	primaryMap     map[string]string      //主键专用倒排索引（磁盘态），主键不会重复，直接map[string]string
-	bitMap         *bitmap.Bitmap         //用于文档删除标记
-	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用
+	bitMap         *bitmap.Bitmap         //用于文档删除标记 //TODO 这个太大，太占磁盘，后面搞成动态的
+	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
 }
 
 const (
