@@ -108,12 +108,12 @@ func LoadTable(path, name string) (*Table, error) {
 
 	//分别加载各个分区
 	for _, partitionName := range tbl.PartitionNames {
-		segment, err := partition.LoadPartition(partitionName)
+		prt, err := partition.LoadPartition(partitionName)
 		if err != nil {
 			log.Errf("partition.LoadPartition Error:%v", err)
 			return nil, err
 		}
-		tbl.partitions = append(tbl.partitions, segment)
+		tbl.partitions = append(tbl.partitions, prt)
 	}
 
 	//产出一块空的内存分区

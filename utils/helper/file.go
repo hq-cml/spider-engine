@@ -39,6 +39,15 @@ func IsDir(path string) bool {
 	return s.IsDir()
 }
 
+// 判断所给路径是否为文件夹
+func Mkdir(path string) bool {
+	err := os.MkdirAll(path, 755)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
 // 写文件
 // Note：
 //   覆盖写，不是追加写

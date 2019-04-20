@@ -4,13 +4,15 @@ import (
 	"github.com/hq-cml/spider-engine/core/table"
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"errors"
+	"fmt"
+	"github.com/hq-cml/spider-engine/core/field"
 )
 
 /**
  * Database，对等于Mysql的database
  * 一个DB有多个Table构成
  *
- * 主要就起到了一个组织管理的功能
+ * 主要就起到了一个整体组织管理的功能
  */
 
 type Database struct {
@@ -37,7 +39,10 @@ func NewDatabase(path, name string) (*Database, error) {
 		return nil, errors.New("The database already exist!")
 	}
 
-	//创建目录
+	//创建目录, 每一个db都有独立的目录
+	if ok := helper.Mkdir(path + name); !ok {
+		return nil, errors.New("Failed create dir!")
+	}
 
 	db := &Database{
 		Path:path,
@@ -45,7 +50,34 @@ func NewDatabase(path, name string) (*Database, error) {
 		TableList:[]string{},
 		TableMap:map[string]*table.Table{},
 	}
-
 	return db, nil
 }
 
+func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*table.Table, error) {
+	path := fmt.Sprintf("%s%s/%s", db.Path, db.DbName, tableName)
+
+	//路径校验
+	_, exist := db.TableMap[tableName]
+	if exist || helper.Exist(path) {
+		return nil, errors.New("The table already exist!")
+	}
+
+	//创建目录, 每一个Table都有独立的目录
+	if ok := helper.Mkdir(path); !ok {
+		return nil, errors.New("Failed create dir!")
+	}
+
+	//创建表和字段
+	tab := table.NewEmptyTable(path, tableName)
+	for _, bf := range fields {
+		if err := tab.AddField(bf); err != nil {
+			return nil, err
+		}
+	}
+
+	//关联进入db
+	db.TableMap[tableName] = tab
+	db.TableList = append(db.TableList, tableName)
+
+	return tab, nil
+}
