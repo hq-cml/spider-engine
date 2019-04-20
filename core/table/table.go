@@ -523,11 +523,6 @@ func (tbl *Table) Close() error {
 //合并表内分区
 //TODO 合并时机需要自动化
 func (tbl *Table) MergePartitions() error {
-	//校验
-	if len(tbl.partitions) == 1 {
-		return nil
-	}
-
 	var startIdx int = -1
 
 	//锁表
@@ -541,7 +536,7 @@ func (tbl *Table) MergePartitions() error {
 
 	//找到第一个个数不符合规范，即要合并的partition
 	for idx := range tbl.partitions {
-		if tbl.partitions[idx].NextDocId - tbl.partitions[idx].StartDocId < partition.PARTITION_MAX_DOC_CNT_TEST {
+		if tbl.partitions[idx].NextDocId - tbl.partitions[idx].StartDocId < partition.PARTITION_MIN_DOC_CNT {
 			startIdx = idx
 			break
 		}
@@ -554,25 +549,7 @@ func (tbl *Table) MergePartitions() error {
 		return nil
 	}
 
-	fmt.Println("X---------", startIdx)
-	fmt.Println("X---------", len(tbl.partitions[startIdx:]))
-	//从startIdx开始, 一点点尝试出最佳的分区合并方式
-	start := tbl.partitions[startIdx].StartDocId
-	tmp := []int{}
-	for i := startIdx; i < len(tbl.partitions[startIdx:]); i++ {
-		tmp = append(tmp, i)
-		if tbl.partitions[i].NextDocId - start >= partition.PARTITION_MAX_DOC_CNT_TEST {
-			fmt.Println("A-------", tmp)
-			tmp = []int{}
-			start = tbl.partitions[i].NextDocId
-		}
-	}
-
-	/*
-	todoPartitions := tbl.partitions[startIdx:]
-
-
-	//开始合并
+	//准备好非主键字段信息备用
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
 		//主键分区是独立的存在，没必要参与到分区合并中
@@ -581,30 +558,54 @@ func (tbl *Table) MergePartitions() error {
 		}
 	}
 
-	//生成内存分区骨架，开始合并
-	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
-	tbl.Prefix++
-	tmpPartition := partition.NewEmptyPartitionWithBasicFields(partitionName, tbl.NextDocId, basicFields)
-
-	err := tmpPartition.MergePersistPartitions(todoPartitions)
-	if err != nil {
-		log.Errf("MergePartitions Error: %s", err)
-		return err
+	//从startIdx开始, 一点点尝试出最佳的分区合并方式
+	todoPartitions := [][]*partition.Partition{}
+	start := tbl.partitions[startIdx].StartDocId
+	tmpPrts := []*partition.Partition{}
+	for i := startIdx; i < len(tbl.partitions); i++ {
+		tmpPrts = append(tmpPrts, tbl.partitions[i])
+		if tbl.partitions[i].NextDocId - start >= partition.PARTITION_MIN_DOC_CNT {
+			todoPartitions = append(todoPartitions, tmpPrts)
+			tmpPrts = []*partition.Partition{}
+			start = tbl.partitions[i].NextDocId
+		}
+	}
+	if len(tmpPrts) > 0{
+		todoPartitions = append(todoPartitions, tmpPrts)
 	}
 
-	//清理旧的分区
-	for _, prt := range todoPartitions {
-		prt.Destroy()
-	}
 	//截断后面的没用的分区
 	tbl.partitions = tbl.partitions[:startIdx]
 	tbl.PartitionNames = tbl.PartitionNames[:startIdx]
+	//开始合并
+	for _, todoParts := range todoPartitions {
+		//生成内存分区骨架，开始合并
+		partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+		tbl.Prefix++
+		tmpPartition := partition.NewEmptyPartitionWithBasicFields(partitionName, todoParts[0].StartDocId, basicFields)
 
-	//追加上有用的分区
-	tbl.partitions = append(tbl.partitions, tmpPartition)
-	tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
-	return tbl.StoreMeta()
-	*/
+		err := tmpPartition.MergePersistPartitions(todoParts)
+		if err != nil {
+			log.Errf("MergePartitions Error: %s", err)
+			return err
+		}
+
+		//追加上有用的分区
+		tbl.partitions = append(tbl.partitions, tmpPartition)
+		tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
+
+		//清理旧的分区
+		for _, prt := range todoParts {
+			prt.Destroy()
+		}
+	}
+
+	//存储meta
+	err := tbl.StoreMeta()
+
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

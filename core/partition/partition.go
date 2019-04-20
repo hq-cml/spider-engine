@@ -21,9 +21,10 @@ import (
 	"github.com/hq-cml/spider-engine/utils/bitmap"
 )
 
-const (
-	PARTITION_MAX_DOC_CNT_TEST = 3    //10w个文档，分区合并的一个参考值
-	PARTITION_MAX_DOC_CNT = 1000000   //10w个文档，分区合并的一个参考值
+//TODO 配置化
+var (
+	//PARTITION_MIN_DOC_CNT uint32 = 100000
+	PARTITION_MIN_DOC_CNT uint32 = 3 //10w个文档，分区合并的一个参考值
 )
 
 // Segment description:段结构

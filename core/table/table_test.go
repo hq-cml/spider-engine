@@ -1,13 +1,12 @@
 package table
 
 import (
-	"testing"
 	"os"
 	"os/exec"
 
+	"testing"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/core/index"
-	//"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/utils/helper"
 )
 
@@ -26,7 +25,6 @@ func init() {
 	}
 }
 
-/*
 func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
 
@@ -423,8 +421,6 @@ func TestMergeThenLoad(t *testing.T) {
 	t.Log("\n\n")
 }
 
-*/
-
 //测试碎片化的merge
 func TestMultiMerge(t *testing.T) {
 	//清理目录
@@ -502,7 +498,7 @@ func TestMultiMerge(t *testing.T) {
 	}
 	t.Log("User[10003]:", helper.JsonEncode(user))
 
-	//合并
+	//启动合并
 	err = table.MergePartitions()
 	if err != nil {
 		t.Fatal("MergePartitions Err:", err)
@@ -527,4 +523,27 @@ func TestMultiMerge(t *testing.T) {
 	t.Log("\n\n")
 }
 
+func TestLoadAgainAgain(t *testing.T) {
+	//加载回来
+	table, err := LoadTable("/tmp/spider", TEST_TABLE)
+	if err != nil {
+		t.Fatal("LoadTable Error:", err)
+	}
 
+	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七")
+	if !ok {
+		t.Fatal("shuoud exist")
+	}
+	t.Log(helper.JsonEncode(docs))
+
+	user, ok := table.GetDoc("10003")
+	if !ok {
+		t.Fatal("shuoud exist")
+	}
+	t.Log("User[10003]:", helper.JsonEncode(user))
+	t.Log(table.displayInner())
+
+	//关闭
+	table.Close()
+	t.Log("\n\n")
+}
