@@ -14,7 +14,7 @@ import (
 const TEST_FIELD = "user_name"
 
 func init() {
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)
@@ -136,7 +136,7 @@ func TestLoad(t *testing.T) {
 //为merge做准备, 建立两个独立的field
 func TestPrepareMerge(t *testing.T) {
 	//清空
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)

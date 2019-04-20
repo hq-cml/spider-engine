@@ -13,7 +13,7 @@ import (
 const TEST_TREE = "user_name"
 
 func init() {
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)
@@ -112,7 +112,7 @@ func TestQureyTermInFile(t *testing.T) {
 
 func TestMergeIndex(t *testing.T) {
 	//清空目录
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)

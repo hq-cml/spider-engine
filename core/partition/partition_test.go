@@ -16,7 +16,7 @@ const TEST_FIELD2 = "user_age"
 const TEST_FIELD3 = "user_desc"
 
 func init() {
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)
@@ -25,19 +25,19 @@ func init() {
 
 func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
-	//var basicFields = []field.BasicField{
+	//var coreFields = []field.CoreField{
 	//}
 
 	//创建空的分区
-	memPartition := NewEmptyPartitionWithBasicFields(patitionName, 0, nil)
+	memPartition := NewEmptyPartitionWithCoreFields(patitionName, 0, nil)
 	if memPartition.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
 
 	//新增字段
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
+	memPartition.AddField(field.CoreField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
+	memPartition.AddField(field.CoreField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
+	memPartition.AddField(field.CoreField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
 	if memPartition.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
@@ -174,20 +174,20 @@ func TestLoad(t *testing.T) {
 }
 
 func TestPartitionMerge(t *testing.T) {
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)
 	}
 	patitionName0 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
 	//创建分区1
-	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, nil)
+	part0 := NewEmptyPartitionWithCoreFields(patitionName0, 0, nil)
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	part0.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
-	part0.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
-	part0.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
+	part0.AddField(field.CoreField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
+	part0.AddField(field.CoreField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
+	part0.AddField(field.CoreField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
@@ -201,13 +201,13 @@ func TestPartitionMerge(t *testing.T) {
 
 	//创建分区2
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
-	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, nil)
+	part1 := NewEmptyPartitionWithCoreFields(patitionName1, 3, nil)
 	if part1.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	part1.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
-	part1.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
-	part1.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
+	part1.AddField(field.CoreField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
+	part1.AddField(field.CoreField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
+	part1.AddField(field.CoreField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
 	if part1.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
@@ -227,11 +227,11 @@ func TestPartitionMerge(t *testing.T) {
 
 	//外插花一个分区, 准备合并
 	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
-	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, nil)
+	part2 := NewEmptyPartitionWithCoreFields(patitionName2, 6, nil)
 	defer part2.Close()
-	part2.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
-	part2.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
-	part2.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
+	part2.AddField(field.CoreField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING, FwdOffset:0, DocCnt:0})
+	part2.AddField(field.CoreField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER, FwdOffset:0, DocCnt:0})
+	part2.AddField(field.CoreField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG, FwdOffset:0, DocCnt:0})
 
 	//合并
 	err = part2.MergePersistPartitions([]*Partition{part0, part1})
@@ -298,7 +298,7 @@ func TestPartitionMerge(t *testing.T) {
 	}
 	t.Log(s2)
 
-	t.Log(helper.JsonEncode(part2.BasicFields))
+	t.Log(helper.JsonEncode(part2.CoreFields))
 
 	t.Log("\n\n")
 
@@ -367,6 +367,6 @@ func TestLoadMerge(t *testing.T) {
 		t.Fatal("Error")
 	}
 	t.Log(s2)
-	t.Log(helper.JsonEncode(part2.BasicFields))
+	t.Log(helper.JsonEncode(part2.CoreFields))
 	t.Log("\n\n")
 }

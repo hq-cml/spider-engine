@@ -28,8 +28,8 @@ type Field struct {
 	btdb       btree.Btree  `json:"-"`
 }
 
-// 字段的最基本描述信息，用于分区的落盘
-type BasicField struct {
+// 字段的核心描述信息，用于分区的落盘
+type CoreField struct {
 	FieldName string `json:"fieldName"`
 	IndexType uint8  `json:"indexType"`
 	FwdOffset uint64 `json:"fwdOffset"` //正排索引的偏移量

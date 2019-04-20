@@ -29,37 +29,37 @@ var (
 
 // Segment description:段结构
 type Partition struct {
-	StartDocId    uint32                      `json:"startDocId"`
-	NextDocId     uint32                      `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
-	PartitionName string                      `json:"partitionName"`
-	BasicFields   map[string]field.BasicField `json:"fields"`         //分区各个字段的最基础信息，落盘用
-	Fields        map[string]*field.Field	  `json:"-"`
-	inMemory      bool                        `json:"-"`
-	btdb          btree.Btree                 `json:"-"`			  //四套文件，本分区所有字段公用
-	ivtMmap       *mmap.Mmap				  `json:"-"`
-	baseMmap      *mmap.Mmap				  `json:"-"`
-	extMmap       *mmap.Mmap                  `json:"-"`
+	StartDocId    uint32                     `json:"startDocId"`
+	NextDocId     uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
+	PartitionName string                     `json:"partitionName"`
+	CoreFields    map[string]field.CoreField `json:"fields"` //分区各个字段的最基础信息，落盘用
+	Fields        map[string]*field.Field    `json:"-"`
+	inMemory      bool                       `json:"-"`
+	btdb          btree.Btree                `json:"-"`			  //四套文件，本分区所有字段公用
+	ivtMmap       *mmap.Mmap                 `json:"-"`
+	baseMmap      *mmap.Mmap                 `json:"-"`
+	extMmap       *mmap.Mmap                 `json:"-"`
 }
 
 //新建一个空分区, 包含字段
 //相当于建立了一个完整的空骨架，分区=>字段=>索引
-func NewEmptyPartitionWithBasicFields(partitionName string, start uint32, basicFields []field.BasicField) *Partition {
+func NewEmptyPartitionWithCoreFields(partitionName string, start uint32, coreFields []field.CoreField) *Partition {
 
 	part := &Partition{
 		StartDocId:    start,
 		NextDocId:     start,
 		PartitionName: partitionName,
 		Fields:        make(map[string]*field.Field),
-		BasicFields:   make(map[string]field.BasicField),
+		CoreFields:    make(map[string]field.CoreField),
 		inMemory:      true,
 	}
 
-	for _, fld := range basicFields {
-		basicField := field.BasicField{
+	for _, fld := range coreFields {
+		coreField := field.CoreField{
 			FieldName: fld.FieldName,
 			IndexType: fld.IndexType,
 		}
-		part.BasicFields[fld.FieldName] = basicField
+		part.CoreFields[fld.FieldName] = coreField
 		emptyField := field.NewEmptyField(fld.FieldName, start, fld.IndexType)
 		part.Fields[fld.FieldName] = emptyField
 	}
@@ -74,7 +74,7 @@ func LoadPartition(partitionName string) (*Partition, error) {
 	part := Partition {
 		PartitionName: partitionName,
 		Fields:        make(map[string]*field.Field),
-		BasicFields:   make(map[string]field.BasicField),
+		CoreFields:    make(map[string]field.CoreField),
 	}
 
 	//从meta文件加载partition信息到part
@@ -119,16 +119,16 @@ func LoadPartition(partitionName string) (*Partition, error) {
 	log.Debugf("Load Detail File : %v.dtl", partitionName)
 
 	//加载各个Field
-	for _, basicField := range part.BasicFields {
-		if basicField.DocCnt == 0 {
+	for _, coreField := range part.CoreFields {
+		if coreField.DocCnt == 0 {
 			//TODO ?? 这里会进入吗
-			newField := field.NewEmptyField(basicField.FieldName, part.StartDocId, basicField.IndexType)
-			part.Fields[basicField.FieldName] = newField
+			newField := field.NewEmptyField(coreField.FieldName, part.StartDocId, coreField.IndexType)
+			part.Fields[coreField.FieldName] = newField
 		} else {
-			oldField := field.LoadField(basicField.FieldName, part.StartDocId,
-				part.NextDocId, basicField.IndexType, basicField.FwdOffset, basicField.DocCnt,
+			oldField := field.LoadField(coreField.FieldName, part.StartDocId,
+				part.NextDocId, coreField.IndexType, coreField.FwdOffset, coreField.DocCnt,
 				part.ivtMmap, part.baseMmap, part.extMmap, part.btdb)
-			part.Fields[basicField.FieldName] = oldField
+			part.Fields[coreField.FieldName] = oldField
 		}
 	}
 	return &part, nil
@@ -140,30 +140,30 @@ func (part *Partition) IsEmpty() bool {
 }
 
 //添加字段
-func (part *Partition) AddField(basicField field.BasicField) error {
+func (part *Partition) AddField(coreField field.CoreField) error {
 	//校验
-	if _, exist := part.BasicFields[basicField.FieldName]; exist {
-		log.Warnf("Partition --> AddField Already has field [%v]", basicField.FieldName)
+	if _, exist := part.CoreFields[coreField.FieldName]; exist {
+		log.Warnf("Partition --> AddField Already has field [%v]", coreField.FieldName)
 		return errors.New("Already has field..")
 	}
 
 	//分区只能是内存态并且为空的时候，才能变更字段(因为已经有部分的doc,新字段没法处理)
 	if !part.inMemory || !part.IsEmpty() {
-		log.Warnf("Partition --> AddField field [%v] fail..", basicField.FieldName)
+		log.Warnf("Partition --> AddField field [%v] fail..", coreField.FieldName)
 		return errors.New("Only memory and enmpty partition can add field..")
 	}
 
 	//新增
-	part.BasicFields[basicField.FieldName] = basicField
-	newFiled := field.NewEmptyField(basicField.FieldName, part.NextDocId, basicField.IndexType)
-	part.Fields[basicField.FieldName] = newFiled
+	part.CoreFields[coreField.FieldName] = coreField
+	newFiled := field.NewEmptyField(coreField.FieldName, part.NextDocId, coreField.IndexType)
+	part.Fields[coreField.FieldName] = newFiled
 	return nil
 }
 
 //删除字段
 func (part *Partition) DeleteField(fieldname string) error {
 	//校验
-	if _, exist := part.BasicFields[fieldname]; !exist {
+	if _, exist := part.CoreFields[fieldname]; !exist {
 		log.Warnf("Partition --> DeleteField not found field [%v]", fieldname)
 		return errors.New("not found field")
 	}
@@ -176,7 +176,7 @@ func (part *Partition) DeleteField(fieldname string) error {
 
 	part.Fields[fieldname].Destroy()
 	delete(part.Fields, fieldname)
-	delete(part.BasicFields, fieldname)
+	delete(part.CoreFields, fieldname)
 	log.Infof("Partition --> DeleteField[%v] :: Success ", fieldname)
 	return nil
 }
@@ -350,17 +350,17 @@ func (part *Partition) Persist() error {
 		part.btdb = btree.NewBtree("", btdbPath)
 	}
 	log.Debugf("Persist Partition File : [%v] Start", part.PartitionName)
-	for name, basicField := range part.BasicFields {
+	for name, coreField := range part.CoreFields {
 		//当前分区的各个字段分别落地
 		//Note: field.Persist不会自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
 		if err := part.Fields[name].Persist(part.PartitionName, part.btdb); err != nil {
 			log.Errf("Partition --> Persist %v", err)
 			return err
 		}
-		//设置basicField的fwdOffset和docCnt
-		basicField.FwdOffset, basicField.DocCnt = part.Fields[name].FwdOffset, part.Fields[name].DocCnt
-		part.BasicFields[basicField.FieldName] = basicField
-		log.Debugf("%v %v %v", name, basicField.FwdOffset, basicField.DocCnt)
+		//设置coreField的fwdOffset和docCnt
+		coreField.FwdOffset, coreField.DocCnt = part.Fields[name].FwdOffset, part.Fields[name].DocCnt
+		part.CoreFields[coreField.FieldName] = coreField
+		log.Debugf("%v %v %v", name, coreField.FwdOffset, coreField.DocCnt)
 	}
 
 	//存储源信息
@@ -414,7 +414,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	}
 
 	//逐个字段进行merge
-	for fieldName, basicField := range part.BasicFields {
+	for fieldName, coreField := range part.CoreFields {
 		fs := make([]*field.Field, 0)
 		for _, pt := range parts {
 			if _, exist := pt.Fields[fieldName]; exist {
@@ -432,9 +432,9 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 			return err
 		}
 
-		basicField.FwdOffset = part.Fields[fieldName].FwdOffset
-		basicField.DocCnt = part.Fields[fieldName].DocCnt
-		part.BasicFields[fieldName] = basicField
+		coreField.FwdOffset = part.Fields[fieldName].FwdOffset
+		coreField.DocCnt = part.Fields[fieldName].DocCnt
+		part.CoreFields[fieldName] = coreField
 	}
 
 	//加载回mmap

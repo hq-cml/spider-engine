@@ -18,7 +18,7 @@ const TEST_FIELD3 = "user_desc"
 const TEST_FIELD4 = "tobe_del"
 
 func init() {
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)
@@ -28,32 +28,32 @@ func init() {
 func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
 
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD0,
 		IndexType: index.IDX_TYPE_PK,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD1,
 		IndexType: index.IDX_TYPE_STRING,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD2,
 		IndexType: index.IDX_TYPE_NUMBER,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD3,
 		IndexType: index.IDX_TYPE_STRING_SEG,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD4,
 		IndexType: index.IDX_TYPE_NUMBER,
 	}); err != nil {
@@ -424,7 +424,7 @@ func TestMergeThenLoad(t *testing.T) {
 //测试碎片化的merge
 func TestMultiMerge(t *testing.T) {
 	//清理目录
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -f /tmp/spider/*`)
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
 		os.Exit(1)
@@ -434,19 +434,19 @@ func TestMultiMerge(t *testing.T) {
 	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
 
 	//新建字段
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD0,
 		IndexType: index.IDX_TYPE_PK,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD1,
 		IndexType: index.IDX_TYPE_STRING,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := table.AddField(field.BasicField{
+	if err := table.AddField(field.CoreField{
 		FieldName: TEST_FIELD2,
 		IndexType: index.IDX_TYPE_NUMBER,
 	}); err != nil {

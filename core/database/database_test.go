@@ -29,7 +29,7 @@ func TestNewDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = db.CreateTable(TEST_TABLE, []field.BasicField{
+	_, err = db.CreateTable(TEST_TABLE, []field.CoreField{
 		{
 			FieldName: TEST_FIELD0,
 			IndexType: index.IDX_TYPE_PK,
