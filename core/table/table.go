@@ -26,7 +26,6 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/core/field"
-	"os"
 )
 
 //表的原则：
@@ -70,7 +69,7 @@ func NewEmptyTable(path, name string) *Table {
 	}
 
 	//bitmap文件新建
-	btmpName := fmt.Sprintf("%v%v%v", path, name, basic.IDX_FILENAME_SUFFIX_BITMAP)
+	btmpName := table.genBitMapName()
 	table.bitMap = bitmap.NewBitmap(btmpName, false)
 
 	return &table
@@ -78,7 +77,7 @@ func NewEmptyTable(path, name string) *Table {
 
 //产出一块空的内存分区
 func (tbl *Table) generateMemPartition() {
-	prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+	prtPathName := tbl.genPrtPathName()
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
 		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
@@ -87,7 +86,7 @@ func (tbl *Table) generateMemPartition() {
 	}
 
 	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(prtPathName, tbl.NextDocId, basicFields)
-	tbl.Prefix++
+	tbl.Prefix++ //自增
 }
 
 //从文件加载一张表
@@ -95,8 +94,8 @@ func LoadTable(path, name string) (*Table, error) {
 	if string(path[len(path)-1]) != "/" {
 		path = path + "/"
 	}
-	tbl := Table{}
-	metaFileName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_META)
+	tbl := Table{Path:path, TableName:name}
+	metaFileName := tbl.genMetaName()
 	buffer, err := helper.ReadFile(metaFileName)
 	if err != nil {
 		return nil, err
@@ -126,8 +125,8 @@ func LoadTable(path, name string) (*Table, error) {
 
 	//如果表存在主键，则直接加载主键专用btree和内存map
 	if tbl.PrimaryKey != "" {
-		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
-		tbl.primaryBtdb = btree.NewBtree("", primaryname)
+		primaryName := tbl.genPrimaryBtName()
+		tbl.primaryBtdb = btree.NewBtree("", primaryName)
 		tbl.primaryMap = make(map[string]string)
 	}
 
@@ -136,8 +135,8 @@ func LoadTable(path, name string) (*Table, error) {
 }
 
 //落地表的元信息
-func (tbl *Table) StoreMeta() error {
-	metaFileName := fmt.Sprintf("%v%v%s", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_META)
+func (tbl *Table) storeMeta() error {
+	metaFileName := tbl.genMetaName()
 	data := helper.JsonEncodeIndent(tbl)
 	if data != "" {
 		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
@@ -174,8 +173,8 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 			return errors.New("Primary key has exist!")
 		}
 		tbl.PrimaryKey = basicField.FieldName
-		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
-		tbl.primaryBtdb = btree.NewBtree("", primaryname)
+		primaryName := tbl.genPrimaryBtName()
+		tbl.primaryBtdb = btree.NewBtree("", primaryName)
 		tbl.primaryBtdb.AddTree(basicField.FieldName)
 	} else {
 		//锁表
@@ -209,9 +208,9 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 	}
 
 	//元信息落地
-	err := tbl.StoreMeta()
+	err := tbl.storeMeta()
 	if err != nil {
-		return errors.New("StoreMeta Error:" + err.Error())
+		return errors.New("storeMeta Error:" + err.Error())
 	}
 
 	return nil
@@ -257,9 +256,9 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	}
 
 	//元信息落地
-	err := tbl.StoreMeta()
+	err := tbl.storeMeta()
 	if err != nil {
-		return errors.New("StoreMeta Error:" + err.Error())
+		return errors.New("storeMeta Error:" + err.Error())
 	}
 	return nil
 }
@@ -301,7 +300,7 @@ func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
 		tbl.mutex.Lock()
 		tbl.generateMemPartition()
 		//意义何在？
-		//if err := tbl.StoreMeta(); err != nil {
+		//if err := tbl.storeMeta(); err != nil {
 		//	tbl.mutex.Unlock()
 		//	return 0, err
 		//}
@@ -353,7 +352,7 @@ func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 		tbl.mutex.Lock()
 		tbl.generateMemPartition()
 		//意义何在？
-		//if err := tbl.StoreMeta(); err != nil {
+		//if err := tbl.storeMeta(); err != nil {
 		//	tbl.mutex.Unlock()
 		//	return 0, err
 		//}
@@ -485,7 +484,7 @@ func (tbl *Table) persistMemPartition() error {
 	tbl.PrtPathNames = append(tbl.PrtPathNames, tmpPartition.PrtPathName)
 	tbl.memPartition = nil
 
-	return tbl.StoreMeta()
+	return tbl.storeMeta()
 }
 
 //关闭一张表
@@ -499,23 +498,19 @@ func (tbl *Table) DoClose() error {
 	if tbl.memPartition != nil {
 		tbl.persistMemPartition() //内存分区落地
 	}
-
 	//逐个关闭磁盘分区
 	for _, prt := range tbl.partitions {
 		prt.DoClose()
 	}
-
 	//关闭主键btdb，如果有
 	if tbl.primaryBtdb != nil {
 		tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
 		tbl.primaryBtdb.Close()
 	}
-
 	//关闭btmp
 	if tbl.bitMap != nil {
 		tbl.bitMap.Close()
 	}
-
 	log.Infof("Close Table [%v] Finish", tbl.TableName)
 	return nil
 }
@@ -530,20 +525,23 @@ func (tbl *Table) Destroy() error {
 	log.Infof("Destroy Table [%v] Begin", tbl.TableName)
 
 	//因为刚刚Close，所以不应该存在内存分区
-	if tbl.memPartition != nil {
+	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty() {
 		return errors.New("Should not exist mem partition!")
 	}
-
 	//逐个删除磁盘分区
 	for _, prt := range tbl.partitions {
 		prt.Remove()
 	}
 
-	//关闭主键btdb，如果有
-	err := os.Remove(tbl.Path)
-	if err != nil {
-		return err
-	}
+	//删除残留的文件和目录
+	metaFile := tbl.genMetaName()
+	primaryFile := tbl.genPrimaryBtName()
+	bitmapFile := tbl.genBitMapName()
+
+	if err := helper.Remove(metaFile); err != nil {	return err }
+	if err := helper.Remove(primaryFile); err != nil { return err }
+	if err := helper.Remove(bitmapFile); err != nil { return err }
+	if err := helper.Remove(tbl.Path); err != nil {	return err }
 
 	log.Infof("DoClose Table [%v] Finish", tbl.TableName)
 	return nil
@@ -609,7 +607,7 @@ func (tbl *Table) MergePartitions() error {
 	//开始合并
 	for _, todoParts := range todoPartitions {
 		//生成内存分区骨架，开始合并
-		prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+		prtPathName := tbl.genPrtPathName()
 		tbl.Prefix++
 		tmpPartition := partition.NewEmptyPartitionWithBasicFields(prtPathName, todoParts[0].StartDocId, basicFields)
 
@@ -630,7 +628,7 @@ func (tbl *Table) MergePartitions() error {
 	}
 
 	//存储meta
-	err := tbl.StoreMeta()
+	err := tbl.storeMeta()
 
 	if err != nil {
 		return err
@@ -676,4 +674,24 @@ func (tbl *Table) displayInner() string {
 	}
 
 	return str
+}
+
+func (tbl *Table) genBitMapName() string {
+	btmpName := fmt.Sprintf("%v%v%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BITMAP)
+	return btmpName
+}
+
+func (tbl *Table) genMetaName() string {
+	metaFileName := fmt.Sprintf("%v%v%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_META)
+	return metaFileName
+}
+
+func (tbl *Table) genPrimaryBtName() string {
+	primaryName := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
+	return primaryName
+}
+
+func (tbl *Table) genPrtPathName() string {
+	prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位补零
+	return prtPathName
 }

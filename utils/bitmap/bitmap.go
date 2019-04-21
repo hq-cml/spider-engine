@@ -5,7 +5,6 @@ package bitmap
  */
 import (
 	"fmt"
-	"os"
 	"log"
 	"github.com/hq-cml/spider-engine/utils/mmap"
 )
@@ -188,11 +187,17 @@ func (bm *Bitmap) String() string {
 	return fmt.Sprintf("The BitMap => \n  MaxIdx: %d, %v", bm.FirstOneIdx, numSlice)
 }
 
-func (bm *Bitmap) Destroy(indexName string) error {
-	bm.DataMap.Unmap()
-	os.Remove(indexName)
-	return nil
-}
+//func (bm *Bitmap) Destroy(indexName string) error {
+//	err := bm.DataMap.Unmap()
+//	if err != nil {
+//		return err
+//	}
+//	err = helper.Remove(indexName)
+//	if err != nil {
+//		return err
+//	}
+//	return nil
+//}
 
 func (bm *Bitmap) Sync() error {
 	err := bm.DataMap.Sync()

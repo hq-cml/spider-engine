@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/utils/mmap"
 	"github.com/hq-cml/spider-engine/utils/log"
@@ -277,11 +276,11 @@ func (part *Partition) Destroy() error {
 //销毁分区
 func (part *Partition) Remove() error {
 	//删除文件
-	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META); err != nil {return err}
-	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_INVERT); err != nil {return err}
-	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_FWD); err != nil {return err}
-	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_FWDEXT); err != nil {return err}
-	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_BTREE); err != nil {return err}
+	if err := helper.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META); err != nil {return err}
+	if err := helper.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_INVERT); err != nil {return err}
+	if err := helper.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_FWD); err != nil {return err}
+	if err := helper.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_FWDEXT); err != nil {return err}
+	if err := helper.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_BTREE); err != nil {return err}
 	return nil
 }
 
@@ -339,7 +338,7 @@ func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (ma
 }
 
 //存储元信息
-func (part *Partition) StoreMeta() error {
+func (part *Partition) storeMeta() error {
 	metaFileName := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META
 	data := helper.JsonEncodeIndent(part)
 	if data != "" {
@@ -378,7 +377,7 @@ func (part *Partition) Persist() error {
 	}
 
 	//存储源信息
-	if err := part.StoreMeta(); err != nil {
+	if err := part.storeMeta(); err != nil {
 		return err
 	}
 
@@ -480,7 +479,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	part.NextDocId = parts[l-1].NextDocId
 
 	log.Infof("MergePartitions [%v] Finish", part.PrtPathName)
-	return part.StoreMeta()
+	return part.storeMeta()
 }
 
 //查询

@@ -3,6 +3,7 @@ package helper
 import (
 	"os"
 	"io/ioutil"
+	"github.com/hq-cml/spider-engine/utils/log"
 )
 
 //读取file文件
@@ -62,5 +63,14 @@ func WriteToFile(data []byte, filePath string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func Remove(path string) error {
+	if err := os.Remove(path); err != nil {
+		log.Err("Remove Error: ", err)
+		return err
+	}
+	log.Info("Remove: ", path)
 	return nil
 }

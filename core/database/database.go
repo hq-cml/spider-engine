@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/basic"
+	"encoding/json"
 )
 
 /**
@@ -51,16 +52,37 @@ func NewDatabase(path, name string) (*Database, error) {
 	return db, nil
 }
 
-//func LoadDatabase() (*Database, error) {
-//
-//}
-
-func (db *Database) DoClose() error {
-	for _, tab := range db.TableMap {
-		if err := tab.DoClose(); err != nil {
-			return err
-		}
+//加载db
+func LoadDatabase(path, name string) (*Database, error) {
+	if string(path[len(path)-1]) != "/" {
+		path = path + "/"
 	}
+	db := Database{}
+	metaFileName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_META)
+	buffer, err := helper.ReadFile(metaFileName)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(buffer, &db)
+	if err != nil {
+		return nil, err
+	}
+
+	db.TableMap = map[string]*table.Table{}
+	for _, tableName := range db.TableList {
+		tablePath := db.Path + tableName
+		tab, err := table.LoadTable(tablePath, tableName)
+		if err != nil {
+			return nil, err
+		}
+		db.TableMap[tableName] = tab
+	}
+
+	return &db, nil
+}
+
+//meta落地
+func (db *Database) storeMeta() error {
 
 	metaFileName := fmt.Sprintf("%v%v%s", db.Path, db.DbName, basic.IDX_FILENAME_SUFFIX_META)
 	data := helper.JsonEncodeIndent(db)
@@ -75,6 +97,24 @@ func (db *Database) DoClose() error {
 	return nil
 }
 
+//关闭
+func (db *Database) DoClose() error {
+	//逐个关闭表
+	for _, tab := range db.TableMap {
+		if err := tab.DoClose(); err != nil {
+			return err
+		}
+	}
+
+	//meta落地
+	err := db.storeMeta()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//建表
 func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*table.Table, error) {
 	path := fmt.Sprintf("%s%s", db.Path, tableName)
 
@@ -104,6 +144,7 @@ func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*t
 	return tab, nil
 }
 
+//删除表
 func (db *Database) DropTable(tableName string) (error) {
 	//路径校验
 	_, exist := db.TableMap[tableName]
@@ -112,9 +153,12 @@ func (db *Database) DropTable(tableName string) (error) {
 	}
 
 	//删除表
-	db.TableMap[tableName].Destroy()
+	err := db.TableMap[tableName].Destroy()
+	if err != nil {
+		return err
+	}
 
-	//删
+	//删slice
 	delete(db.TableMap, tableName)
 	for i := 0; i < len(db.TableList); i++ {
 		if db.TableList[i] == tableName {
@@ -122,6 +166,58 @@ func (db *Database) DropTable(tableName string) (error) {
 		}
 	}
 
+	//更新meta
+	db.storeMeta()
+
 	return nil
 }
 
+//新增Doc
+func (db *Database) AddDoc(tableName string, content map[string]string) (uint32, error) {
+	tab, exist := db.TableMap[tableName]
+	if !exist {
+		return 0, errors.New("Table not exist!")
+	}
+
+	return tab.AddDoc(content)
+}
+
+//获取Doc
+func (db *Database) GetDoc(tableName string, primaryKey string) (map[string]string, bool) {
+	tab, exist := db.TableMap[tableName]
+	if !exist {
+		return nil, false
+	}
+
+	return tab.GetDoc(primaryKey)
+}
+
+//改变doc
+func (db *Database) UpdateDoc(tableName string, content map[string]string) (uint32, error) {
+	tab, exist := db.TableMap[tableName]
+	if !exist {
+		return 0, errors.New("Table not exist!")
+	}
+
+	return tab.UpdateDoc(content)
+}
+
+//删除Doc
+func (db *Database) DeleteDoc(tableName string, primaryKey string) (bool) {
+	tab, exist := db.TableMap[tableName]
+	if !exist {
+		return false
+	}
+
+	return tab.DeleteDoc(primaryKey)
+}
+
+//搜索
+func (db *Database) SearchDocs(tableName, fieldName, keyWord string) ([]basic.DocNode, bool) {
+	tab, exist := db.TableMap[tableName]
+	if !exist {
+		return nil, false
+	}
+
+	return tab.SearchDocs(fieldName, keyWord)
+}
