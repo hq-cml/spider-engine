@@ -53,6 +53,19 @@ func NewDatabase(path, name string) (*Database, error) {
 	return db, nil
 }
 
+//func LoadDatabase() (*Database, error) {
+//
+//}
+
+func (db *Database) DoClose() error {
+	for _, tab := range db.TableMap {
+		if err := tab.DoClose(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*table.Table, error) {
 	path := fmt.Sprintf("%s%s/%s", db.Path, db.DbName, tableName)
 
@@ -81,3 +94,25 @@ func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*t
 
 	return tab, nil
 }
+
+func (db *Database) DropTable(tableName string) (error) {
+	//路径校验
+	_, exist := db.TableMap[tableName]
+	if !exist {
+		return errors.New("The table not exist!")
+	}
+
+	//删除表
+	db.TableMap[tableName].Destroy()
+
+	//删
+	delete(db.TableMap, tableName)
+	for i := 0; i < len(db.TableList); i++ {
+		if db.TableList[i] == tableName {
+			db.TableList = append(db.TableList[:i], db.TableList[i+1:]...)
+		}
+	}
+
+	return nil
+}
+

@@ -37,7 +37,7 @@ type ForwardIndex struct {
 	startDocId uint32 					//初始分区：从0开始；非初始分区：从本分区的第一篇DocId开始
 	nextDocId  uint32 					//下一个加入本索引的docId（所以本索引最大docId是nextDocId-1）
 	inMemory   bool   					//本索引是内存态还是磁盘态（不会同时并存）
-	indexType  uint8  					//本索引的类型
+	indexType  uint16  					//本索引的类型
 	fwdOffset  uint64 					//本索引的数据，在base文件中的起始偏移
 	docCnt     uint32 					//本索引文档数量
 	fake       bool                     //假，用于占位，高层的分区缺少某个字段时候，用此占位
@@ -50,7 +50,7 @@ type ForwardIndex struct {
 const DATA_BYTE_CNT = 8
 
 //假索引，高层占位用
-func NewEmptyFakeForwardIndex(indexType uint8, start uint32, docCnt uint32) *ForwardIndex {
+func NewEmptyFakeForwardIndex(indexType uint16, start uint32, docCnt uint32) *ForwardIndex {
 	return &ForwardIndex{
 		docCnt:     docCnt,
 		indexType:  indexType,
@@ -61,7 +61,7 @@ func NewEmptyFakeForwardIndex(indexType uint8, start uint32, docCnt uint32) *For
 }
 
 //新建空正排索引
-func NewEmptyForwardIndex(indexType uint8, start uint32) *ForwardIndex {
+func NewEmptyForwardIndex(indexType uint16, start uint32) *ForwardIndex {
 	return &ForwardIndex{
 		fake:       false,
 		fwdOffset:  0,
@@ -77,7 +77,7 @@ func NewEmptyForwardIndex(indexType uint8, start uint32) *ForwardIndex {
 //从磁盘加载正排索引
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 //如果mmap自己创建的话，会造成多个mmap实例对应同一个磁盘文件，这样会造成不确定性(mmmap头部有隐藏信息字段)，也不易于维护
-func LoadForwardIndex(indexType uint8, baseMmap, extMmap *mmap.Mmap,
+func LoadForwardIndex(indexType uint16, baseMmap, extMmap *mmap.Mmap,
 		offset uint64, docLen, start, next uint32) *ForwardIndex {
 	return &ForwardIndex{
 		fake:      false,

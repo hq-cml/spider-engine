@@ -100,7 +100,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	content,exist := table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
@@ -108,7 +108,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	err = table.Persist()
 	if err != nil {
 		t.Fatal("Persist Error:", err)
-		table.Close()
+		table.DoClose()
 	}
 
 	//测试落地后能否直接从磁盘读取
@@ -131,7 +131,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
@@ -151,7 +151,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10004]:", helper.JsonEncode(content))
 
@@ -168,7 +168,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	t.Log("唐伯虎", helper.JsonEncode(ids))
 
 	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
-	table.Close()
+	table.DoClose()
 
 	t.Log("\n\n")
 }
@@ -205,7 +205,7 @@ func TestLoad(t *testing.T) {
 	content,exist := table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
@@ -214,7 +214,7 @@ func TestLoad(t *testing.T) {
 	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10005]:", helper.JsonEncode(content))
 
@@ -230,7 +230,7 @@ func TestLoad(t *testing.T) {
 	content, exist = table.GetDoc("10005") //找回来试试
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log(helper.JsonEncode(content))
 
@@ -247,7 +247,7 @@ func TestLoad(t *testing.T) {
 	}
 
 	//关闭
-	table.Close()
+	table.DoClose()
 	t.Log("\n\n")
 }
 
@@ -285,7 +285,7 @@ func TestLoadAgain(t *testing.T) {
 	content,exist := table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
@@ -297,7 +297,7 @@ func TestLoadAgain(t *testing.T) {
 	}
 
 	//关闭
-	table.Close()
+	table.DoClose()
 	t.Log("\n\n")
 }
 
@@ -343,7 +343,7 @@ func TestMerge(t *testing.T) {
 	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
@@ -368,7 +368,7 @@ func TestMerge(t *testing.T) {
 	t.Log(helper.JsonEncode(content))
 
 	//关闭
-	table.Close()
+	table.DoClose()
 	t.Log("\n\n")
 }
 
@@ -400,7 +400,7 @@ func TestMergeThenLoad(t *testing.T) {
 	content,exist = table.getDocByDocId(docId)
 	if !exist {
 		t.Fatal("Should exist")
-		table.Close()
+		table.DoClose()
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
@@ -417,7 +417,7 @@ func TestMergeThenLoad(t *testing.T) {
 	}
 	t.Log("唐伯虎", helper.JsonEncode(ids))
 
-	table.Close()
+	table.DoClose()
 	t.Log("\n\n")
 }
 
@@ -519,7 +519,7 @@ func TestMultiMerge(t *testing.T) {
 	t.Log(table.displayInner())
 
 	//关闭
-	table.Close()
+	table.DoClose()
 	t.Log("\n\n")
 }
 
@@ -544,6 +544,6 @@ func TestLoadAgainAgain(t *testing.T) {
 	t.Log(table.displayInner())
 
 	//关闭
-	table.Close()
+	table.DoClose()
 	t.Log("\n\n")
 }

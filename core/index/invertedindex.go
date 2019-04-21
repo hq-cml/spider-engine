@@ -34,7 +34,7 @@ import (
 type InvertedIndex struct {
 	nextDocId uint32                     //下一个加入本索引的docId（所以本索引最大docId是nextDocId-1）
 	inMemory  bool                       //本索引是内存态还是磁盘态（不会同时并存）
-	indexType uint8                      //本索引的类型
+	indexType uint16                     //本索引的类型
 	fieldName string                     //本索引所属字段
 	termMap   map[string][]basic.DocNode //索引的内存容器
 	ivtMmap   *mmap.Mmap                 //倒排文件(以mmap的形式)
@@ -44,7 +44,7 @@ type InvertedIndex struct {
 const DOCNODE_BYTE_CNT = 8
 
 //新建空的倒排索引
-func NewEmptyInvertedIndex(indexType uint8, nextDocId uint32, fieldName string) *InvertedIndex {
+func NewEmptyInvertedIndex(indexType uint16, nextDocId uint32, fieldName string) *InvertedIndex {
 	rIdx := &InvertedIndex{
 		nextDocId: nextDocId,
 		fieldName: fieldName,
@@ -60,7 +60,7 @@ func NewEmptyInvertedIndex(indexType uint8, nextDocId uint32, fieldName string) 
 //从磁盘加载倒排索引
 //这里并未真的从磁盘加载，mmap和btdb都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 //如果mmap自己创建的话，会造成多个mmap实例对应同一个磁盘文件，这样会造成不确定性(mmmap头部有隐藏信息字段)，也不易于维护
-func LoadInvertedIndex(btdb btree.Btree, indexType uint8, fieldname string, ivtMmap *mmap.Mmap, nextDocId uint32) *InvertedIndex {
+func LoadInvertedIndex(btdb btree.Btree, indexType uint16, fieldname string, ivtMmap *mmap.Mmap, nextDocId uint32) *InvertedIndex {
 	rIdx := &InvertedIndex{
 		indexType: indexType,
 		fieldName: fieldname,

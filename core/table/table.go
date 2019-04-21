@@ -36,12 +36,12 @@ import (
 type Table struct {
 	TableName      string                      `json:"tableName"`
 	Path           string                      `json:"pathName"`
-	BasicFields    map[string]field.BasicField `json:"fields"` //包括主键
+	BasicFields    map[string]field.BasicField `json:"fields"`       //包括主键
 	PrimaryKey     string                      `json:"primaryKey"`
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
 	Prefix         uint64                      `json:"prefix"`
-	PartitionNames []string                    `json:"partitionNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
+	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
 	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
 	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键！！！
@@ -61,12 +61,12 @@ func NewEmptyTable(path, name string) *Table {
 		path = path + "/"
 	}
 	table := Table{
-		TableName:      name,
-		PartitionNames: make([]string, 0),
-		partitions:     make([]*partition.Partition, 0),
-		Path:           path,
-		BasicFields:    make(map[string]field.BasicField),
-		primaryMap:     make(map[string]string),
+		TableName:    name,
+		PrtPathNames: make([]string, 0),
+		partitions:   make([]*partition.Partition, 0),
+		Path:         path,
+		BasicFields:  make(map[string]field.BasicField),
+		primaryMap:   make(map[string]string),
 	}
 
 	//bitmap文件新建
@@ -78,7 +78,7 @@ func NewEmptyTable(path, name string) *Table {
 
 //产出一块空的内存分区
 func (tbl *Table) generateMemPartition() {
-	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+	prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
 		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
@@ -86,7 +86,7 @@ func (tbl *Table) generateMemPartition() {
 		}
 	}
 
-	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(partitionName, tbl.NextDocId, basicFields)
+	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(prtPathName, tbl.NextDocId, basicFields)
 	tbl.Prefix++
 }
 
@@ -108,8 +108,8 @@ func LoadTable(path, name string) (*Table, error) {
 	}
 
 	//分别加载各个分区
-	for _, partitionName := range tbl.PartitionNames {
-		prt, err := partition.LoadPartition(partitionName)
+	for _, prtPathName := range tbl.PrtPathNames {
+		prt, err := partition.LoadPartition(prtPathName)
 		if err != nil {
 			log.Errf("partition.LoadPartition Error:%v", err)
 			return nil, err
@@ -202,7 +202,7 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 			}
 			//归档分区
 			tbl.partitions = append(tbl.partitions, tmpPartition)
-			tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PrtPathName)
+			tbl.PrtPathNames = append(tbl.PrtPathNames, tmpPartition.PrtPathName)
 			//新分区（包含新字段）生成
 			tbl.generateMemPartition()
 		}
@@ -251,7 +251,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 			return err
 		}
 		tbl.partitions = append(tbl.partitions, tmpPartition)
-		tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PrtPathName)
+		tbl.PrtPathNames = append(tbl.PrtPathNames, tmpPartition.PrtPathName)
 		//产出新的分区(字段已删除）
 		tbl.generateMemPartition()
 	}
@@ -482,14 +482,14 @@ func (tbl *Table) persistMemPartition() error {
 	}
 	//归档分区
 	tbl.partitions = append(tbl.partitions, tmpPartition)
-	tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PrtPathName)
+	tbl.PrtPathNames = append(tbl.PrtPathNames, tmpPartition.PrtPathName)
 	tbl.memPartition = nil
 
 	return tbl.StoreMeta()
 }
 
 //关闭一张表
-func (tbl *Table) Close() error {
+func (tbl *Table) DoClose() error {
 	//锁表
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
@@ -522,7 +522,7 @@ func (tbl *Table) Close() error {
 
 //销毁一张表在磁盘的文件
 func (tbl *Table) Destroy() error {
-	tbl.Close()
+	tbl.DoClose()
 
 	//锁表
 	//tbl.mutex.Lock()
@@ -605,13 +605,13 @@ func (tbl *Table) MergePartitions() error {
 
 	//截断后面的没用的分区
 	tbl.partitions = tbl.partitions[:startIdx]
-	tbl.PartitionNames = tbl.PartitionNames[:startIdx]
+	tbl.PrtPathNames = tbl.PrtPathNames[:startIdx]
 	//开始合并
 	for _, todoParts := range todoPartitions {
 		//生成内存分区骨架，开始合并
-		partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
+		prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
 		tbl.Prefix++
-		tmpPartition := partition.NewEmptyPartitionWithBasicFields(partitionName, todoParts[0].StartDocId, basicFields)
+		tmpPartition := partition.NewEmptyPartitionWithBasicFields(prtPathName, todoParts[0].StartDocId, basicFields)
 
 		err := tmpPartition.MergePersistPartitions(todoParts)
 		if err != nil {
@@ -621,7 +621,7 @@ func (tbl *Table) MergePartitions() error {
 
 		//追加上有用的分区
 		tbl.partitions = append(tbl.partitions, tmpPartition)
-		tbl.PartitionNames = append(tbl.PartitionNames, partitionName)
+		tbl.PrtPathNames = append(tbl.PrtPathNames, prtPathName)
 
 		//清理旧的分区
 		for _, prt := range todoParts {

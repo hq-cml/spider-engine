@@ -19,7 +19,7 @@ type Field struct {
 	FieldName  string `json:"fieldName"`
 	StartDocId uint32 `json:"startDocId"`                  //和它所拥有的正排索引一致
 	NextDocId  uint32 `json:"startDocId"`
-	IndexType  uint8  `json:"indexType"`
+	IndexType  uint16 `json:"indexType"`
 	inMemory   bool
 	IvtIdx     *index.InvertedIndex    `json:"-"`  //倒排索引
 	FwdIdx     *index.ForwardIndex      `json:"-"` //正排索引
@@ -38,11 +38,11 @@ type CoreField struct {
 // 字段的基本描述信息，用于除了CoreFiled场景之外的场景
 type BasicField struct {
 	FieldName string `json:"fieldName"`
-	IndexType uint8  `json:"indexType"`
+	IndexType uint16  `json:"indexType"`
 }
 
 //假字段，高层占位用
-func NewEmptyFakeField(fieldname string, start uint32, IndexType uint8, docCnt uint32) *Field {
+func NewEmptyFakeField(fieldname string, start uint32, IndexType uint16, docCnt uint32) *Field {
 	fwdIdx := index.NewEmptyFakeForwardIndex(IndexType, start, docCnt)
 	return &Field{
 		FieldName:  fieldname,
@@ -54,7 +54,7 @@ func NewEmptyFakeField(fieldname string, start uint32, IndexType uint8, docCnt u
 }
 
 //新建空字段
-func NewEmptyField(fieldName string, start uint32, indexType uint8) *Field {
+func NewEmptyField(fieldName string, start uint32, indexType uint16) *Field {
 	//建立反向索引，如果需要的话
 	var ivtIdx *index.InvertedIndex
 	if indexType == index.IDX_TYPE_STRING ||
@@ -83,25 +83,25 @@ func NewEmptyField(fieldName string, start uint32, indexType uint8) *Field {
 
 //加载字段索引
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
-func LoadField(fieldname string, start, next uint32, fieldtype uint8, fwdOffset uint64,
+func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset uint64,
 	fwdDocCnt uint32, ivtMmap, baseMmap, extMmap *mmap.Mmap, btree btree.Btree) *Field {
 
 	var ivtIdx *index.InvertedIndex
-	if fieldtype == index.IDX_TYPE_STRING ||
-		fieldtype == index.IDX_TYPE_STRING_SEG ||
-		fieldtype == index.IDX_TYPE_STRING_LIST ||
-		fieldtype == index.IDX_TYPE_STRING_SINGLE ||
-		fieldtype == index.GATHER_TYPE {
-		ivtIdx = index.LoadInvertedIndex(btree, fieldtype, fieldname, ivtMmap, next)
+	if indexType == index.IDX_TYPE_STRING ||
+		indexType == index.IDX_TYPE_STRING_SEG ||
+		indexType == index.IDX_TYPE_STRING_LIST ||
+		indexType == index.IDX_TYPE_STRING_SINGLE ||
+		indexType == index.GATHER_TYPE {
+		ivtIdx = index.LoadInvertedIndex(btree, indexType, fieldname, ivtMmap, next)
 	}
 
-	fwdIdx := index.LoadForwardIndex(fieldtype, baseMmap, extMmap, fwdOffset, fwdDocCnt, start, next)
+	fwdIdx := index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, start, next)
 
 	return &Field{
 		FieldName:  fieldname,
 		StartDocId: start,
 		NextDocId:  next,
-		IndexType:  fieldtype,
+		IndexType:  indexType,
 		inMemory:   false,
 		DocCnt:     fwdDocCnt,
 		FwdOffset:  fwdOffset,
