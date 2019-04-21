@@ -210,7 +210,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 					match = false
 					break
 				}
-				log.Debugf("Partition[%v] QUERY  %v", part.PartitionName, doc)
+				log.Debugf("Partition[%v] QUERY  %v", part.PrtPathName, doc)
 			}
 			if match {
 				retDocs[idx] = doc

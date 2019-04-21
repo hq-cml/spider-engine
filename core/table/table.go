@@ -26,6 +26,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/core/field"
+	"os"
 )
 
 //表的原则：
@@ -201,7 +202,7 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 			}
 			//归档分区
 			tbl.partitions = append(tbl.partitions, tmpPartition)
-			tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PartitionName)
+			tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PrtPathName)
 			//新分区（包含新字段）生成
 			tbl.generateMemPartition()
 		}
@@ -250,7 +251,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 			return err
 		}
 		tbl.partitions = append(tbl.partitions, tmpPartition)
-		tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PartitionName)
+		tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PrtPathName)
 		//产出新的分区(字段已删除）
 		tbl.generateMemPartition()
 	}
@@ -481,7 +482,7 @@ func (tbl *Table) persistMemPartition() error {
 	}
 	//归档分区
 	tbl.partitions = append(tbl.partitions, tmpPartition)
-	tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PartitionName)
+	tbl.PartitionNames = append(tbl.PartitionNames, tmpPartition.PrtPathName)
 	tbl.memPartition = nil
 
 	return tbl.StoreMeta()
@@ -501,10 +502,10 @@ func (tbl *Table) Close() error {
 
 	//逐个关闭磁盘分区
 	for _, prt := range tbl.partitions {
-		prt.Close()
+		prt.DoClose()
 	}
 
-	//关闭主键btdb
+	//关闭主键btdb，如果有
 	if tbl.primaryBtdb != nil {
 		tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
 		tbl.primaryBtdb.Close()
@@ -516,6 +517,35 @@ func (tbl *Table) Close() error {
 	}
 
 	log.Infof("Close Table [%v] Finish", tbl.TableName)
+	return nil
+}
+
+//销毁一张表在磁盘的文件
+func (tbl *Table) Destroy() error {
+	tbl.Close()
+
+	//锁表
+	//tbl.mutex.Lock()
+	//defer tbl.mutex.Unlock()
+	log.Infof("Destroy Table [%v] Begin", tbl.TableName)
+
+	//因为刚刚Close，所以不应该存在内存分区
+	if tbl.memPartition != nil {
+		return errors.New("Should not exist mem partition!")
+	}
+
+	//逐个删除磁盘分区
+	for _, prt := range tbl.partitions {
+		prt.Remove()
+	}
+
+	//关闭主键btdb，如果有
+	err := os.Remove(tbl.Path)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("DoClose Table [%v] Finish", tbl.TableName)
 	return nil
 }
 

@@ -29,29 +29,29 @@ var (
 
 // Segment description:段结构
 type Partition struct {
-	StartDocId    uint32                     `json:"startDocId"`
-	NextDocId     uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
-	PartitionName string                     `json:"partitionName"`
-	CoreFields    map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
-	Fields        map[string]*field.Field    `json:"-"`
-	inMemory      bool                       `json:"-"`
-	btdb          btree.Btree                `json:"-"`			     //四套文件，本分区所有字段公用
-	ivtMmap       *mmap.Mmap                 `json:"-"`
-	baseMmap      *mmap.Mmap                 `json:"-"`
-	extMmap       *mmap.Mmap                 `json:"-"`
+	StartDocId  uint32                     `json:"startDocId"`
+	NextDocId   uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
+	PrtPathName string                     `json:"prtPathName"`
+	CoreFields  map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
+	Fields      map[string]*field.Field    `json:"-"`
+	inMemory    bool                       `json:"-"`
+	btdb        btree.Btree                `json:"-"`			   //四套文件，本分区所有字段公用
+	ivtMmap     *mmap.Mmap                 `json:"-"`
+	baseMmap    *mmap.Mmap                 `json:"-"`
+	extMmap     *mmap.Mmap                 `json:"-"`
 }
 
 //新建一个空分区, 包含字段
 //相当于建立了一个完整的空骨架，分区=>字段=>索引
-func NewEmptyPartitionWithBasicFields(partitionName string, start uint32, basicFields []field.BasicField) *Partition {
+func NewEmptyPartitionWithBasicFields(PrtPathName string, start uint32, basicFields []field.BasicField) *Partition {
 
 	part := &Partition{
-		StartDocId:    start,
-		NextDocId:     start,
-		PartitionName: partitionName,
-		Fields:        make(map[string]*field.Field),
-		CoreFields:    make(map[string]field.CoreField),
-		inMemory:      true,
+		StartDocId:  start,
+		NextDocId:   start,
+		PrtPathName: PrtPathName,
+		Fields:      make(map[string]*field.Field),
+		CoreFields:  make(map[string]field.CoreField),
+		inMemory:    true,
 	}
 
 	for _, fld := range basicFields {
@@ -66,21 +66,21 @@ func NewEmptyPartitionWithBasicFields(partitionName string, start uint32, basicF
 		part.Fields[fld.FieldName] = emptyField
 	}
 
-	log.Infof("Make New Partition [%v] Success ", partitionName)
+	log.Infof("Make New Partition [%v] Success ", PrtPathName)
 	return part
 }
 
 //从文件加载一个分区
-func LoadPartition(partitionName string) (*Partition, error) {
+func LoadPartition(prtPathName string) (*Partition, error) {
 
 	part := Partition {
-		PartitionName: partitionName,
-		Fields:        make(map[string]*field.Field),
-		CoreFields:    make(map[string]field.CoreField),
+		PrtPathName: prtPathName,
+		Fields:      make(map[string]*field.Field),
+		CoreFields:  make(map[string]field.CoreField),
 	}
 
 	//从meta文件加载partition信息到part
-	metaFileName := partitionName + basic.IDX_FILENAME_SUFFIX_META
+	metaFileName := prtPathName + basic.IDX_FILENAME_SUFFIX_META
 	buffer, err := helper.ReadFile(metaFileName)
 	if err != nil {
 		return nil ,err
@@ -91,34 +91,34 @@ func LoadPartition(partitionName string) (*Partition, error) {
 	}
 
 	//加载btree
-	btdbPath := partitionName + basic.IDX_FILENAME_SUFFIX_BTREE
+	btdbPath := prtPathName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if helper.Exist(btdbPath) {
 		log.Debugf("Load B+Tree File : %v", btdbPath)
 		part.btdb = btree.NewBtree("", btdbPath)
 	}
 
 	//加载倒排文件
-	part.ivtMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_INVERT, partitionName), true, 0)
+	part.ivtMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_INVERT, prtPathName), true, 0)
 	if err != nil {
 		fmt.Printf("mmap error : %v \n", err)
 		return nil, err
 	}
-	log.Debugf("Load Invert File : %v.idx ", partitionName)
+	log.Debugf("Load Invert File : %v.idx ", prtPathName)
 
 	//加载正排文件
-	part.baseMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, partitionName), true, 0)
+	part.baseMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, prtPathName), true, 0)
 	if err != nil {
 		fmt.Printf("mmap error : %v \n", err)
 		return nil, err
 	}
-	log.Debugf("Load Profile File : %v.pfl", partitionName)
+	log.Debugf("Load Profile File : %v.pfl", prtPathName)
 
 	//加载正排辅助文件
-	part.extMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, partitionName), true, 0)
+	part.extMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, prtPathName), true, 0)
 	if err != nil {
 		fmt.Printf("mmap error : %v \n", err)
 	}
-	log.Debugf("Load Detail File : %v.dtl", partitionName)
+	log.Debugf("Load Detail File : %v.dtl", prtPathName)
 
 	//加载各个Field
 	for _, coreField := range part.CoreFields {
@@ -181,7 +181,7 @@ func (part *Partition) DeleteField(fieldname string) error {
 		return errors.New("Only memory and enmpty partition can delete field..")
 	}
 
-	part.Fields[fieldname].Destroy()
+	part.Fields[fieldname].DoClose()
 	delete(part.Fields, fieldname)
 	delete(part.CoreFields, fieldname)
 	log.Infof("Partition --> DeleteField[%v] :: Success ", fieldname)
@@ -201,7 +201,7 @@ func (part *Partition) AddDocument(docId uint32, content map[string]string) erro
 		if _, ok := content[fieldName]; !ok {
 			//如果某个字段没传, 则会是空值
 			if err := part.Fields[fieldName].AddDocument(docId, ""); err != nil {
-				log.Errf("Partition --> AddDocument [%v] :: %v", part.PartitionName, err)
+				log.Errf("Partition --> AddDocument [%v] :: %v", part.PrtPathName, err)
 			}
 		} else {
 			if err := part.Fields[fieldName].AddDocument(docId, content[fieldName]); err != nil {
@@ -241,9 +241,9 @@ func (part *Partition) UpdateDocument(docId uint32, content map[string]string) e
 }
 
 //关闭Partition
-func (part *Partition) Close() error {
+func (part *Partition) DoClose() error {
 	for _, fld := range part.Fields {
-		fld.Destroy()
+		fld.DoClose()
 	}
 
 	//统一unmmap掉
@@ -267,14 +267,21 @@ func (part *Partition) Close() error {
 //销毁分区
 func (part *Partition) Destroy() error {
 	//先关闭
-	part.Close()
+	part.DoClose()
 
 	//删除文件
-	os.Remove(part.PartitionName + basic.IDX_FILENAME_SUFFIX_META)
-	os.Remove(part.PartitionName + basic.IDX_FILENAME_SUFFIX_INVERT)
-	os.Remove(part.PartitionName + basic.IDX_FILENAME_SUFFIX_FWD)
-	os.Remove(part.PartitionName + basic.IDX_FILENAME_SUFFIX_FWDEXT)
-	os.Remove(part.PartitionName + basic.IDX_FILENAME_SUFFIX_BTREE)
+	part.Remove()
+	return nil
+}
+
+//销毁分区
+func (part *Partition) Remove() error {
+	//删除文件
+	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META); err != nil {return err}
+	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_INVERT); err != nil {return err}
+	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_FWD); err != nil {return err}
+	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_FWDEXT); err != nil {return err}
+	if err := os.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_BTREE); err != nil {return err}
 	return nil
 }
 
@@ -333,7 +340,7 @@ func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (ma
 
 //存储元信息
 func (part *Partition) StoreMeta() error {
-	metaFileName := part.PartitionName + basic.IDX_FILENAME_SUFFIX_META
+	metaFileName := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META
 	data := helper.JsonEncode(part)
 	if data != "" {
 		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
@@ -352,15 +359,15 @@ func (part *Partition) StoreMeta() error {
 //  因为四个文件的公用分为是分区级别，这里已经可以统一加载mmap了
 func (part *Partition) Persist() error {
 
-	btdbPath := part.PartitionName + basic.IDX_FILENAME_SUFFIX_BTREE
+	btdbPath := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if part.btdb == nil {
 		part.btdb = btree.NewBtree("", btdbPath)
 	}
-	log.Debugf("Persist Partition File : [%v] Start", part.PartitionName)
+	log.Debugf("Persist Partition File : [%v] Start", part.PrtPathName)
 	for name, coreField := range part.CoreFields {
 		//当前分区的各个字段分别落地
 		//Note: field.Persist不会自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
-		if err := part.Fields[name].Persist(part.PartitionName, part.btdb); err != nil {
+		if err := part.Fields[name].Persist(part.PrtPathName, part.btdb); err != nil {
 			log.Errf("Partition --> Persist %v", err)
 			return err
 		}
@@ -380,15 +387,15 @@ func (part *Partition) Persist() error {
 
 	//加载回mmap
 	var err error
-	part.ivtMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	part.ivtMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		log.Errf("mmap error : %v \n", err)
 	}
-	part.baseMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	part.baseMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		log.Errf("mmap error : %v \n", err)
 	}
-	part.extMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	part.extMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		log.Errf("mmap error : %v \n", err)
 	}
@@ -397,7 +404,7 @@ func (part *Partition) Persist() error {
 	for name := range part.Fields {
 		part.Fields[name].SetMmap(part.baseMmap, part.extMmap, part.ivtMmap)
 	}
-	log.Infof("Persist Partition File : [%v] Finish", part.PartitionName)
+	log.Infof("Persist Partition File : [%v] Finish", part.PrtPathName)
 	return nil
 }
 
@@ -414,8 +421,8 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		}
 	}
 
-	log.Infof("MergePartitions [%v] Start", part.PartitionName)
-	btdbname := part.PartitionName + basic.IDX_FILENAME_SUFFIX_BTREE
+	log.Infof("MergePartitions [%v] Start", part.PrtPathName)
+	btdbname := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if part.btdb == nil {
 		part.btdb = btree.NewBtree("", btdbname)
 	}
@@ -433,7 +440,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 				fs = append(fs, fakefield)
 			}
 		}
-		err := part.Fields[fieldName].MergePersistField(fs, part.PartitionName, part.btdb)
+		err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
 		if err != nil {
 			log.Errln("MergePartitions Error:", err)
 			return err
@@ -446,17 +453,17 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 
 	//加载回mmap
 	var err error
-	part.ivtMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	part.ivtMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		log.Errln("MergePartitions Error:", err)
 		return err
 	}
-	part.baseMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWD,true, 0)
+	part.baseMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_FWD,true, 0)
 	if err != nil {
 		log.Errln("MergePartitions Error:", err)
 		return err
 	}
-	part.extMmap, err = mmap.NewMmap(part.PartitionName+ basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	part.extMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		log.Errln("MergePartitions Error:", err)
 		return err
@@ -472,7 +479,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	part.StartDocId = parts[0].StartDocId
 	part.NextDocId = parts[l-1].NextDocId
 
-	log.Infof("MergePartitions [%v] Finish", part.PartitionName)
+	log.Infof("MergePartitions [%v] Finish", part.PrtPathName)
 	return part.StoreMeta()
 }
 

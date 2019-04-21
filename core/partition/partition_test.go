@@ -126,7 +126,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	if s1 != s2 {
 		t.Fatal("Should ==")
 	}
-	memPartition.Close()
+	memPartition.DoClose()
 
 	t.Log("\n\n")
 }
@@ -234,7 +234,7 @@ func TestPartitionMerge(t *testing.T) {
 		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
-	defer part2.Close()
+	defer part2.DoClose()
 
 	//合并
 	err = part2.MergePersistPartitions([]*Partition{part0, part1})

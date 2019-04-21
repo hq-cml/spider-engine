@@ -179,13 +179,13 @@ func (fld *Field) GetString(docId uint32) (string, bool) {
 }
 
 //销毁字段
-func (fld *Field) Destroy() error {
+func (fld *Field) DoClose() error {
 	if fld.FwdIdx != nil {
-		fld.FwdIdx.Destroy()
+		fld.FwdIdx.DoClose()
 	}
 
 	if fld.IvtIdx != nil {
-		fld.IvtIdx.Destroy()
+		fld.IvtIdx.DoClose()
 	}
 	return nil
 }
