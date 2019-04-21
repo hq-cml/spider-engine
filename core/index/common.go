@@ -1,7 +1,7 @@
 package index
 
 import (
-	"github.com/hq-cml/spider-engine/utils/splitter"
+	"github.com/hq-cml/spider-engine/splitter"
 	"github.com/hq-cml/spider-engine/basic"
 	"strings"
 )

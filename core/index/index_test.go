@@ -72,7 +72,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 	//测试落地
 	tree := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree.Close()
-	if err := rIdx.Persist("/tmp/spider/Segment0", tree); err != nil {
+	if err := rIdx.Persist("/tmp/spider/Partition0", tree); err != nil {
 		t.Fatal("Wrong:", err)
 	}
 	t.Log("\n\n")
@@ -89,7 +89,7 @@ func TestQureyTermInFile(t *testing.T) {
 	defer rIdx.btdb.Close()
 	//从磁盘加载mmap
 	var err error
-	rIdx.ivtMmap, err = mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	rIdx.ivtMmap, err = mmap.NewMmap("/tmp/spider/Partition0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

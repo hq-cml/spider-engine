@@ -71,7 +71,7 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
 	t.Log("Before Persist. NextId:", field.NextDocId)
-	if err := field.Persist("/tmp/spider/Segment0", treedb); err != nil {
+	if err := field.Persist("/tmp/spider/Partition0", treedb); err != nil {
 		t.Fatal("Wrong:", err)
 	}
 	t.Log("After Persist. NextId:", field.NextDocId)
@@ -85,15 +85,15 @@ func TestLoad(t *testing.T) {
 	btdb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer btdb.Close()
 	//从磁盘加载mmap
-	ivtMmap, err := mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	ivtMmap, err := mmap.NewMmap("/tmp/spider/Partition0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mmp1, err := mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	mmp1, err := mmap.NewMmap("/tmp/spider/Partition0" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	mmp2, err := mmap.NewMmap("/tmp/spider/Segment0" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	mmp2, err := mmap.NewMmap("/tmp/spider/Partition0" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
@@ -153,12 +153,12 @@ func TestPrepareMerge(t *testing.T) {
 	//准备落地
 	treedb1 := btree.NewBtree("xx", "/tmp/spider/spider1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb1.Close()
-	if err := field1.Persist("/tmp/spider/Segment1", treedb1); err != nil {
+	if err := field1.Persist("/tmp/spider/Partition1", treedb1); err != nil {
 		t.Fatal("Wrong:", err)
 	}
 	treedb2 := btree.NewBtree("xx", "/tmp/spider/spider2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb2.Close()
-	if err := field2.Persist("/tmp/spider/Segment2", treedb2); err != nil {
+	if err := field2.Persist("/tmp/spider/Partition2", treedb2); err != nil {
 		t.Fatal("Wrong:", err)
 	}
 	t.Log("\n\n")
@@ -169,15 +169,15 @@ func TestMerge(t *testing.T) {
 	//加载Field1
 	btdb1 := btree.NewBtree("xx", "/tmp/spider/spider1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer btdb1.Close()
-	ivtMmap1, err := mmap.NewMmap("/tmp/spider/Segment1" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	ivtMmap1, err := mmap.NewMmap("/tmp/spider/Partition1" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mmp11, err := mmap.NewMmap("/tmp/spider/Segment1" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	mmp11, err := mmap.NewMmap("/tmp/spider/Partition1" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	mmp21, err := mmap.NewMmap("/tmp/spider/Segment1" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	mmp21, err := mmap.NewMmap("/tmp/spider/Partition1" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
@@ -187,15 +187,15 @@ func TestMerge(t *testing.T) {
 	//加载field2
 	btdb2 := btree.NewBtree("xx", "/tmp/spider/spider2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer btdb2.Close()
-	ivtMmap2, err := mmap.NewMmap("/tmp/spider/Segment2" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	ivtMmap2, err := mmap.NewMmap("/tmp/spider/Partition2" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mmp12, err := mmap.NewMmap("/tmp/spider/Segment2" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	mmp12, err := mmap.NewMmap("/tmp/spider/Partition2" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	mmp22, err := mmap.NewMmap("/tmp/spider/Segment2" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	mmp22, err := mmap.NewMmap("/tmp/spider/Partition2" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
@@ -205,7 +205,7 @@ func TestMerge(t *testing.T) {
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
 	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
-	err = field.MergePersistField([]*Field{field1, field2}, "/tmp/spider/segment", treedb)
+	err = field.MergePersistField([]*Field{field1, field2}, "/tmp/spider/Partition", treedb)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,15 +213,15 @@ func TestMerge(t *testing.T) {
 
 	//合并完毕后进行测试
 	//从磁盘加载mmap
-	ivtMmap, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	ivtMmap, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mmp1, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	mmp1, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	mmp2, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	mmp2, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
@@ -269,15 +269,15 @@ func TestLoadMerge(t *testing.T) {
 	btdb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer btdb.Close()
 	//从磁盘加载mmap
-	ivtMmap, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
+	ivtMmap, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mmp1, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
+	mmp1, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}
-	mmp2, err := mmap.NewMmap("/tmp/spider/segment" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
+	mmp2, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
 		t.Fatal("Load Error:", err)
 	}

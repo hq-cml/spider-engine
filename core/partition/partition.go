@@ -26,7 +26,7 @@ var (
 	PARTITION_MIN_DOC_CNT uint32 = 3 //10w个文档，分区合并的一个参考值
 )
 
-// Segment description:段结构
+// Partition description:段结构
 type Partition struct {
 	StartDocId  uint32                     `json:"startDocId"`
 	NextDocId   uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）

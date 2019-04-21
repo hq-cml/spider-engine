@@ -1,8 +1,8 @@
 package splitter
 
 import (
-	"github.com/hq-cml/spider-engine/utils/splitter/sego"
-	"github.com/hq-cml/spider-engine/utils/splitter/jieba"
+	"github.com/hq-cml/spider-engine/splitter/jieba"
+	"github.com/hq-cml/spider-engine/splitter/sego"
 )
 
 /*
