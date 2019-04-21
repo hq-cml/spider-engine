@@ -53,7 +53,7 @@ func NewDatabase(path, name string) (*Database, error) {
 	return db, nil
 }
 
-func (db *Database) CreateTable(tableName string, fields []field.CoreField) (*table.Table, error) {
+func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*table.Table, error) {
 	path := fmt.Sprintf("%s%s/%s", db.Path, db.DbName, tableName)
 
 	//路径校验

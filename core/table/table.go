@@ -33,14 +33,14 @@ import (
 // 最新的文档增加只会操作内存态分区，到达阈值后回落地或者和其他分区合并落地
 // 文档的删除采用假删除，通过bitmap标记
 type Table struct {
-	TableName      string                     `json:"tableName"`
-	Path           string                     `json:"pathName"`
-	CoreFields     map[string]field.CoreField `json:"fields"` //包括主键
-	PrimaryKey     string                     `json:"primaryKey"`
-	StartDocId     uint32                     `json:"startDocId"`
-	NextDocId      uint32                     `json:"nextDocId"`
-	Prefix         uint64                     `json:"prefix"`
-	PartitionNames []string                   `json:"partitionNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
+	TableName      string                      `json:"tableName"`
+	Path           string                      `json:"pathName"`
+	BasicFields    map[string]field.BasicField `json:"fields"` //包括主键
+	PrimaryKey     string                      `json:"primaryKey"`
+	StartDocId     uint32                      `json:"startDocId"`
+	NextDocId      uint32                      `json:"nextDocId"`
+	Prefix         uint64                      `json:"prefix"`
+	PartitionNames []string                    `json:"partitionNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
 	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
 	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键！！！
@@ -64,7 +64,7 @@ func NewEmptyTable(path, name string) *Table {
 		PartitionNames: make([]string, 0),
 		partitions:     make([]*partition.Partition, 0),
 		Path:           path,
-		CoreFields:     make(map[string]field.CoreField),
+		BasicFields:    make(map[string]field.BasicField),
 		primaryMap:     make(map[string]string),
 	}
 
@@ -78,14 +78,14 @@ func NewEmptyTable(path, name string) *Table {
 //产出一块空的内存分区
 func (tbl *Table) generateMemPartition() {
 	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
-	var coreFields []field.CoreField
-	for _, f := range tbl.CoreFields {
-		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
-			coreFields = append(coreFields, f)
+	var basicFields []field.BasicField
+	for _, f := range tbl.BasicFields {
+		if f.Type != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
+			basicFields = append(basicFields, f)
 		}
 	}
 
-	tbl.memPartition = partition.NewEmptyPartitionWithCoreFields(partitionName, tbl.NextDocId, coreFields)
+	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(partitionName, tbl.NextDocId, basicFields)
 	tbl.Prefix++
 }
 
@@ -158,24 +158,24 @@ func (tbl *Table) StoreMeta() error {
 //Note:
 // 新增的字段只会在最新的空分区生效，如果新增的时候有非空的分区，会先落地，然后产出新分区
 // 分区的变动，会锁表
-func (tbl *Table) AddField(coreField field.CoreField) error {
+func (tbl *Table) AddField(basicField field.BasicField) error {
 	//校验
-	if _, exist := tbl.CoreFields[coreField.FieldName]; exist {
-		log.Warnf("Field %v have Exist ", coreField.FieldName)
-		return errors.New(fmt.Sprintf("Field %v have Exist ", coreField.FieldName))
+	if _, exist := tbl.BasicFields[basicField.Name]; exist {
+		log.Warnf("Field %v have Exist ", basicField.Name)
+		return errors.New(fmt.Sprintf("Field %v have Exist ", basicField.Name))
 	}
 
 	//实施新增
-	tbl.CoreFields[coreField.FieldName] = coreField
-	if coreField.IndexType == index.IDX_TYPE_PK {
+	tbl.BasicFields[basicField.Name] = basicField
+	if basicField.Type == index.IDX_TYPE_PK {
 		//主键新增单独处理
 		if tbl.PrimaryKey != "" {
 			return errors.New("Primary key has exist!")
 		}
-		tbl.PrimaryKey = coreField.FieldName
+		tbl.PrimaryKey = basicField.Name
 		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.primaryBtdb = btree.NewBtree("", primaryname)
-		tbl.primaryBtdb.AddTree(coreField.FieldName)
+		tbl.primaryBtdb.AddTree(basicField.Name)
 	} else {
 		//锁表
 		tbl.mutex.Lock()
@@ -187,7 +187,7 @@ func (tbl *Table) AddField(coreField field.CoreField) error {
 
 		} else if tbl.memPartition.IsEmpty() {
 			//如果内存分区为空架子，则直接在内存分区新增字段
-			err := tbl.memPartition.AddField(coreField)
+			err := tbl.memPartition.AddField(basicField)
 			if err != nil {
 				log.Errf("Add Field Error  %v", err)
 				return err
@@ -217,11 +217,11 @@ func (tbl *Table) AddField(coreField field.CoreField) error {
 }
 
 //删除分区
-//本质上也是一种假删除, 只是把tbl.CoreFields对应项删除, 使得上层查询隐藏该字段
+//本质上也是一种假删除, 只是把tbl.BasicFields对应项删除, 使得上层查询隐藏该字段
 //如果内存分区非空, 则会先落地内存分区
 func (tbl *Table) DeleteField(fieldname string) error {
 	//校验
-	if _, exist := tbl.CoreFields[fieldname]; !exist {
+	if _, exist := tbl.BasicFields[fieldname]; !exist {
 		log.Warnf("Field %v not found ", fieldname)
 		return nil
 	}
@@ -235,7 +235,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	defer tbl.mutex.Unlock()
 
 	//假删除
-	delete(tbl.CoreFields, fieldname)
+	delete(tbl.BasicFields, fieldname)
 
 	if tbl.memPartition == nil {
 		//啥也不需要干
@@ -290,7 +290,7 @@ func (tbl *Table) DeleteDoc(primaryKey string) bool {
 //新增
 func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
 	//校验
-	if len(tbl.CoreFields) == 0 {
+	if len(tbl.BasicFields) == 0 {
 		log.Errf("Field or Partiton is nil")
 		return 0, errors.New("field or partition is nil")
 	}
@@ -334,7 +334,7 @@ func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
 // 本质上还是新增，主键不变，但是doc变了
 func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 	//校验
-	if len(tbl.CoreFields) == 0 {
+	if len(tbl.BasicFields) == 0 {
 		log.Errf("Field or Partiton is nil")
 		return 0, errors.New("field or partition is nil")
 	}
@@ -392,8 +392,8 @@ func (tbl *Table) getDocByDocId(docId uint32) (map[string]string, bool) {
 		return nil, false
 	}
 	fieldNames := []string{}
-	for _, v := range tbl.CoreFields {
-		fieldNames = append(fieldNames, v.FieldName)
+	for _, v := range tbl.BasicFields {
+		fieldNames = append(fieldNames, v.Name)
 	}
 
 	//如果在内存分区, 则从内存分区获取
@@ -549,11 +549,11 @@ func (tbl *Table) MergePartitions() error {
 	}
 
 	//准备好非主键字段信息备用
-	var coreFields []field.CoreField
-	for _, f := range tbl.CoreFields {
+	var basicFields []field.BasicField
+	for _, f := range tbl.BasicFields {
 		//主键分区是独立的存在，没必要参与到分区合并中
-		if f.IndexType != index.IDX_TYPE_PK {
-			coreFields = append(coreFields, f)
+		if f.Type != index.IDX_TYPE_PK {
+			basicFields = append(basicFields, f)
 		}
 	}
 
@@ -581,7 +581,7 @@ func (tbl *Table) MergePartitions() error {
 		//生成内存分区骨架，开始合并
 		partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
 		tbl.Prefix++
-		tmpPartition := partition.NewEmptyPartitionWithCoreFields(partitionName, todoParts[0].StartDocId, coreFields)
+		tmpPartition := partition.NewEmptyPartitionWithBasicFields(partitionName, todoParts[0].StartDocId, basicFields)
 
 		err := tmpPartition.MergePersistPartitions(todoParts)
 		if err != nil {

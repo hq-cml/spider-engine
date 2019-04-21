@@ -32,10 +32,10 @@ type Partition struct {
 	StartDocId    uint32                     `json:"startDocId"`
 	NextDocId     uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
 	PartitionName string                     `json:"partitionName"`
-	CoreFields    map[string]field.CoreField `json:"fields"` //分区各个字段的最基础信息，落盘用
+	CoreFields    map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
 	Fields        map[string]*field.Field    `json:"-"`
 	inMemory      bool                       `json:"-"`
-	btdb          btree.Btree                `json:"-"`			  //四套文件，本分区所有字段公用
+	btdb          btree.Btree                `json:"-"`			     //四套文件，本分区所有字段公用
 	ivtMmap       *mmap.Mmap                 `json:"-"`
 	baseMmap      *mmap.Mmap                 `json:"-"`
 	extMmap       *mmap.Mmap                 `json:"-"`
@@ -43,7 +43,7 @@ type Partition struct {
 
 //新建一个空分区, 包含字段
 //相当于建立了一个完整的空骨架，分区=>字段=>索引
-func NewEmptyPartitionWithCoreFields(partitionName string, start uint32, coreFields []field.CoreField) *Partition {
+func NewEmptyPartitionWithBasicFields(partitionName string, start uint32, basicFields []field.BasicField) *Partition {
 
 	part := &Partition{
 		StartDocId:    start,
@@ -54,14 +54,14 @@ func NewEmptyPartitionWithCoreFields(partitionName string, start uint32, coreFie
 		inMemory:      true,
 	}
 
-	for _, fld := range coreFields {
+	for _, fld := range basicFields {
 		coreField := field.CoreField{
-			FieldName: fld.FieldName,
-			IndexType: fld.IndexType,
+			FieldName: fld.Name,
+			IndexType: fld.Type,
 		}
-		part.CoreFields[fld.FieldName] = coreField
-		emptyField := field.NewEmptyField(fld.FieldName, start, fld.IndexType)
-		part.Fields[fld.FieldName] = emptyField
+		part.CoreFields[fld.Name] = coreField
+		emptyField := field.NewEmptyField(fld.Name, start, fld.Type)
+		part.Fields[fld.Name] = emptyField
 	}
 
 	log.Infof("Make New Partition [%v] Success ", partitionName)
@@ -140,23 +140,26 @@ func (part *Partition) IsEmpty() bool {
 }
 
 //添加字段
-func (part *Partition) AddField(coreField field.CoreField) error {
+func (part *Partition) AddField(basicField field.BasicField) error {
 	//校验
-	if _, exist := part.CoreFields[coreField.FieldName]; exist {
-		log.Warnf("Partition --> AddField Already has field [%v]", coreField.FieldName)
+	if _, exist := part.CoreFields[basicField.Name]; exist {
+		log.Warnf("Partition --> AddField Already has field [%v]", basicField.Name)
 		return errors.New("Already has field..")
 	}
 
 	//分区只能是内存态并且为空的时候，才能变更字段(因为已经有部分的doc,新字段没法处理)
 	if !part.inMemory || !part.IsEmpty() {
-		log.Warnf("Partition --> AddField field [%v] fail..", coreField.FieldName)
+		log.Warnf("Partition --> AddField field [%v] fail..", basicField.Name)
 		return errors.New("Only memory and enmpty partition can add field..")
 	}
 
 	//新增
-	part.CoreFields[coreField.FieldName] = coreField
-	newFiled := field.NewEmptyField(coreField.FieldName, part.NextDocId, coreField.IndexType)
-	part.Fields[coreField.FieldName] = newFiled
+	part.CoreFields[basicField.Name] = field.CoreField{
+		FieldName: basicField.Name,
+		IndexType: basicField.Type,
+	}
+	newFiled := field.NewEmptyField(basicField.Name, part.NextDocId, basicField.Type)
+	part.Fields[basicField.Name] = newFiled
 	return nil
 }
 
