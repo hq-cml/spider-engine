@@ -43,6 +43,7 @@ func InitSpider(path string, ver string) (*SpiderEngine, error) {
 		if err != nil {
 			return nil, err
 		}
+		se.DbMap = map[string]*database.Database{}
 		for _, dbName := range se.DbList {
 			dbPath := fmt.Sprintf("%s%s", path, dbName)
 			tmpDb, err := database.LoadDatabase(dbPath, dbName)
@@ -100,8 +101,8 @@ func (se *SpiderEngine) DoClose() error {
 //建库
 func (se *SpiderEngine) CreateDatabase(dbName string) (*database.Database, error) {
 	_, exist := se.DbMap[dbName]
-	if !exist {
-		return nil, errors.New("The db not exist!")
+	if exist {
+		return nil, errors.New("The db already exist!")
 	}
 
 	//创建表和字段
