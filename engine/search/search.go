@@ -1,4 +1,4 @@
-package engine
+package search
 /*
  * 搜索引擎的引擎部分
  * 负责搜索功能实现

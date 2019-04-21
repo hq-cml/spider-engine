@@ -14,7 +14,7 @@ import (
  * Database，对等于Mysql的database
  * 一个DB有多个Table构成
  *
- * 主要就起到了一个整体组织管理的功能
+ * 主要就起到一个整体的组织和管理的功能
  */
 
 type Database struct {
