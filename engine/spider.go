@@ -7,6 +7,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"errors"
 	"encoding/json"
+	"github.com/hq-cml/spider-engine/core/field"
 )
 
 type SpiderEngine struct {
@@ -98,9 +99,13 @@ func (se *SpiderEngine) DoClose() error {
 
 //建库
 func (se *SpiderEngine) CreateDatabase(dbName string) (*database.Database, error) {
-	path := fmt.Sprintf("%s%s", se.Path, dbName)
+	_, exist := se.DbMap[dbName]
+	if !exist {
+		return nil, errors.New("The db not exist!")
+	}
 
 	//创建表和字段
+	path := fmt.Sprintf("%s%s", se.Path, dbName)
 	db, err := database.NewDatabase(path, dbName)
 	if err != nil {
 		return nil, err
@@ -115,14 +120,13 @@ func (se *SpiderEngine) CreateDatabase(dbName string) (*database.Database, error
 
 //删除库
 func (se *SpiderEngine) DropDatabase(dbName string) (error) {
-	//路径校验
-	_, exist := se.DbMap[dbName]
+	db, exist := se.DbMap[dbName]
 	if !exist {
 		return errors.New("The db not exist!")
 	}
 
 	//删除库
-	err := se.DbMap[dbName].Destory()
+	err := db.Destory()
 	if err != nil {
 		return err
 	}
@@ -139,3 +143,94 @@ func (se *SpiderEngine) DropDatabase(dbName string) (error) {
 	se.storeMeta()
 	return nil
 }
+
+//建表
+func (se *SpiderEngine) CreateTable(dbName, tableName string, fields []field.BasicField) (error) {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return errors.New("The db not exist!")
+	}
+	_, err := db.CreateTable(tableName, fields)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+//删除表
+func (se *SpiderEngine) DropTable(dbName, tableName string) (error) {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return errors.New("The db not exist!")
+	}
+	err := db.DropTable(tableName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//增减字段
+func (se *SpiderEngine) AddField(dbName, tableName string, basicField field.BasicField) error {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return errors.New("The db not exist!")
+	}
+	return db.AddField(tableName, basicField)
+}
+
+func (se *SpiderEngine) DeleteField(dbName, tableName string, fieldName string) error {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return errors.New("The db not exist!")
+	}
+	return db.DeleteField(tableName, fieldName)
+}
+
+
+//新增Doc
+func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]string) (uint32, error) {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return 0, errors.New("The db not exist!")
+	}
+	return db.AddDoc(tableName, content)
+}
+
+//获取Doc
+func (se *SpiderEngine) GetDoc(dbName, tableName string, primaryKey string) (map[string]string, bool) {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return nil, false
+	}
+	return db.GetDoc(tableName, primaryKey)
+}
+
+//改变doc
+func (se *SpiderEngine) UpdateDoc(dbName, tableName string, content map[string]string) (uint32, error) {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return 0, errors.New("The db not exist!")
+	}
+	return db.UpdateDoc(tableName, content)
+}
+
+//删除Doc
+func (se *SpiderEngine) DeleteDoc(dbName, tableName string, primaryKey string) (bool) {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return false
+	}
+	return db.DeleteDoc(tableName, primaryKey)
+}
+
+//搜索
+func (se *SpiderEngine) SearchDocs(dbName, tableName, fieldName, keyWord string) ([]basic.DocNode, bool) {
+	db, exist := se.DbMap[dbName]
+	if !exist {
+		return nil, false
+	}
+	return db.SearchDocs(tableName, fieldName, keyWord)
+}
+
