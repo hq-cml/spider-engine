@@ -27,6 +27,11 @@ func TestInitSpider(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	_, err = spider.CreateDatabase("database1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	//_, err = db.CreateTable(TEST_TABLE, []field.BasicField {
 	//	{
 	//		FieldName: TEST_FIELD0,
