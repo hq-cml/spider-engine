@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hq-cml/spider-engine/core/field"
+	"github.com/hq-cml/spider-engine/basic"
 )
 
 /**
@@ -32,15 +33,12 @@ func NewDatabase(path, name string) (*Database, error) {
 	if string(path[0]) == "." {
 		return nil, errors.New("The path must be absolute path!")
 	}
-	if !helper.Exist(path) {
-		return nil, errors.New("The path not exist!")
-	}
-	if helper.Exist(path + name) {
+	if helper.Exist(path) {
 		return nil, errors.New("The database already exist!")
 	}
 
 	//创建目录, 每一个db都有独立的目录
-	if ok := helper.Mkdir(path + name); !ok {
+	if ok := helper.Mkdir(path); !ok {
 		return nil, errors.New("Failed create dir!")
 	}
 
@@ -63,11 +61,22 @@ func (db *Database) DoClose() error {
 			return err
 		}
 	}
+
+	metaFileName := fmt.Sprintf("%v%v%s", db.Path, db.DbName, basic.IDX_FILENAME_SUFFIX_META)
+	data := helper.JsonEncodeIndent(db)
+	if data != "" {
+		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
+			return err
+		}
+	} else {
+		return errors.New("Json error")
+	}
+
 	return nil
 }
 
 func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*table.Table, error) {
-	path := fmt.Sprintf("%s%s/%s", db.Path, db.DbName, tableName)
+	path := fmt.Sprintf("%s%s", db.Path, tableName)
 
 	//路径校验
 	_, exist := db.TableMap[tableName]

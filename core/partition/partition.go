@@ -341,7 +341,7 @@ func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (ma
 //存储元信息
 func (part *Partition) StoreMeta() error {
 	metaFileName := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META
-	data := helper.JsonEncode(part)
+	data := helper.JsonEncodeIndent(part)
 	if data != "" {
 		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
 			return err

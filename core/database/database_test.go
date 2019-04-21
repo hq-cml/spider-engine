@@ -24,7 +24,7 @@ func init() {
 }
 
 func TestNewDatabase(t *testing.T) {
-	db, err := NewDatabase("/tmp/spider", "db1")
+	db, err := NewDatabase("/tmp/spider/db1", "db1")
 	if err != nil {
 		t.Fatal(err)
 	}

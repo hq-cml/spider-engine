@@ -138,7 +138,7 @@ func LoadTable(path, name string) (*Table, error) {
 //落地表的元信息
 func (tbl *Table) StoreMeta() error {
 	metaFileName := fmt.Sprintf("%v%v%s", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_META)
-	data := helper.JsonEncode(tbl)
+	data := helper.JsonEncodeIndent(tbl)
 	if data != "" {
 		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
 			return err
