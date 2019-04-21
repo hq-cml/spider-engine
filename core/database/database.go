@@ -57,8 +57,8 @@ func LoadDatabase(path, name string) (*Database, error) {
 	if string(path[len(path)-1]) != "/" {
 		path = path + "/"
 	}
-	db := Database{}
-	metaFileName := fmt.Sprintf("%v%v%v",path, name, basic.IDX_FILENAME_SUFFIX_META)
+	db := Database{Path:path, DbName:name}
+	metaFileName := db.genMetaName()
 	buffer, err := helper.ReadFile(metaFileName)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func LoadDatabase(path, name string) (*Database, error) {
 //meta落地
 func (db *Database) storeMeta() error {
 
-	metaFileName := fmt.Sprintf("%v%v%s", db.Path, db.DbName, basic.IDX_FILENAME_SUFFIX_META)
+	metaFileName := db.genMetaName()
 	data := helper.JsonEncodeIndent(db)
 	if data != "" {
 		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
@@ -220,4 +220,44 @@ func (db *Database) SearchDocs(tableName, fieldName, keyWord string) ([]basic.Do
 	}
 
 	return tab.SearchDocs(fieldName, keyWord)
+}
+
+//增减字段
+func (db *Database) AddField(tableName string, basicField field.BasicField) error {
+	tab, exist := db.TableMap[tableName]
+	if !exist {
+		return errors.New("Table not exist!")
+	}
+
+	return tab.AddField(basicField)
+}
+
+func (db *Database) DeleteField(tableName string, fieldName string) error {
+	tab, exist := db.TableMap[tableName]
+	if !exist {
+		return errors.New("Table not exist!")
+	}
+
+	return tab.DeleteField(fieldName)
+}
+
+func (db *Database) genMetaName() string {
+	return fmt.Sprintf("%v%v%v", db.Path, db.DbName, basic.IDX_FILENAME_SUFFIX_META)
+}
+
+//删除库
+func (db *Database) Destory() error {
+	//表逐个销毁
+	for _, tab := range db.TableMap {
+		if err := tab.Destroy(); err != nil {
+			return err
+		}
+	}
+
+	//删除残留的文件和目录
+	metaPath := db.genMetaName()
+	if err := helper.Remove(metaPath); err != nil {	return err }
+	if err := helper.Remove(db.Path); err != nil {	return err }
+
+	return nil
 }

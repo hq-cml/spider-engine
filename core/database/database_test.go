@@ -23,6 +23,7 @@ func init() {
 	}
 }
 
+//测试新建库，新建表，增加文档，关闭库表等
 func TestNewDatabase(t *testing.T) {
 	db, err := NewDatabase("/tmp/spider/db1", "db1")
 	if err != nil {
@@ -66,6 +67,7 @@ func TestNewDatabase(t *testing.T) {
 	}
 }
 
+//测试加载库表，查询库表、删除库表等
 func TestLoadDatabase(t *testing.T) {
 	db, err := LoadDatabase("/tmp/spider/db1", "db1")
 	if err != nil {
@@ -97,6 +99,11 @@ func TestLoadDatabase(t *testing.T) {
 	t.Log("Got the doc[电影]:", helper.JsonEncode(tmp))
 
 	err = db.DropTable(TEST_TABLE)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.Destory()
 	if err != nil {
 		t.Fatal(err)
 	}
