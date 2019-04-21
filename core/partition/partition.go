@@ -56,12 +56,14 @@ func NewEmptyPartitionWithBasicFields(partitionName string, start uint32, basicF
 
 	for _, fld := range basicFields {
 		coreField := field.CoreField{
-			FieldName: fld.Name,
-			IndexType: fld.Type,
+			BasicField: field.BasicField{
+				FieldName: fld.FieldName,
+				IndexType: fld.IndexType,
+			},
 		}
-		part.CoreFields[fld.Name] = coreField
-		emptyField := field.NewEmptyField(fld.Name, start, fld.Type)
-		part.Fields[fld.Name] = emptyField
+		part.CoreFields[fld.FieldName] = coreField
+		emptyField := field.NewEmptyField(fld.FieldName, start, fld.IndexType)
+		part.Fields[fld.FieldName] = emptyField
 	}
 
 	log.Infof("Make New Partition [%v] Success ", partitionName)
@@ -142,24 +144,26 @@ func (part *Partition) IsEmpty() bool {
 //添加字段
 func (part *Partition) AddField(basicField field.BasicField) error {
 	//校验
-	if _, exist := part.CoreFields[basicField.Name]; exist {
-		log.Warnf("Partition --> AddField Already has field [%v]", basicField.Name)
+	if _, exist := part.CoreFields[basicField.FieldName]; exist {
+		log.Warnf("Partition --> AddField Already has field [%v]", basicField.FieldName)
 		return errors.New("Already has field..")
 	}
 
 	//分区只能是内存态并且为空的时候，才能变更字段(因为已经有部分的doc,新字段没法处理)
 	if !part.inMemory || !part.IsEmpty() {
-		log.Warnf("Partition --> AddField field [%v] fail..", basicField.Name)
+		log.Warnf("Partition --> AddField field [%v] fail..", basicField.FieldName)
 		return errors.New("Only memory and enmpty partition can add field..")
 	}
 
 	//新增
-	part.CoreFields[basicField.Name] = field.CoreField{
-		FieldName: basicField.Name,
-		IndexType: basicField.Type,
+	part.CoreFields[basicField.FieldName] = field.CoreField{
+		BasicField: field.BasicField{
+			FieldName: basicField.FieldName,
+			IndexType: basicField.IndexType,
+		},
 	}
-	newFiled := field.NewEmptyField(basicField.Name, part.NextDocId, basicField.Type)
-	part.Fields[basicField.Name] = newFiled
+	newFiled := field.NewEmptyField(basicField.FieldName, part.NextDocId, basicField.IndexType)
+	part.Fields[basicField.FieldName] = newFiled
 	return nil
 }
 

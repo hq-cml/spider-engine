@@ -206,7 +206,7 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 			match := true
 			//必须全部的过滤器都满足
 			for _, filter := range filters {
-				if !part.Fields[filter.FieldName].Filter(doc.DocId, filter.Type, filter.Start, filter.End, filter.Range, filter.MatchStr) {
+				if !part.Fields[filter.FieldName].Filter(doc.DocId, filter.IndexType, filter.Start, filter.End, filter.Range, filter.MatchStr) {
 					match = false
 					break
 				}

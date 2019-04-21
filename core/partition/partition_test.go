@@ -35,9 +35,9 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 
 	//新增字段
-	memPartition.AddField(field.BasicField{Name:TEST_FIELD1, Type:index.IDX_TYPE_STRING})
-	memPartition.AddField(field.BasicField{Name:TEST_FIELD2, Type:index.IDX_TYPE_NUMBER})
-	memPartition.AddField(field.BasicField{Name:TEST_FIELD3, Type:index.IDX_TYPE_STRING_SEG})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG})
 	if memPartition.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
@@ -182,9 +182,9 @@ func TestPartitionMerge(t *testing.T) {
 	patitionName0 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
 	//创建分区1
 	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, []field.BasicField{
-		{Name:TEST_FIELD1, Type:index.IDX_TYPE_STRING},
-		{Name:TEST_FIELD2, Type:index.IDX_TYPE_NUMBER},
-		{Name:TEST_FIELD3, Type:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
@@ -203,9 +203,9 @@ func TestPartitionMerge(t *testing.T) {
 	//创建分区2
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
 	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, []field.BasicField{
-		{Name:TEST_FIELD1, Type:index.IDX_TYPE_STRING},
-		{Name:TEST_FIELD2, Type:index.IDX_TYPE_NUMBER},
-		{Name:TEST_FIELD3, Type:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part1.IsEmpty() != true {
 		t.Fatal("Should empty!!")
@@ -230,9 +230,9 @@ func TestPartitionMerge(t *testing.T) {
 	//外插花一个分区, 准备合并
 	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, []field.BasicField{
-		{Name:TEST_FIELD1, Type:index.IDX_TYPE_STRING},
-		{Name:TEST_FIELD2, Type:index.IDX_TYPE_NUMBER},
-		{Name:TEST_FIELD3, Type:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	defer part2.Close()
 

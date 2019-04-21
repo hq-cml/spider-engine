@@ -93,7 +93,7 @@ func LoadForwardIndex(indexType uint8, baseMmap, extMmap *mmap.Mmap,
 }
 
 func (fwdIdx *ForwardIndex)String() string {
-	return fmt.Sprintf("FwdIndex-- Start:%v, Next:%v, InMem:%v, Type:%v, Offset:%v, Cnt:%v, Fake:%v",
+	return fmt.Sprintf("FwdIndex-- Start:%v, Next:%v, InMem:%v, IndexType:%v, Offset:%v, Cnt:%v, Fake:%v",
 		fwdIdx.startDocId,
 		fwdIdx.nextDocId,
 		fwdIdx.inMemory,

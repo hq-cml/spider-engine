@@ -80,7 +80,7 @@ func (tbl *Table) generateMemPartition() {
 	partitionName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位数补零
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
-		if f.Type != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
+		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
 			basicFields = append(basicFields, f)
 		}
 	}
@@ -160,22 +160,22 @@ func (tbl *Table) StoreMeta() error {
 // 分区的变动，会锁表
 func (tbl *Table) AddField(basicField field.BasicField) error {
 	//校验
-	if _, exist := tbl.BasicFields[basicField.Name]; exist {
-		log.Warnf("Field %v have Exist ", basicField.Name)
-		return errors.New(fmt.Sprintf("Field %v have Exist ", basicField.Name))
+	if _, exist := tbl.BasicFields[basicField.FieldName]; exist {
+		log.Warnf("Field %v have Exist ", basicField.FieldName)
+		return errors.New(fmt.Sprintf("Field %v have Exist ", basicField.FieldName))
 	}
 
 	//实施新增
-	tbl.BasicFields[basicField.Name] = basicField
-	if basicField.Type == index.IDX_TYPE_PK {
+	tbl.BasicFields[basicField.FieldName] = basicField
+	if basicField.IndexType == index.IDX_TYPE_PK {
 		//主键新增单独处理
 		if tbl.PrimaryKey != "" {
 			return errors.New("Primary key has exist!")
 		}
-		tbl.PrimaryKey = basicField.Name
+		tbl.PrimaryKey = basicField.FieldName
 		primaryname := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
 		tbl.primaryBtdb = btree.NewBtree("", primaryname)
-		tbl.primaryBtdb.AddTree(basicField.Name)
+		tbl.primaryBtdb.AddTree(basicField.FieldName)
 	} else {
 		//锁表
 		tbl.mutex.Lock()
@@ -393,7 +393,7 @@ func (tbl *Table) getDocByDocId(docId uint32) (map[string]string, bool) {
 	}
 	fieldNames := []string{}
 	for _, v := range tbl.BasicFields {
-		fieldNames = append(fieldNames, v.Name)
+		fieldNames = append(fieldNames, v.FieldName)
 	}
 
 	//如果在内存分区, 则从内存分区获取
@@ -552,7 +552,7 @@ func (tbl *Table) MergePartitions() error {
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
 		//主键分区是独立的存在，没必要参与到分区合并中
-		if f.Type != index.IDX_TYPE_PK {
+		if f.IndexType != index.IDX_TYPE_PK {
 			basicFields = append(basicFields, f)
 		}
 	}
