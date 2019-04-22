@@ -41,7 +41,7 @@ type BasicField struct {
 	IndexType uint16  `json:"indexType"`
 }
 
-//假字段，高层占位用
+//假字段，高层合并落地时, 占位用
 func NewEmptyFakeField(fieldname string, start uint32, IndexType uint16, docCnt uint32) *Field {
 	fwdIdx := index.NewEmptyFakeForwardIndex(IndexType, start, docCnt)
 	return &Field{
@@ -251,7 +251,7 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 }
 
 //字段归并
-//和底层逻辑一直，同样mmap不会加载，其他控制数据包括btdb会加载
+//和底层逻辑一致，同样mmap不会加载，其他控制数据包括btdb会加载
 func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) (error) {
 	//一些校验, index的类型，顺序必须完整正确
 	if fields == nil || len(fields) == 0 {
@@ -278,6 +278,11 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 	}
 
 	//如果有倒排索引，则合并
+	//if indexType == index.IDX_TYPE_STRING ||
+	//	indexType == index.IDX_TYPE_STRING_SEG ||
+	//	indexType == index.IDX_TYPE_STRING_LIST ||
+	//	indexType == index.IDX_TYPE_STRING_SINGLE ||
+	//	indexType == index.GATHER_TYPE {
 	if fields[0].IvtIdx != nil {
 		ivts := make([]*index.InvertedIndex, 0)
 		for _, fd := range fields {

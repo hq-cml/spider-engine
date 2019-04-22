@@ -442,7 +442,8 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 			if _, exist := pt.Fields[fieldName]; exist {
 				fs = append(fs, pt.Fields[fieldName])
 			} else {
-				//TODO fake的效用?
+				//特殊情况
+				//如果新的分区拥有一些新字段,但是老分区没有这个字段,此时,需要生成一个假的字段来占位
 				fakefield := field.NewEmptyFakeField(part.Fields[fieldName].FieldName, pt.StartDocId,
 					part.Fields[fieldName].IndexType, pt.NextDocId-pt.StartDocId)
 				fs = append(fs, fakefield)

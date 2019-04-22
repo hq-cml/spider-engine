@@ -1,10 +1,15 @@
 package search
+
+import (
+	"strings"
+	"github.com/hq-cml/spider-engine/utils/bitmap"
+)
 /*
  * 搜索引擎的引擎部分
  * 负责搜索功能实现
  */
 
-/*
+
  //从numbers判断pos指定的数,如果
 // type:EQ 只要有一个==, 就算ok
 // type:NEQ 必须全部都是!=, 就算ok
@@ -132,9 +137,6 @@ func (fwdIdx *ForwardIndex) Filter(pos uint32, filterRype uint8, start, end int6
 	return false
 }
 
- */
-
-/*
 
 //过滤（针对的是正排索引）
 func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbers []int64, str string) bool {
@@ -152,10 +154,7 @@ func (fld *Field) Filter(docId uint32, filterType uint8, start, end int64, numbe
 	return false
 }
 
- */
 
-
-/*
 
 //搜索（单query）
 //根据query搜索结果, 再通过filter进行过滤
@@ -221,8 +220,6 @@ func (part *Partition) SearchDocs(query basic.SearchQuery, filters []basic.Searc
 
 	return retDocs, true
 }
-
- */
 
 
 
