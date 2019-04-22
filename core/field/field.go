@@ -32,7 +32,7 @@ type Field struct {
 type CoreField struct {
 	BasicField
 	FwdOffset uint64 `json:"fwdOffset"` //正排索引的偏移量
-	DocCnt    uint32 `json:"docCnt"` 	//正排索引文档个数
+	//DocCnt    uint32 `json:"docCnt"` 	//没必要：正排索引文档个数
 }
 
 // 字段的基本描述信息，用于除了CoreFiled场景之外的场景

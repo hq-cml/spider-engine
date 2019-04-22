@@ -30,6 +30,7 @@ var (
 type Partition struct {
 	StartDocId  uint32                     `json:"startDocId"`
 	NextDocId   uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
+	DocCnt      uint32                     `json:"docCnt"` 	       //分区文档个数
 	PrtPathName string                     `json:"prtPathName"`
 	CoreFields  map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
 	Fields      map[string]*field.Field    `json:"-"`
@@ -121,13 +122,14 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 
 	//加载各个Field
 	for _, coreField := range part.CoreFields {
-		if coreField.DocCnt == 0 {
+		if part.DocCnt == 0 {
 			//TODO ?? 这里会进入吗
+			panic("Unknow error")
 			newField := field.NewEmptyField(coreField.FieldName, part.StartDocId, coreField.IndexType)
 			part.Fields[coreField.FieldName] = newField
 		} else {
 			oldField := field.LoadField(coreField.FieldName, part.StartDocId,
-				part.NextDocId, coreField.IndexType, coreField.FwdOffset, coreField.DocCnt,
+				part.NextDocId, coreField.IndexType, coreField.FwdOffset, part.DocCnt,
 				part.ivtMmap, part.baseMmap, part.extMmap, part.btdb)
 			part.Fields[coreField.FieldName] = oldField
 		}
@@ -209,6 +211,7 @@ func (part *Partition) AddDocument(docId uint32, content map[string]string) erro
 		}
 	}
 	part.NextDocId++
+	part.DocCnt++
 	return nil
 }
 
@@ -363,6 +366,7 @@ func (part *Partition) Persist() error {
 		part.btdb = btree.NewBtree("", btdbPath)
 	}
 	log.Debugf("Persist Partition File : [%v] Start", part.PrtPathName)
+	var docCnt uint32
 	for name, coreField := range part.CoreFields {
 		//当前分区的各个字段分别落地
 		//Note: field.Persist不会自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
@@ -371,9 +375,13 @@ func (part *Partition) Persist() error {
 			return err
 		}
 		//设置coreField的fwdOffset和docCnt
-		coreField.FwdOffset, coreField.DocCnt = part.Fields[name].FwdOffset, part.Fields[name].DocCnt
+		coreField.FwdOffset, docCnt = part.Fields[name].FwdOffset, part.Fields[name].DocCnt
 		part.CoreFields[coreField.FieldName] = coreField
-		log.Debugf("%v %v %v", name, coreField.FwdOffset, coreField.DocCnt)
+		log.Debugf("%v %v %v", name, coreField.FwdOffset, docCnt)
+		if part.DocCnt != docCnt {
+			log.Errf("Doc cnt not same!!. %v, %v", part.DocCnt, docCnt)
+			return errors.New("Doc cnt not same!!")
+		}
 	}
 
 	//存储源信息
@@ -427,6 +435,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	}
 
 	//逐个字段进行merge
+	tmp := map[uint32]bool{}
 	for fieldName, coreField := range part.CoreFields {
 		fs := make([]*field.Field, 0)
 		for _, pt := range parts {
@@ -446,8 +455,13 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		}
 
 		coreField.FwdOffset = part.Fields[fieldName].FwdOffset
-		coreField.DocCnt = part.Fields[fieldName].DocCnt
+		tmp[part.Fields[fieldName].DocCnt] = true
 		part.CoreFields[fieldName] = coreField
+	}
+
+	if len(tmp) > 1 {
+		log.Errf("Doc cnt not consistent!!. %v", tmp)
+		return errors.New("Doc cnt not same!!")
 	}
 
 	//加载回mmap
@@ -477,6 +491,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	//最后设置startId和nextDocId
 	part.StartDocId = parts[0].StartDocId
 	part.NextDocId = parts[l-1].NextDocId
+	part.DocCnt = parts[l-1].NextDocId - parts[0].StartDocId
 
 	log.Infof("MergePartitions [%v] Finish", part.PrtPathName)
 	return part.storeMeta()

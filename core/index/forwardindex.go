@@ -78,10 +78,10 @@ func NewEmptyForwardIndex(indexType uint16, start uint32) *ForwardIndex {
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 //如果mmap自己创建的话，会造成多个mmap实例对应同一个磁盘文件，这样会造成不确定性(mmmap头部有隐藏信息字段)，也不易于维护
 func LoadForwardIndex(indexType uint16, baseMmap, extMmap *mmap.Mmap,
-		offset uint64, docLen, start, next uint32) *ForwardIndex {
+		offset uint64, docCnt, start, next uint32) *ForwardIndex {
 	return &ForwardIndex{
 		fake:      false,
-		docCnt:    docLen,
+		docCnt:    docCnt,
 		fwdOffset: offset,
 		inMemory:  false,
 		indexType: indexType,
