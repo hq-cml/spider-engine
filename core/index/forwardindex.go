@@ -41,7 +41,7 @@ type ForwardIndex struct {
 	indexType  uint16  					//本索引的类型
 	fwdOffset  uint64 					//本索引的数据，在base文件中的起始偏移
 	docCnt     uint32 					//本索引文档数量
-	fake       bool                     //假，用于占位，高层的分区缺少某个字段时候，用此占位
+	fake       bool                     //标记位, 用于占位，高层的分区缺少某个字段时候，用此占位
 	memoryNum  []int64    `json:"-"`    //内存态本正排索引(数字)
 	memoryStr  []string   `json:"-"`    //内存态本正排索引(字符串)
 	baseMmap   *mmap.Mmap `json:"-"`    //底层mmap文件, 用于存储磁盘态正排索引
@@ -51,9 +51,9 @@ type ForwardIndex struct {
 const DATA_BYTE_CNT = 8
 
 //假索引，高层占位用
-func NewEmptyFakeForwardIndex(indexType uint16, start uint32, next uint32) *ForwardIndex {
+func NewFakeForwardIndex(indexType uint16, start uint32, next uint32) *ForwardIndex {
 	return &ForwardIndex{
-		docCnt:     next - start,
+		docCnt:     (next - start),
 		indexType:  indexType,
 		startDocId: start,
 		nextDocId:  next,
@@ -211,7 +211,7 @@ func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) er
 //以字符串形式获取
 //参数Pos: 通常索引内引用元素，比如dockId - startId
 func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
-	if fwdIdx.fake {  //TODO why??
+	if fwdIdx.fake {  //占位假索引, 直接返回占位数据
 		return "", true
 	}
 	//先尝试从内存获取
@@ -258,8 +258,7 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 //参数Pos: 通常索引内引用元素，比如dockId - startId
 //TODO 不支持从字符型中读取数字??
 func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
-
-	if fwdIdx.fake {  //TODO why??
+	if fwdIdx.fake {  //占位假索引, 直接返回占位数据
 		return 0xFFFFFFFF, true
 	}
 
@@ -512,132 +511,5 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 	fwdIdx.memoryStr = nil
 	fwdIdx.memoryNum = nil
 	return nil
-}
-
-//从numbers判断pos指定的数,如果
-// type:EQ 只要有一个==, 就算ok
-// type:NEQ 必须全部都是!=, 就算ok
-func (fwdIdx *ForwardIndex) FilterNums(pos uint32, filterType uint8, numbers []int64) bool {
-	var value int64
-	if fwdIdx.fake {   //TODO ??
-		return false
-	}
-
-	//仅支持数值型
-	if fwdIdx.indexType != IDX_TYPE_NUMBER {
-		return false
-	}
-
-	if fwdIdx.inMemory {
-		value = fwdIdx.memoryNum[pos]
-	} else {
-		if fwdIdx.baseMmap == nil {
-			return false
-		}
-
-		offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
-		value = fwdIdx.baseMmap.ReadInt64(offset)
-	}
-
-	switch filterType {
-	case basic.FILT_EQ:
-		for _, num := range numbers {
-			if (0xFFFFFFFF&value != 0xFFFFFFFF) && (value == num) {
-				return true
-			}
-		}
-		return false
-	case basic.FILT_NEQ:
-		for _, num := range numbers {
-			if (0xFFFFFFFF&value != 0xFFFFFFFF) && (value == num) {
-				return false
-			}
-		}
-		return true
-
-	default:
-		return false
-	}
-}
-
-//过滤
-func (fwdIdx *ForwardIndex) Filter(pos uint32, filterRype uint8, start, end int64, str string) bool {
-
-	var value int64
-	if fwdIdx.fake {
-		return false
-	}
-
-	if fwdIdx.indexType == IDX_TYPE_NUMBER {
-		if fwdIdx.inMemory {
-			value = fwdIdx.memoryNum[pos]
-		} else {
-			if fwdIdx.baseMmap == nil {
-				return false
-			}
-			offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
-			value = fwdIdx.baseMmap.ReadInt64(offset)
-		}
-
-		switch filterRype {
-		case basic.FILT_EQ:
-			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value == start)
-		case basic.FILT_OVER:
-			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value >= start)
-		case basic.FILT_LESS:
-			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value <= start)
-		case basic.FILT_RANGE:
-			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value >= start && value <= end)
-		case basic.FILT_NEQ:
-			return (0xFFFFFFFF&value != 0xFFFFFFFF) && (value != start)
-		default:
-			return false
-		}
-	} else if fwdIdx.indexType == IDX_TYPE_STRING_SINGLE || fwdIdx.indexType == IDX_TYPE_STRING{
-		vl := strings.Split(str, ",")
-		switch filterRype {
-
-		case basic.FILT_STR_PREFIX:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if strings.HasPrefix(vstr, v) {
-						return true
-					}
-				}
-			}
-			return false
-		case basic.FILT_STR_SUFFIX:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if strings.HasSuffix(vstr, v) {
-						return true
-					}
-				}
-			}
-			return false
-		case basic.FILT_STR_RANGE:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if !strings.Contains(vstr, v) {
-						return false
-					}
-				}
-				return true
-			}
-			return false
-		case basic.FILT_STR_ALL:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if vstr == v {
-						return true
-					}
-				}
-			}
-			return false
-		default:
-			return false
-		}
-	}
-	return false
 }
 

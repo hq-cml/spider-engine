@@ -36,6 +36,7 @@ type InvertedIndex struct {
 	inMemory  bool                       //本索引是内存态还是磁盘态（不会同时并存）
 	indexType uint16                     //本索引的类型
 	fieldName string                     //本索引所属字段
+	fake      bool                       //标记位, 用于占位，高层的分区缺少某个字段时候，用此占位
 	termMap   map[string][]basic.DocNode //索引的内存容器
 	ivtMmap   *mmap.Mmap                 //倒排文件(以mmap的形式)
 	btdb      btree.Btree                //B+树
@@ -49,10 +50,22 @@ func NewEmptyInvertedIndex(indexType uint16, nextDocId uint32, fieldName string)
 		nextDocId: nextDocId,
 		fieldName: fieldName,
 		indexType: indexType,
+		fake:      false,
 		termMap:   make(map[string][]basic.DocNode),
 		inMemory:  true,                            	//新索引都是从内存态开始
 		ivtMmap:   nil,
 		btdb:      nil,
+	}
+	return rIdx
+}
+
+//新建空的倒排索引
+func NewFakeInvertedIndex(indexType uint16, nextDocId uint32, fieldName string) *InvertedIndex {
+	rIdx := &InvertedIndex{
+		nextDocId: nextDocId,
+		fieldName: fieldName,
+		indexType: indexType,
+		fake:      true,      //here is the point~~
 	}
 	return rIdx
 }
@@ -65,6 +78,7 @@ func LoadInvertedIndex(btdb btree.Btree, indexType uint16, fieldname string, ivt
 		indexType: indexType,
 		fieldName: fieldname,
 		nextDocId: nextDocId,
+		fake:      false,
 		inMemory:  false,       //加载的索引都是磁盘态的
 		ivtMmap:   ivtMmap,
 		btdb:      btdb,
@@ -332,6 +346,9 @@ func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partit
 	//数据准备，开始多路归并
 	tmpIvts := make([]tmpMerge, 0)
 	for _, ivt := range rIndexes {
+		if ivt.fake {
+			continue  //对于高层的占位假索引, 直接忽略即可
+		}
 		if ivt.btdb == nil {
 			panic("Error")
 		}
@@ -380,14 +397,14 @@ func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partit
 			value = append(value, tmpIvts[i].nodes...)
 
 			//找到后继者，顶上去
-			next, _, ok := tmpIvts[i].rIndex.GetNextKV(tmpIvts[i].term)
+			nextTerm, _, ok := tmpIvts[i].rIndex.GetNextKV(tmpIvts[i].term)
 			if !ok {
 				//如果没有后继者了，那么该索引位置标记为无效
 				tmpIvts[i].over = true
 				continue
 			}
-			tmpIvts[i].term = next
-			tmpIvts[i].nodes, ok = tmpIvts[i].rIndex.QueryTerm(next)
+			tmpIvts[i].term = nextTerm
+			tmpIvts[i].nodes, ok = tmpIvts[i].rIndex.QueryTerm(nextTerm)
 			if !ok {
 				panic("Index wrong!")
 			}

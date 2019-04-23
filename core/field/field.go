@@ -41,15 +41,26 @@ type BasicField struct {
 	IndexType uint16  `json:"indexType"`
 }
 
-//假字段，高层合并落地时, 占位用
-func NewEmptyFakeField(fieldname string, start uint32, next uint32, IndexType uint16) *Field {
-	fwdIdx := index.NewEmptyFakeForwardIndex(IndexType, start, next)
-	return &Field{
+//假字段，高层合并落地时, 可能会出现部分新的分区拥有新字段
+//此时, 老分区用FakeField占位用
+func NewFakeField(fieldname string, start uint32, next uint32, indexType uint16) *Field {
+	fwdIdx := index.NewFakeForwardIndex(indexType, start, next)
+	var ivtIdx *index.InvertedIndex
+	if indexType == index.IDX_TYPE_STRING ||
+		indexType == index.IDX_TYPE_STRING_SEG ||
+		indexType == index.IDX_TYPE_STRING_LIST ||
+		indexType == index.IDX_TYPE_STRING_SINGLE ||
+		indexType == index.GATHER_TYPE {
+		ivtIdx = index.NewFakeInvertedIndex(indexType, start, fieldname)
+	}
+
+	return &Field {
 		FieldName:  fieldname,
 		StartDocId: start,
 		NextDocId:  next,
-		IndexType:  IndexType,
+		IndexType:  indexType,
 		FwdIdx:     fwdIdx,    //主要是为了这个假索引
+		IvtIdx:     ivtIdx,    //主要是为了这个假索引
 	}
 }
 
@@ -84,7 +95,7 @@ func NewEmptyField(fieldName string, start uint32, indexType uint16) *Field {
 //加载字段索引
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset uint64,
-	fwdDocCnt uint32, ivtMmap, baseMmap, extMmap *mmap.Mmap, btree btree.Btree) *Field {
+	fwdDocCnt uint32, ivtMmap, baseMmap, extMmap *mmap.Mmap, btdb btree.Btree) *Field {
 
 	var ivtIdx *index.InvertedIndex
 	if indexType == index.IDX_TYPE_STRING ||
@@ -92,7 +103,7 @@ func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset
 		indexType == index.IDX_TYPE_STRING_LIST ||
 		indexType == index.IDX_TYPE_STRING_SINGLE ||
 		indexType == index.GATHER_TYPE {
-		ivtIdx = index.LoadInvertedIndex(btree, indexType, fieldname, ivtMmap, next)
+		ivtIdx = index.LoadInvertedIndex(btdb, indexType, fieldname, ivtMmap, next)
 	}
 
 	fwdIdx := index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, start, next)
@@ -107,7 +118,7 @@ func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset
 		FwdOffset:  fwdOffset,
 		IvtIdx:     ivtIdx,
 		FwdIdx:     fwdIdx,
-		btdb:       btree,
+		btdb:       btdb,
 	}
 }
 
@@ -258,12 +269,8 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 		return errors.New("Nil []*Field")
 	}
 	l := len(fields)
-	fmt.Println(l)
 	for i:=0; i<(l-1); i++ {
 		if fields[i].NextDocId != fields[i+1].StartDocId {
-			fmt.Println(fields[i].FieldName)
-			fmt.Println(fields[i].NextDocId)
-			fmt.Println(fields[i+1].StartDocId)
 			return errors.New("Indexes order wrong")
 		}
 	}

@@ -22,7 +22,7 @@ func init() {
 		os.Exit(1)
 	}
 }
-/*
+
 func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
 	//var coreFields = []field.CoreField{
@@ -373,8 +373,9 @@ func TestLoadMerge(t *testing.T) {
 	t.Log(helper.JsonEncode(part2.CoreFields))
 	t.Log("\n\n")
 }
-*/
+
 //测试在字段出现新增前后，分区的合并情况
+//这个用例主要在测试底层索引的fake字段的使用
 func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
@@ -385,7 +386,6 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	//创建分区1
 	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, []field.BasicField{
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
-		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
 	})
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
@@ -393,15 +393,15 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	user0 := map[string]string {TEST_FIELD1:"张三", TEST_FIELD2:"20"}
-	user1 := map[string]string {TEST_FIELD1:"李四", TEST_FIELD2:"30"}
-	user2 := map[string]string {TEST_FIELD1:"王二", TEST_FIELD2:"25"}
+	user0 := map[string]string {TEST_FIELD1:"张三"}
+	user1 := map[string]string {TEST_FIELD1:"李四"}
+	user2 := map[string]string {TEST_FIELD1:"王二"}
 	part0.AddDocument(0, user0)
 	part0.AddDocument(1, user1)
 	part0.AddDocument(2, user2)
 
 
-	//创建分区2
+	//创建分区2, 多了两个字段
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
 	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, []field.BasicField{
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
@@ -446,34 +446,30 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	//part2.Fields[TEST_FIELD3].IvtIdx.GetBtree().Display(TEST_FIELD3)
 
 
-	//合并完毕, 测试合并效果
+	//合并完毕, 测试合并效果, 测试倒排
 	list, exist := part2.query(TEST_FIELD3, "美食")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 3!!")
+	}
+	t.Log("美食:", helper.JsonEncode(list))
+
+	list, exist = part2.query(TEST_FIELD3, "喜欢")
 	if !exist {
 		t.Fatal("Should exist!!")
 	}
 	if len(list) != 3 {
 		t.Fatal("Should 3!!")
 	}
-	t.Log(helper.JsonEncode(list))
-
-	list, exist = part2.query(TEST_FIELD3, "喜欢")
-	if !exist {
-		t.Fatal("Should exist!!")
-	}
-	if len(list) != 6 {
-		t.Fatal("Should 6!!")
-	}
-	t.Log(helper.JsonEncode(list))
+	t.Log("喜欢:", helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD3, "游泳")
-	if !exist {
-		t.Fatal("Should exist!!")
+	if exist {
+		t.Fatal("Should not exist!!")
 	}
-	if len(list) != 1 {
-		t.Fatal("Should 1!!")
-	}
-
-	t.Log(helper.JsonEncode(list))
+	t.Log("游泳:", helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD1, "李八")
 	if !exist {
@@ -482,22 +478,20 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatal("Should 1!!")
 	}
-	t.Log(helper.JsonEncode(list))
+	t.Log("李八:", helper.JsonEncode(list))
 
+	//测试正排索引
 	d, ok := part2.GetDocument(2)
 	if !ok {
 		t.Fatal("Shuold exist")
 	}
-	if d[TEST_FIELD2] != "25" {
-		t.Fatal("Error")
-	}
-	t.Log(helper.JsonEncode(d))
+	t.Log("Got doc 2:", helper.JsonEncode(d))
 
-	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
+	s2, ok := part2.GetFieldValue(3, TEST_FIELD3)
 	if !ok {
 		t.Fatal("Shuold exist")
 	}
-	if s2 != "喜欢美食,也喜欢文艺" {
+	if s2 != "喜欢打牌,也喜欢美食" {
 		t.Fatal("Error")
 	}
 	t.Log(s2)

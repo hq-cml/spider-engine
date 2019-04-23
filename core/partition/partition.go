@@ -93,14 +93,14 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 	//加载btree
 	btdbPath := prtPathName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if helper.Exist(btdbPath) {
-		log.Debugf("Load B+Tree File : %v", btdbPath)
+		log.Infof("Load B+Tree File : %v", btdbPath)
 		part.btdb = btree.NewBtree("", btdbPath)
 	}
 
 	//加载倒排文件
 	part.ivtMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_INVERT, prtPathName), true, 0)
 	if err != nil {
-		fmt.Printf("mmap error : %v \n", err)
+		log.Errf("mmap error : %v \n", err)
 		return nil, err
 	}
 	log.Debugf("Load Invert File : %v.idx ", prtPathName)
@@ -108,7 +108,7 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 	//加载正排文件
 	part.baseMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, prtPathName), true, 0)
 	if err != nil {
-		fmt.Printf("mmap error : %v \n", err)
+		log.Errf("mmap error : %v \n", err)
 		return nil, err
 	}
 	log.Debugf("Load Profile File : %v.pfl", prtPathName)
@@ -116,7 +116,7 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 	//加载正排辅助文件
 	part.extMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, prtPathName), true, 0)
 	if err != nil {
-		fmt.Printf("mmap error : %v \n", err)
+		log.Errf("mmap error : %v \n", err)
 	}
 	log.Debugf("Load Detail File : %v.dtl", prtPathName)
 
@@ -445,12 +445,12 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 				//fmt.Println("A---------", fieldName)
 				//特殊情况
 				//如果新的分区拥有一些新字段,但是老分区没有这个字段,此时,需要生成一个假的字段来占位
-				fakefield := field.NewEmptyFakeField(part.Fields[fieldName].FieldName, pt.StartDocId,
+				fakefield := field.NewFakeField(part.Fields[fieldName].FieldName, pt.StartDocId,
 					pt.NextDocId, part.Fields[fieldName].IndexType)
 				fs = append(fs, fakefield)
 			}
 		}
-		fmt.Println("A---------", len(fs))
+		//fmt.Println("A---------", len(fs))
 		err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
 		if err != nil {
 			log.Errln("MergePartitions Error1:", err)
