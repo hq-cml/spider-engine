@@ -33,6 +33,9 @@ import (
 	"strings"
 )
 
+const (
+	MaxInt64 = (0x01 << 63) -1 //0x7FFFFFFFFFFFFFFF, 即64位有符号int最大值
+)
 //profile 正排索引，detail也是保存在这里
 type ForwardIndex struct {
 	startDocId uint32 					//初始分区：从0开始；非初始分区：从本分区的第一篇DocId开始
@@ -116,13 +119,13 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 	log.Debugf("ForwardIndex AddDocument --> DocId: %v ,Content: %v", docId, content)
 
 	vtype := reflect.TypeOf(content)
-	var value int64 = 0xFFFFFFFF
+	var value int64 = MaxInt64
 	var ok error
 	switch vtype.Name() {
 	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
 		value, ok = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
 		if ok != nil {
-			value = 0xFFFFFFFF
+			value = MaxInt64
 		}
 		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 	case "float32":
@@ -137,13 +140,13 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 		if fwdIdx.indexType == IDX_TYPE_NUMBER {
 			value, err := strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
 			if err != nil {
-				value = 0xFFFFFFFF
+				value = MaxInt64
 			}
 			fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 		} else if fwdIdx.indexType == IDX_TYPE_DATE {
 			value, err := helper.String2Timestamp(fmt.Sprintf("%v", content))
 			if err != nil {
-				value = 0xFFFFFFFF
+				value = MaxInt64
 			}
 			fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 		} else {
@@ -173,19 +176,19 @@ func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) er
 	}
 
 	vtype := reflect.TypeOf(content)
-	var value int64 = 0xFFFFFFFF
+	var value int64 = MaxInt64
 	switch vtype.Name() {
 	case "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
 		var err error
 		if fwdIdx.indexType == IDX_TYPE_DATE {
 			value, err = helper.String2Timestamp(fmt.Sprintf("%v", content))
 			if err != nil {
-				value = 0xFFFFFFFF
+				value = MaxInt64
 			}
 		} else {
 			value, err = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
 			if err != nil {
-				value = 0xFFFFFFFF
+				value = MaxInt64
 			}
 		}
 	case "float32":
@@ -195,7 +198,7 @@ func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) er
 		v, _ := content.(float64)
 		value = int64(v * 100)
 	default:
-		value = 0xFFFFFFFF
+		value = MaxInt64
 	}
 
 	//内存态直接更新map，否则更新底层mmap
@@ -259,7 +262,7 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 //TODO 不支持从字符型中读取数字??
 func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 	if fwdIdx.fake {  //占位假索引, 直接返回占位数据
-		return 0xFFFFFFFF, true
+		return MaxInt64, true
 	}
 
 	//从内存读取
@@ -268,23 +271,23 @@ func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 			pos < uint32(len(fwdIdx.memoryNum)) {
 			return fwdIdx.memoryNum[pos], true
 		}
-		return 0xFFFFFFFF, false
+		return MaxInt64, false
 	}
 
 	//从disk读取
 	if fwdIdx.baseMmap == nil {
-		return 0xFFFFFFFF, false
+		return MaxInt64, false
 	}
 
 	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 	if fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE {
 		if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
-			return 0xFFFFFFFF, false
+			return MaxInt64, false
 		}
 		return fwdIdx.baseMmap.ReadInt64(realOffset), true
 	}
 
-	return 0xFFFFFFFF, false
+	return MaxInt64, false
 }
 
 //销毁
@@ -511,5 +514,132 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 	fwdIdx.memoryStr = nil
 	fwdIdx.memoryNum = nil
 	return nil
+}
+
+//从numbers判断pos指定的数,如果
+// type:EQ 只要有一个==, 就算ok
+// type:NEQ 必须全部都是!=, 就算ok
+func (fwdIdx *ForwardIndex) FilterNums(pos uint32, filterType uint8, numbers []int64) bool {
+	var value int64
+	if fwdIdx.fake {
+		return false
+	}
+
+	//仅支持数值型
+	if fwdIdx.indexType != IDX_TYPE_NUMBER {
+		return false
+	}
+
+	if fwdIdx.inMemory {
+		value = fwdIdx.memoryNum[pos]
+	} else {
+		if fwdIdx.baseMmap == nil {
+			return false
+		}
+
+		offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
+		value = fwdIdx.baseMmap.ReadInt64(offset)
+	}
+
+	switch filterType {
+	case basic.FILT_EQ:
+		for _, num := range numbers {
+			if (MaxInt64 & value != MaxInt64) && (value == num) {
+				return true
+			}
+		}
+		return false
+	case basic.FILT_NEQ:
+		for _, num := range numbers {
+			if (MaxInt64 & value != MaxInt64) && (value == num) {
+				return false
+			}
+		}
+		return true
+
+	default:
+		return false
+	}
+}
+
+//过滤
+func (fwdIdx *ForwardIndex) Filter(pos uint32, filterType uint8, start, end int64, str string) bool {
+
+	var value int64
+	if fwdIdx.fake {
+		return false
+	}
+
+	if fwdIdx.indexType == IDX_TYPE_NUMBER {
+		if fwdIdx.inMemory {
+			value = fwdIdx.memoryNum[pos]
+		} else {
+			if fwdIdx.baseMmap == nil {
+				return false
+			}
+			offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
+			value = fwdIdx.baseMmap.ReadInt64(offset)
+		}
+
+		switch filterType {
+		case basic.FILT_EQ:
+			return (MaxInt64 & value != MaxInt64) && (value == start)
+		case basic.FILT_OVER:
+			return (MaxInt64 & value != MaxInt64) && (value >= start)
+		case basic.FILT_LESS:
+			return (MaxInt64 & value != MaxInt64) && (value <= start)
+		case basic.FILT_BETWEEN:
+			return (MaxInt64 & value != MaxInt64) && (value >= start && value <= end)
+		case basic.FILT_NEQ:
+			return (MaxInt64 & value != MaxInt64) && (value != start)
+		default:
+			return false
+		}
+	} else if fwdIdx.indexType == IDX_TYPE_STRING_SINGLE || fwdIdx.indexType == IDX_TYPE_STRING{
+		vl := strings.Split(str, ",")
+		switch filterType {
+
+		case basic.FILT_STR_PREFIX:
+			if vstr, ok := fwdIdx.GetString(pos); ok {
+				for _, v := range vl {
+					if strings.HasPrefix(vstr, v) {
+						return true
+					}
+				}
+			}
+			return false
+		case basic.FILT_STR_SUFFIX:
+			if vstr, ok := fwdIdx.GetString(pos); ok {
+				for _, v := range vl {
+					if strings.HasSuffix(vstr, v) {
+						return true
+					}
+				}
+			}
+			return false
+		case basic.FILT_STR_RANGE:
+			if vstr, ok := fwdIdx.GetString(pos); ok {
+				for _, v := range vl {
+					if !strings.Contains(vstr, v) {
+						return false
+					}
+				}
+				return true
+			}
+			return false
+		case basic.FILT_STR_ALL:
+			if vstr, ok := fwdIdx.GetString(pos); ok {
+				for _, v := range vl {
+					if vstr == v {
+						return true
+					}
+				}
+			}
+			return false
+		default:
+			return false
+		}
+	}
+	return false
 }
 

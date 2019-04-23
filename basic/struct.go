@@ -16,10 +16,13 @@ func init() {
 // 过滤类型，对应filtertype
 const (
 	FILT_EQ          = 1  //等于
-	FILT_OVER        = 2  //大于
-	FILT_LESS        = 3  //小于
-	FILT_RANGE       = 4  //范围内
-	FILT_NEQ 		 = 5  //不等于
+	FILT_NEQ 		 = 2  //不等于
+	FILT_OVER        = 3  //大于, 仅数字支持
+	FILT_LESS        = 4  //小于, 仅数字支持
+	FILT_IN          = 5  //IN
+	FILT_NOTIN       = 6  //NOT IN
+	FILT_BETWEEN     = 7  //范围内
+
 	FILT_STR_PREFIX  = 11 //前缀
 	FILT_STR_SUFFIX  = 12 //后缀
 	FILT_STR_RANGE   = 13 //之内
