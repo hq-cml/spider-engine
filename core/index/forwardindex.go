@@ -278,7 +278,6 @@ func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 	if fwdIdx.baseMmap == nil {
 		return MaxInt64, false
 	}
-
 	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 	if fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE {
 		if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
@@ -516,130 +515,86 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 	return nil
 }
 
-//从numbers判断pos指定的数,如果
-// type:EQ 只要有一个==, 就算ok
-// type:NEQ 必须全部都是!=, 就算ok
-func (fwdIdx *ForwardIndex) FilterNums(pos uint32, filterType uint8, numbers []int64) bool {
-	var value int64
-	if fwdIdx.fake {
+//过滤操作
+// 判断pos指向的dco是否满足条件，pos指的是在当前分区中的位置，即(docId-startDocId)
+// 返回true的doc，将会保留，否则，将会被剔除
+func (fwdIdx *ForwardIndex) Filter(pos uint32, filter basic.SearchFilter) bool {
+	if fwdIdx.fake {  //Fake直接返回
 		return false
 	}
 
-	//仅支持数值型
-	if fwdIdx.indexType != IDX_TYPE_NUMBER {
-		return false
-	}
-
-	if fwdIdx.inMemory {
-		value = fwdIdx.memoryNum[pos]
-	} else {
-		if fwdIdx.baseMmap == nil {
+	if fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE {
+		//数字类型, 现获取值
+		value, ok := fwdIdx.GetInt(pos)
+		if !ok {
 			return false
 		}
 
-		offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
-		value = fwdIdx.baseMmap.ReadInt64(offset)
-	}
-
-	switch filterType {
-	case basic.FILT_EQ:
-		for _, num := range numbers {
-			if (MaxInt64 & value != MaxInt64) && (value == num) {
-				return true
-			}
-		}
-		return false
-	case basic.FILT_NEQ:
-		for _, num := range numbers {
-			if (MaxInt64 & value != MaxInt64) && (value == num) {
-				return false
-			}
-		}
-		return true
-
-	default:
-		return false
-	}
-}
-
-//过滤
-func (fwdIdx *ForwardIndex) Filter(pos uint32, filterType uint8, start, end int64, str string) bool {
-
-	var value int64
-	if fwdIdx.fake {
-		return false
-	}
-
-	if fwdIdx.indexType == IDX_TYPE_NUMBER {
-		if fwdIdx.inMemory {
-			value = fwdIdx.memoryNum[pos]
-		} else {
-			if fwdIdx.baseMmap == nil {
-				return false
-			}
-			offset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
-			value = fwdIdx.baseMmap.ReadInt64(offset)
-		}
-
-		switch filterType {
+		//根据不同的匹配类型，进行对应的匹配
+		switch filter.FilterType {
 		case basic.FILT_EQ:
-			return (MaxInt64 & value != MaxInt64) && (value == start)
-		case basic.FILT_OVER:
-			return (MaxInt64 & value != MaxInt64) && (value >= start)
-		case basic.FILT_LESS:
-			return (MaxInt64 & value != MaxInt64) && (value <= start)
-		case basic.FILT_BETWEEN:
-			return (MaxInt64 & value != MaxInt64) && (value >= start && value <= end)
+			return (MaxInt64 & value != MaxInt64) && (value == filter.IntVal)
 		case basic.FILT_NEQ:
-			return (MaxInt64 & value != MaxInt64) && (value != start)
+			return (MaxInt64 & value != MaxInt64) && (value != filter.IntVal)
+		case basic.FILT_MORE_THAN:
+			return (MaxInt64 & value != MaxInt64) && (value >= filter.IntVal)
+		case basic.FILT_LESS_THAN:
+			return (MaxInt64 & value != MaxInt64) && (value <= filter.IntVal)
+		case basic.FILT_BETWEEN:
+			return (MaxInt64 & value != MaxInt64) && (value >= filter.Begin && value <= filter.End)
+		case basic.FILT_IN:
+			for _, num := range filter.RangeNums {
+				if (MaxInt64 & value != MaxInt64) && (value == num) {
+					return true
+				}
+			}
+			return false
+		case basic.FILT_NOTIN:
+			for _, num := range filter.RangeNums {
+				if (MaxInt64 & value != MaxInt64) && (value == num) {
+					return false
+				}
+			}
+			return true
 		default:
 			return false
 		}
-	} else if fwdIdx.indexType == IDX_TYPE_STRING_SINGLE || fwdIdx.indexType == IDX_TYPE_STRING{
-		vl := strings.Split(str, ",")
-		switch filterType {
+	} else {
+		//字符类型
+		value, ok := fwdIdx.GetString(pos)
+		if !ok {
+			return false
+		}
 
+		switch filter.FilterType {
+		case basic.FILT_EQ:
+			return value == filter.StrVal
+		case basic.FILT_NEQ:
+			return value != filter.StrVal
 		case basic.FILT_STR_PREFIX:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if strings.HasPrefix(vstr, v) {
-						return true
-					}
-				}
-			}
-			return false
+			return strings.HasPrefix(value, filter.StrVal)
 		case basic.FILT_STR_SUFFIX:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if strings.HasSuffix(vstr, v) {
-						return true
-					}
+			return strings.HasSuffix(value, filter.StrVal)
+		case basic.FILT_STR_CONTAIN:
+			return strings.Contains(value, filter.StrVal)
+		case basic.FILT_IN:
+			for _, str := range filter.RangeStrs {
+				if value == str {
+					return true
 				}
 			}
 			return false
-		case basic.FILT_STR_RANGE:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if !strings.Contains(vstr, v) {
-						return false
-					}
-				}
-				return true
-			}
-			return false
-		case basic.FILT_STR_ALL:
-			if vstr, ok := fwdIdx.GetString(pos); ok {
-				for _, v := range vl {
-					if vstr == v {
-						return true
-					}
+		case basic.FILT_NOTIN:
+			for _, str := range filter.RangeStrs {
+				if value == str {
+					return false
 				}
 			}
-			return false
+			return true
 		default:
 			return false
 		}
 	}
+
 	return false
 }
-

@@ -1,6 +1,8 @@
 package basic
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 type DocNode struct {
 	DocId  uint32
@@ -17,16 +19,15 @@ func init() {
 const (
 	FILT_EQ          = 1  //等于
 	FILT_NEQ 		 = 2  //不等于
-	FILT_OVER        = 3  //大于, 仅数字支持
-	FILT_LESS        = 4  //小于, 仅数字支持
+	FILT_MORE_THAN   = 3  //大于, 仅数字支持
+	FILT_LESS_THAN   = 4  //小于, 仅数字支持
 	FILT_IN          = 5  //IN
 	FILT_NOTIN       = 6  //NOT IN
 	FILT_BETWEEN     = 7  //范围内
 
-	FILT_STR_PREFIX  = 11 //前缀
-	FILT_STR_SUFFIX  = 12 //后缀
-	FILT_STR_RANGE   = 13 //之内
-	FILT_STR_ALL     = 14 //全词
+	FILT_STR_PREFIX  = 11 //前缀, 仅数字字符
+	FILT_STR_SUFFIX  = 12 //后缀, 仅数字字符
+	FILT_STR_CONTAIN = 13 //包含
 )
 
 const (
@@ -67,4 +68,15 @@ type SearchFilted struct {
 	Type      uint8    `json:"_type"`
 	MatchStr  string   `json:"_matchstr"`
 	RangeStr  []string `json:"_rangestr"`
+}
+
+type SearchFilter struct {
+	FieldName       string
+	FilterType      uint8
+	StrVal          string   //用于字符的==/!=
+	IntVal          int64    //用于数字的==/!=/>/<
+	Begin           int64    //用于数字between
+	End             int64    //用于数字between
+	RangeNums       []int64  //用于数字in或not in
+	RangeStrs       []string //用于字符in或not in
 }
