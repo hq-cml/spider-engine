@@ -442,16 +442,18 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 			if _, exist := pt.Fields[fieldName]; exist {
 				fs = append(fs, pt.Fields[fieldName])
 			} else {
+				//fmt.Println("A---------", fieldName)
 				//特殊情况
 				//如果新的分区拥有一些新字段,但是老分区没有这个字段,此时,需要生成一个假的字段来占位
 				fakefield := field.NewEmptyFakeField(part.Fields[fieldName].FieldName, pt.StartDocId,
-					part.Fields[fieldName].IndexType, pt.NextDocId-pt.StartDocId)
+					pt.NextDocId, part.Fields[fieldName].IndexType)
 				fs = append(fs, fakefield)
 			}
 		}
+		fmt.Println("A---------", len(fs))
 		err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
 		if err != nil {
-			log.Errln("MergePartitions Error:", err)
+			log.Errln("MergePartitions Error1:", err)
 			return err
 		}
 
@@ -469,17 +471,17 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	var err error
 	part.ivtMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
-		log.Errln("MergePartitions Error:", err)
+		log.Errln("MergePartitions Error2:", err)
 		return err
 	}
 	part.baseMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_FWD,true, 0)
 	if err != nil {
-		log.Errln("MergePartitions Error:", err)
+		log.Errln("MergePartitions Error3:", err)
 		return err
 	}
 	part.extMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
-		log.Errln("MergePartitions Error:", err)
+		log.Errln("MergePartitions Error4:", err)
 		return err
 	}
 	for name := range part.Fields {

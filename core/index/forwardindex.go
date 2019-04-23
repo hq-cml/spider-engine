@@ -51,12 +51,12 @@ type ForwardIndex struct {
 const DATA_BYTE_CNT = 8
 
 //假索引，高层占位用
-func NewEmptyFakeForwardIndex(indexType uint16, start uint32, docCnt uint32) *ForwardIndex {
+func NewEmptyFakeForwardIndex(indexType uint16, start uint32, next uint32) *ForwardIndex {
 	return &ForwardIndex{
-		docCnt:     docCnt,
+		docCnt:     next - start,
 		indexType:  indexType,
 		startDocId: start,
-		nextDocId:  start,
+		nextDocId:  next,
 		fake:       true,   //here is the point!
 	}
 }
@@ -462,7 +462,7 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 			}
 		}
 	} else {
-		//打开dtl文件
+		//打开ext文件
 		extFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, partitionPathName)
 		extFd, err := os.OpenFile(extFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {

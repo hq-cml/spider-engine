@@ -42,12 +42,12 @@ type BasicField struct {
 }
 
 //假字段，高层合并落地时, 占位用
-func NewEmptyFakeField(fieldname string, start uint32, IndexType uint16, docCnt uint32) *Field {
-	fwdIdx := index.NewEmptyFakeForwardIndex(IndexType, start, docCnt)
+func NewEmptyFakeField(fieldname string, start uint32, next uint32, IndexType uint16) *Field {
+	fwdIdx := index.NewEmptyFakeForwardIndex(IndexType, start, next)
 	return &Field{
 		FieldName:  fieldname,
 		StartDocId: start,
-		NextDocId:  start,
+		NextDocId:  next,
 		IndexType:  IndexType,
 		FwdIdx:     fwdIdx,    //主要是为了这个假索引
 	}
@@ -258,8 +258,12 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 		return errors.New("Nil []*Field")
 	}
 	l := len(fields)
+	fmt.Println(l)
 	for i:=0; i<(l-1); i++ {
 		if fields[i].NextDocId != fields[i+1].StartDocId {
+			fmt.Println(fields[i].FieldName)
+			fmt.Println(fields[i].NextDocId)
+			fmt.Println(fields[i+1].StartDocId)
 			return errors.New("Indexes order wrong")
 		}
 	}
@@ -278,12 +282,12 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 	}
 
 	//如果有倒排索引，则合并
-	//if indexType == index.IDX_TYPE_STRING ||
-	//	indexType == index.IDX_TYPE_STRING_SEG ||
-	//	indexType == index.IDX_TYPE_STRING_LIST ||
-	//	indexType == index.IDX_TYPE_STRING_SINGLE ||
-	//	indexType == index.GATHER_TYPE {
-	if fields[0].IvtIdx != nil {
+	if fld.IndexType == index.IDX_TYPE_STRING ||
+		fld.IndexType == index.IDX_TYPE_STRING_SEG ||
+		fld.IndexType == index.IDX_TYPE_STRING_LIST ||
+		fld.IndexType == index.IDX_TYPE_STRING_SINGLE ||
+		fld.IndexType == index.GATHER_TYPE {
+
 		ivts := make([]*index.InvertedIndex, 0)
 		for _, fd := range fields {
 			if fd.IvtIdx != nil {

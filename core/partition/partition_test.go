@@ -1,9 +1,9 @@
 package partition
 
 import (
-	"testing"
 	"os"
 	"os/exec"
+	"testing"
 	"fmt"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/core/index"
@@ -22,7 +22,7 @@ func init() {
 		os.Exit(1)
 	}
 }
-
+/*
 func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
 	//var coreFields = []field.CoreField{
@@ -372,4 +372,138 @@ func TestLoadMerge(t *testing.T) {
 	t.Log(s2)
 	t.Log(helper.JsonEncode(part2.CoreFields))
 	t.Log("\n\n")
+}
+*/
+//测试在字段出现新增前后，分区的合并情况
+func TestPartitionMergeAfterFiledChange(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+	patitionName0 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
+	//创建分区1
+	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, []field.BasicField{
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+	})
+	if part0.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	if part0.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	user0 := map[string]string {TEST_FIELD1:"张三", TEST_FIELD2:"20"}
+	user1 := map[string]string {TEST_FIELD1:"李四", TEST_FIELD2:"30"}
+	user2 := map[string]string {TEST_FIELD1:"王二", TEST_FIELD2:"25"}
+	part0.AddDocument(0, user0)
+	part0.AddDocument(1, user1)
+	part0.AddDocument(2, user2)
+
+
+	//创建分区2
+	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
+	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, []field.BasicField{
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
+	})
+	if part1.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	if part1.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+	user3 := map[string]string {TEST_FIELD1:"赵六", TEST_FIELD2:"22", TEST_FIELD3:"喜欢打牌,也喜欢美食"}
+	user4 := map[string]string {TEST_FIELD1:"钱七", TEST_FIELD2:"29", TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
+	user5 := map[string]string {TEST_FIELD1:"李八", TEST_FIELD2:"24", TEST_FIELD3:"喜欢睡觉"}
+	part1.AddDocument(3, user3)
+	part1.AddDocument(4, user4)
+	part1.AddDocument(5, user5)
+
+	//新建的两个分区落地
+	//一定要落地先一次，两个分区的btdb才能被正确设置，否则无法进行合并
+	part0.Persist()
+	part1.Persist()
+	part0.btdb.Display(TEST_FIELD1)
+	part1.btdb.Display(TEST_FIELD1)
+
+	//外插花一个分区, 准备合并
+	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
+	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, []field.BasicField{
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
+	})
+	defer part2.DoClose()
+
+	//合并
+	err = part2.MergePersistPartitions([]*Partition{part0, part1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//part2.Fields[TEST_FIELD3].IvtIdx.GetBtree().Display(TEST_FIELD3)
+
+
+	//合并完毕, 测试合并效果
+	list, exist := part2.query(TEST_FIELD3, "美食")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 3 {
+		t.Fatal("Should 3!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.query(TEST_FIELD3, "喜欢")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 6 {
+		t.Fatal("Should 6!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.query(TEST_FIELD3, "游泳")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 1!!")
+	}
+
+	t.Log(helper.JsonEncode(list))
+
+	list, exist = part2.query(TEST_FIELD1, "李八")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 1 {
+		t.Fatal("Should 1!!")
+	}
+	t.Log(helper.JsonEncode(list))
+
+	d, ok := part2.GetDocument(2)
+	if !ok {
+		t.Fatal("Shuold exist")
+	}
+	if d[TEST_FIELD2] != "25" {
+		t.Fatal("Error")
+	}
+	t.Log(helper.JsonEncode(d))
+
+	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
+	if !ok {
+		t.Fatal("Shuold exist")
+	}
+	if s2 != "喜欢美食,也喜欢文艺" {
+		t.Fatal("Error")
+	}
+	t.Log(s2)
+
+	t.Log(helper.JsonEncode(part2.CoreFields))
+
+	t.Log("\n\n")
+
 }
