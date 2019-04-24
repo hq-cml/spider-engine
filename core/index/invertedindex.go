@@ -106,7 +106,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	//根据type进行分词
 	var nodes map[string]basic.DocNode
 	switch rIdx.indexType {
-	case IDX_TYPE_STRING, GATHER_TYPE: 			//全词匹配模式
+	case IDX_TYPE_STRING: 			             //全词匹配模式
 		nodes = SplitWholeWords(docId, content)
 	case IDX_TYPE_STRING_LIST: 					//分号切割模式
 		nodes = SplitSemicolonWords(docId, content)

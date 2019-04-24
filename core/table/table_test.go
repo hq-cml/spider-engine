@@ -43,7 +43,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD2,
-		IndexType: index.IDX_TYPE_NUMBER,
+		IndexType: index.IDX_TYPE_INTEGER,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD4,
-		IndexType: index.IDX_TYPE_NUMBER,
+		IndexType: index.IDX_TYPE_INTEGER,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +448,7 @@ func TestMultiMerge(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD2,
-		IndexType: index.IDX_TYPE_NUMBER,
+		IndexType: index.IDX_TYPE_INTEGER,
 	}); err != nil {
 		t.Fatal(err)
 	}

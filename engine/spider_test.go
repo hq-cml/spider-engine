@@ -45,7 +45,7 @@ func TestInitSpider(t *testing.T) {
 			IndexType: index.IDX_TYPE_STRING,
 		},{
 			FieldName: TEST_FIELD2,
-			IndexType: index.IDX_TYPE_NUMBER,
+			IndexType: index.IDX_TYPE_INTEGER,
 		},{
 			FieldName: TEST_FIELD3,
 			IndexType: index.IDX_TYPE_STRING_SEG,

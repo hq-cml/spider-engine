@@ -215,32 +215,33 @@ func (part *Partition) AddDocument(docId uint32, content map[string]string) erro
 	return nil
 }
 
+//更高层采用先删后增的方式，变相得实现了update
 //更新文档
 //content, 一篇文档的各个字段的值
-func (part *Partition) UpdateDocument(docId uint32, content map[string]string) error {
-	//校验
-	if docId >= part.NextDocId || docId < part.StartDocId {
-		log.Errf("Partition --> UpdateDocument :: Wrong DocId[%v]  NextDocId[%v]", docId, part.NextDocId)
-		return errors.New("Partition --> UpdateDocument :: Wrong DocId Number")
-	}
-
-	//各个字段分别改
-	for fieldName, _ := range part.Fields {
-		if _, ok := content[fieldName]; !ok {
-			//如果某个字段没传, 则会清空字段
-			if err := part.Fields[fieldName].UpdateDocument(docId, ""); err != nil {
-				log.Errf("Partition --> UpdateDocument :: %v", err)
-			}
-		} else {
-
-			if err := part.Fields[fieldName].UpdateDocument(docId, content[fieldName]); err != nil {
-				log.Errf("Partition --> UpdateDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
-			}
-		}
-	}
-
-	return nil
-}
+//func (part *Partition) UpdateDocument(docId uint32, content map[string]string) error {
+//	//校验
+//	if docId >= part.NextDocId || docId < part.StartDocId {
+//		log.Errf("Partition --> UpdateDocument :: Wrong DocId[%v]  NextDocId[%v]", docId, part.NextDocId)
+//		return errors.New("Partition --> UpdateDocument :: Wrong DocId Number")
+//	}
+//
+//	//各个字段分别改
+//	for fieldName, _ := range part.Fields {
+//		if _, ok := content[fieldName]; !ok {
+//			//如果某个字段没传, 则会清空字段
+//			if err := part.Fields[fieldName].UpdateDocument(docId, ""); err != nil {
+//				log.Errf("Partition --> UpdateDocument :: %v", err)
+//			}
+//		} else {
+//
+//			if err := part.Fields[fieldName].UpdateDocument(docId, content[fieldName]); err != nil {
+//				log.Errf("Partition --> UpdateDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
+//			}
+//		}
+//	}
+//
+//	return nil
+//}
 
 //关闭Partition
 func (part *Partition) DoClose() error {

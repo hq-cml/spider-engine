@@ -112,38 +112,28 @@ func (fwdIdx *ForwardIndex)String() string {
 // 增加文档，只会出现在最新的一个分区（即都是内存态的），所以只会操作内存态的
 // 也就是，一个索引一旦落盘之后，就不在支持增加Doc了（会有其他分区的内存态索引去负责新增）
 func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error {
-
 	if docId != fwdIdx.nextDocId || fwdIdx.inMemory == false {
 		return errors.New("ForwardIndex --> AddDocument :: Wrong DocId Number")
 	}
-	log.Debugf("ForwardIndex AddDocument --> DocId: %v ,Content: %v", docId, content)
 
 	vtype := reflect.TypeOf(content)
 	var value int64 = MaxInt64
 	var ok error
 	switch vtype.Name() {
 	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
+		if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
+			return errors.New("Wrong Type")
+		}
 		value, ok = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
 		if ok != nil {
 			value = MaxInt64
 		}
 		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
-	case "float32":
-		v, _ := content.(float32) 								//TODO why *100??
-		value = int64(v * 100)
-		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
-	case "float64":
-		v, _ := content.(float64)
-		value = int64(v * 100)
-		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 	case "string":
-		if fwdIdx.indexType == IDX_TYPE_NUMBER {
-			value, err := strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
-			if err != nil {
-				value = MaxInt64
-			}
-			fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
-		} else if fwdIdx.indexType == IDX_TYPE_DATE {
+		if fwdIdx.indexType == IDX_TYPE_INTEGER {
+			return errors.New("Wrong Type")
+		}
+		if fwdIdx.indexType == IDX_TYPE_DATE { //日期类型转成时间戳
 			value, err := helper.String2Timestamp(fmt.Sprintf("%v", content))
 			if err != nil {
 				value = MaxInt64
@@ -153,62 +143,98 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 			fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
 		}
 	default:
+		//float，bool等变量，走入默认分支，直接按字符串存
+		if fwdIdx.indexType != IDX_TYPE_STRING && fwdIdx.indexType != IDX_TYPE_STRING_SEG &&
+			fwdIdx.indexType != IDX_TYPE_STRING_LIST && fwdIdx.indexType != IDX_TYPE_STRING_SINGLE {
+			return errors.New("Wrong Type")
+		}
 		fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
 	}
 	fwdIdx.nextDocId++
 	fwdIdx.docCnt ++
+	log.Debugf("ForwardIndex AddDocument --> DocId: %v ,Content: %v", docId, content)
 	return nil
 }
 
+//更高层采用先删后增的方式，变相得实现了update
 //更新文档
 //Note:
 //只支持数字（包括时间）型的索引的更改，string类型的通过外层的bitmap来实现更改
-func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) error {
-	//范围校验
-	if docId < fwdIdx.startDocId || docId >= fwdIdx.nextDocId {
-		log.Errf("ForwardIndex --> UpdateDocument :: Wrong docid %v", docId)
-		return errors.New("Wrong docId")
+//func (fwdIdx *ForwardIndex) UpdateDocument(docId uint32, content interface{}) error {
+//	//范围校验
+//	if docId < fwdIdx.startDocId || docId >= fwdIdx.nextDocId {
+//		log.Errf("ForwardIndex --> UpdateDocument :: Wrong docid %v", docId)
+//		return errors.New("Wrong docId")
+//	}
+//
+//	//只支持数字（包括时间）型的索引的更改，string类型的通过外层的bitmap来实现更改
+//	if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
+//		return nil
+//	}
+//
+//	vtype := reflect.TypeOf(content)
+//	var value int64 = MaxInt64
+//	switch vtype.Name() {
+//	case "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
+//		var err error
+//		if fwdIdx.indexType == IDX_TYPE_DATE {
+//			value, err = helper.String2Timestamp(fmt.Sprintf("%v", content))
+//			if err != nil {
+//				value = MaxInt64
+//			}
+//		} else {
+//			value, err = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
+//			if err != nil {
+//				value = MaxInt64
+//			}
+//		}
+//	case "float32":
+//		v, _ := content.(float32)
+//		value = int64(v * 100)    				//TODO why *100??
+//	case "float64":
+//		v, _ := content.(float64)
+//		value = int64(v * 100)
+//	default:
+//		value = MaxInt64
+//	}
+//
+//	//内存态直接更新map，否则更新底层mmap
+//	if fwdIdx.inMemory == true {
+//		fwdIdx.memoryNum[docId - fwdIdx.startDocId] = value    //下标:docId-fwdIdx.startDocId作为索引内部的引用值
+//	} else {
+//		offset := fwdIdx.fwdOffset + uint64(docId - fwdIdx.startDocId) * DATA_BYTE_CNT
+//		fwdIdx.baseMmap.WriteInt64(offset, value)
+//	}
+//	return nil
+//}
+
+//以字符串形式获取
+//参数Pos: 通常索引内引用元素，比如dockId - startId
+func (fwdIdx *ForwardIndex) GetTimeStr(pos uint32) (string, bool) {
+	if fwdIdx.fake {  //占位假索引, 直接返回占位数据
+		return "", true
 	}
 
-	//只支持数字（包括时间）型的索引的更改，string类型的通过外层的bitmap来实现更改
-	if fwdIdx.indexType != IDX_TYPE_NUMBER && fwdIdx.indexType != IDX_TYPE_DATE {
-		return nil
+	//类型校验
+	if fwdIdx.indexType != IDX_TYPE_DATE && fwdIdx.indexType != IDX_TYPE_INTEGER {
+		return "", false
 	}
 
-	vtype := reflect.TypeOf(content)
-	var value int64 = MaxInt64
-	switch vtype.Name() {
-	case "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
-		var err error
-		if fwdIdx.indexType == IDX_TYPE_DATE {
-			value, err = helper.String2Timestamp(fmt.Sprintf("%v", content))
-			if err != nil {
-				value = MaxInt64
-			}
-		} else {
-			value, err = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
-			if err != nil {
-				value = MaxInt64
-			}
-		}
-	case "float32":
-		v, _ := content.(float32)
-		value = int64(v * 100)    				//TODO why *100??
-	case "float64":
-		v, _ := content.(float64)
-		value = int64(v * 100)
-	default:
-		value = MaxInt64
+	//先尝试从内存获取
+	if fwdIdx.inMemory && pos < uint32(len(fwdIdx.memoryNum)) {
+		return helper.Timestamp2String(fwdIdx.memoryNum[pos]), true
 	}
 
-	//内存态直接更新map，否则更新底层mmap
-	if fwdIdx.inMemory == true {
-		fwdIdx.memoryNum[docId - fwdIdx.startDocId] = value    //下标:docId-fwdIdx.startDocId作为索引内部的引用值
-	} else {
-		offset := fwdIdx.fwdOffset + uint64(docId - fwdIdx.startDocId) * DATA_BYTE_CNT
-		fwdIdx.baseMmap.WriteInt64(offset, value)
+	//再从disk获取(其实是利用mmap, 速度会有所提升
+	if fwdIdx.baseMmap == nil {
+		return "", false
 	}
-	return nil
+	//数字或者日期类型, 直接从索引文件读取
+	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
+	if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
+		return "", false
+	}
+	return helper.Timestamp2String(fwdIdx.baseMmap.ReadInt64(realOffset)), true
 }
 
 //以字符串形式获取
@@ -217,76 +243,67 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 	if fwdIdx.fake {  //占位假索引, 直接返回占位数据
 		return "", true
 	}
-	//先尝试从内存获取
-	if fwdIdx.inMemory && (pos < uint32(len(fwdIdx.memoryNum)) || pos < uint32(len(fwdIdx.memoryStr))) {
-		if fwdIdx.indexType == IDX_TYPE_NUMBER {
-			return fmt.Sprintf("%v", fwdIdx.memoryNum[pos]), true
-		} else if fwdIdx.indexType == IDX_TYPE_DATE {
-			return helper.Timestamp2String(fwdIdx.memoryNum[pos]), true
-		} else {
-			return fwdIdx.memoryStr[pos], true
-		}
-	}
 
-	//再从disk获取(其实是利用mmap, 速度会有所提升
-	if fwdIdx.baseMmap == nil {
+	//类型校验
+	if fwdIdx.indexType != IDX_TYPE_STRING && fwdIdx.indexType != IDX_TYPE_STRING_SEG &&
+		fwdIdx.indexType != IDX_TYPE_STRING_LIST && fwdIdx.indexType != IDX_TYPE_STRING_SINGLE {
 		return "", false
 	}
 
-	//数字或者日期类型, 直接从索引文件读取
+	//先尝试从内存获取
+	if fwdIdx.inMemory && pos < uint32(len(fwdIdx.memoryStr)) {
+		return fwdIdx.memoryStr[pos], true
+	}
+
+	//如果内存没有，则从磁盘读取
+	if fwdIdx.baseMmap == nil {
+		return "", false
+	}
+	//string类型间接从文件获取
 	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 	if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
 		return "", false
 	}
-
-	if fwdIdx.indexType == IDX_TYPE_NUMBER {
-		return fmt.Sprintf("%v", fwdIdx.baseMmap.ReadInt64(realOffset)), true
-	} else if fwdIdx.indexType == IDX_TYPE_DATE {
-		return helper.Timestamp2String(fwdIdx.baseMmap.ReadInt64(realOffset)), true
-	} else {
-		//string类型则间接从文件获取
-		if fwdIdx.extMmap == nil {
-			return "", false
-		}
-		extOffset := fwdIdx.baseMmap.ReadUInt64(realOffset)
-		if (int(extOffset) >= len(fwdIdx.extMmap.DataBytes)) {
-			return "", false
-		}
-		strLen := fwdIdx.extMmap.ReadUInt64(extOffset)
-		return fwdIdx.extMmap.ReadString(extOffset + DATA_BYTE_CNT, strLen), true
+	if fwdIdx.extMmap == nil {
+		return "", false
 	}
+	extOffset := fwdIdx.baseMmap.ReadUInt64(realOffset)
+	if (int(extOffset) >= len(fwdIdx.extMmap.DataBytes)) {
+		return "", false
+	}
+	strLen := fwdIdx.extMmap.ReadUInt64(extOffset)
+	return fwdIdx.extMmap.ReadString(extOffset + DATA_BYTE_CNT, strLen), true
 }
 
 //获取值 (以数值形式)
 //参数Pos: 通常索引内引用元素，比如dockId - startId
-//TODO 不支持从字符型中读取数字??
 func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 	if fwdIdx.fake {  //占位假索引, 直接返回占位数据
 		return MaxInt64, true
 	}
 
-	//从内存读取
-	if fwdIdx.inMemory {
-		if (fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE) &&
-			pos < uint32(len(fwdIdx.memoryNum)) {
-			return fwdIdx.memoryNum[pos], true
-		}
+	//类型校验
+	if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
 		return MaxInt64, false
 	}
 
-	//从disk读取
-	if fwdIdx.baseMmap == nil {
+	if fwdIdx.inMemory {
+		//从内存读取
+		if pos < uint32(len(fwdIdx.memoryNum)) {
+			return fwdIdx.memoryNum[pos], true
+		}
 		return MaxInt64, false
-	}
-	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
-	if fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE {
+	} else {
+		//从disk读取
+		if fwdIdx.baseMmap == nil {
+			return MaxInt64, false
+		}
+		realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
 		if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
 			return MaxInt64, false
 		}
 		return fwdIdx.baseMmap.ReadInt64(realOffset), true
 	}
-
-	return MaxInt64, false
 }
 
 //销毁
@@ -346,7 +363,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 	offset := fi.Size()
 
 	var cnt int
-	if fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE {
+	if fwdIdx.indexType == IDX_TYPE_INTEGER || fwdIdx.indexType == IDX_TYPE_DATE {
 		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, num := range fwdIdx.memoryNum {
 			binary.LittleEndian.PutUint64(buffer, uint64(num))
@@ -444,7 +461,7 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 	offset := fi.Size()
 
 	cnt := 0
-	if indexType == IDX_TYPE_NUMBER || indexType == IDX_TYPE_DATE {
+	if indexType == IDX_TYPE_INTEGER || indexType == IDX_TYPE_DATE {
 		buffer := make([]byte, DATA_BYTE_CNT)
 		for _, idx := range idxList {
 			for i := uint32(0); i < uint32(idx.docCnt); i++ {
@@ -523,7 +540,7 @@ func (fwdIdx *ForwardIndex) Filter(pos uint32, filter basic.SearchFilter) bool {
 		return false
 	}
 
-	if fwdIdx.indexType == IDX_TYPE_NUMBER || fwdIdx.indexType == IDX_TYPE_DATE {
+	if fwdIdx.indexType == IDX_TYPE_INTEGER || fwdIdx.indexType == IDX_TYPE_DATE {
 		//数字类型, 现获取值
 		value, ok := fwdIdx.GetInt(pos)
 		if !ok {

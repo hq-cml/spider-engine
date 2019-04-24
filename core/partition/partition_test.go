@@ -36,7 +36,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 
 	//新增字段
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING})
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER})
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG})
 	if memPartition.IsEmpty() != true {
 		t.Fatal("Should empty!!")
@@ -183,7 +183,7 @@ func TestPartitionMerge(t *testing.T) {
 	//创建分区1
 	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, []field.BasicField{
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
-		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part0.IsEmpty() != true {
@@ -204,7 +204,7 @@ func TestPartitionMerge(t *testing.T) {
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
 	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, []field.BasicField{
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
-		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part1.IsEmpty() != true {
@@ -231,7 +231,7 @@ func TestPartitionMerge(t *testing.T) {
 	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, []field.BasicField{
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
-		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	defer part2.DoClose()
@@ -405,7 +405,7 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
 	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, []field.BasicField{
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
-		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part1.IsEmpty() != true {
@@ -432,7 +432,7 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, []field.BasicField{
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
-		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_NUMBER},
+		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	defer part2.DoClose()

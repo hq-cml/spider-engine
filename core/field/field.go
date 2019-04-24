@@ -138,7 +138,7 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 	}
 
 	//数字型和时间型不能加倒排索引
-	if fld.IndexType != index.IDX_TYPE_NUMBER &&
+	if fld.IndexType != index.IDX_TYPE_INTEGER &&
 		fld.IndexType != index.IDX_TYPE_DATE &&
 		fld.IvtIdx != nil {
 		if err := fld.IvtIdx.AddDocument(docId, content); err != nil {
@@ -152,20 +152,21 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 	return nil
 }
 
+//更高层采用先删后增的方式，变相得实现了update
 //更新
 //Note:
 //只更新正排索引，倒排索引在上层通过bitmap来更新
-func (fld *Field) UpdateDocument(docid uint32, content string) error {
-	if fld.FwdIdx == nil {
-		return errors.New("fwdIdx is nil")
-	}
-	if err := fld.FwdIdx.UpdateDocument(docid, content); err != nil {
-		log.Errf("Field --> UpdateDocument :: Update Document Error %v", err)
-		return err
-	}
-
-	return nil
-}
+//func (fld *Field) UpdateDocument(docid uint32, content string) error {
+//	if fld.FwdIdx == nil {
+//		return errors.New("fwdIdx is nil")
+//	}
+//	if err := fld.FwdIdx.UpdateDocument(docid, content); err != nil {
+//		log.Errf("Field --> UpdateDocument :: Update Document Error %v", err)
+//		return err
+//	}
+//
+//	return nil
+//}
 
 //给定一个查询词query，找出doc的列表
 //Note：这个就是利用倒排索引
