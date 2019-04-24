@@ -213,13 +213,13 @@ func (db *Database) DeleteDoc(tableName string, primaryKey string) (bool) {
 }
 
 //搜索
-func (db *Database) SearchDocs(tableName, fieldName, keyWord string) ([]basic.DocNode, bool) {
+func (db *Database) SearchDocs(tableName, fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
 		return nil, false
 	}
 
-	return tab.SearchDocs(fieldName, keyWord)
+	return tab.SearchDocs(fieldName, keyWord, filters)
 }
 
 //增减字段

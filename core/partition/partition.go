@@ -517,7 +517,7 @@ func (part *Partition) query(fieldName string, key interface{}) ([]basic.DocNode
 
 //搜索, 如果keyWord为空, 则取出所有未删除的节点
 //根据搜索结果, 再通过bitmap进行过滤
-func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap) ([]basic.DocNode, bool) {
+func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap,filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 	//校验
 	if _, exist := part.Fields[fieldName]; !exist {
 		log.Errf("Field [%v] not found", fieldName)
@@ -548,6 +548,26 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 			}
 		}
 		retDocs = retDocs[:idx]
+	}
+
+	//再使用过滤器
+	if filters != nil && len(filters) > 0 {
+		idx := 0
+		for _, doc := range retDocs {
+			match := true
+			//必须全部的过滤器都满足
+			for _, filter := range filters {
+				if !part.Fields[filter.FieldName].Filter(doc.DocId, filter) {
+					match = false
+					break
+				}
+				log.Debugf("Partition[%v] QUERY  %v", part.PrtPathName, doc)
+			}
+			if match {
+				retDocs[idx] = doc
+				idx++
+			}
+		}
 	}
 
 	return retDocs, len(retDocs)>0

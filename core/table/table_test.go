@@ -90,7 +90,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", nil)
 	if !ok {
 		panic("Can't find")
 	}
@@ -123,7 +123,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok = table.SearchDocs(TEST_FIELD3, "美食")
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", nil)
 	if !ok {
 		panic("Can't find")
 	}
@@ -163,7 +163,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
 	}
 	t.Log("Add DocId:", docId)
-	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法", nil)
 	if !ok {
 		panic("Can't find")
 	}
@@ -189,13 +189,13 @@ func TestLoad(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", nil)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法", nil)
 	if !ok {
 		panic("Can't find")
 	}
@@ -269,13 +269,13 @@ func TestLoadAgain(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", nil)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法", nil)
 	if ok {
 		panic("should not find")
 	}
@@ -350,13 +350,13 @@ func TestMerge(t *testing.T) {
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
 
-	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", nil)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法", nil)
 	if ok {
 		panic("should not find")
 	}
@@ -407,13 +407,13 @@ func TestMergeThenLoad(t *testing.T) {
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
 
-	ids, ok := table.SearchDocs(TEST_FIELD3, "美食")
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", nil)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok = table.SearchDocs(TEST_FIELD3, "书法")
+	ids, ok = table.SearchDocs(TEST_FIELD3, "书法", nil)
 	if ok {
 		panic("should not find")
 	}
@@ -488,7 +488,7 @@ func TestMultiMerge(t *testing.T) {
 	t.Log(table.displayInner())
 
 	//测试一下搜索
-	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七")
+	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七", nil)
 	if !ok {
 		panic("shuoud exist")
 	}
@@ -507,7 +507,7 @@ func TestMultiMerge(t *testing.T) {
 	}
 
 	//再次测试一下搜索
-	docs, ok = table.SearchDocs(TEST_FIELD1, "刘七")
+	docs, ok = table.SearchDocs(TEST_FIELD1, "刘七", nil)
 	if !ok {
 		panic("shuoud exist")
 	}
@@ -532,7 +532,7 @@ func TestLoadAgainAgain(t *testing.T) {
 		panic(fmt.Sprintf("Load table Error:%s", err))
 	}
 
-	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七")
+	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七", nil)
 	if !ok {
 		panic("shuoud exist")
 	}

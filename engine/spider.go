@@ -227,11 +227,11 @@ func (se *SpiderEngine) DeleteDoc(dbName, tableName string, primaryKey string) (
 }
 
 //搜索
-func (se *SpiderEngine) SearchDocs(dbName, tableName, fieldName, keyWord string) ([]basic.DocNode, bool) {
+func (se *SpiderEngine) SearchDocs(dbName, tableName, fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 	db, exist := se.DbMap[dbName]
 	if !exist {
 		return nil, false
 	}
-	return db.SearchDocs(tableName, fieldName, keyWord)
+	return db.SearchDocs(tableName, fieldName, keyWord, filters)
 }
 

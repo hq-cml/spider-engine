@@ -645,14 +645,14 @@ func (tbl *Table) MergePartitions() error {
 }
 
 //表内搜索
-func (tbl *Table) SearchDocs(fieldName, keyWord string) ([]basic.DocNode, bool) {
+func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 
 	retDocs := []basic.DocNode{}
 	exist := false
 
 	//各个磁盘分区执行搜索
 	for _, prt := range tbl.partitions {
-		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.bitMap)
+		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.bitMap, filters)
 		if ok {
 			exist = true
 			retDocs = append(retDocs, ids...)
@@ -661,7 +661,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string) ([]basic.DocNode, bool) 
 
 	//内存分区执行搜索
 	if tbl.memPartition != nil {
-		ids, ok := tbl.memPartition.SearchDocs(fieldName, keyWord, tbl.bitMap)
+		ids, ok := tbl.memPartition.SearchDocs(fieldName, keyWord, tbl.bitMap, filters)
 		if ok {
 			exist = true
 			retDocs = append(retDocs, ids...)

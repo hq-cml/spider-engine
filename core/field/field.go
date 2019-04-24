@@ -343,3 +343,14 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 }
 
 
+//过滤（针对的是正排索引）
+func (fld *Field) Filter(docId uint32, filter basic.SearchFilter) bool {
+	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
+
+		//Pos是docId在本索引中的位置
+		pos := docId - fld.StartDocId
+		return fld.FwdIdx.Filter(pos, filter)
+	}
+	return false
+}
+

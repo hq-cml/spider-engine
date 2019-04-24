@@ -87,19 +87,19 @@ func TestLoadDatabase(t *testing.T) {
 	}
 	t.Log("Got the user[10002]:", helper.JsonEncode(user))
 
-	tmp, ok := spider.SearchDocs(TEST_DATABASE, TEST_TABLE, TEST_FIELD3, "游泳")
+	tmp, ok := spider.SearchDocs(TEST_DATABASE, TEST_TABLE, TEST_FIELD3, "游泳", nil)
 	if ok {
 		t.Fatal("Should not exist!")
 	}
 	t.Log("Got the doc[游泳]:", helper.JsonEncode(tmp))
 
-	tmp, ok = spider.SearchDocs(TEST_DATABASE, TEST_TABLE, TEST_FIELD3, "")
+	tmp, ok = spider.SearchDocs(TEST_DATABASE, TEST_TABLE, TEST_FIELD3, "", nil)
 	if !ok {
 		t.Fatal("Should exist!")
 	}
 	t.Log("Got the doc[美食]:", helper.JsonEncode(tmp))
 
-	tmp, ok = spider.SearchDocs(TEST_DATABASE, TEST_TABLE, TEST_FIELD3, "电影")
+	tmp, ok = spider.SearchDocs(TEST_DATABASE, TEST_TABLE, TEST_FIELD3, "电影", nil)
 	if !ok {
 		t.Fatal("Should exist!")
 	}
