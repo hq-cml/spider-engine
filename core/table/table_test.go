@@ -9,6 +9,7 @@ import (
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"fmt"
+	"github.com/hq-cml/spider-engine/basic"
 )
 
 const TEST_TABLE = "user"         //用户
@@ -547,5 +548,162 @@ func TestLoadAgainAgain(t *testing.T) {
 
 	//关闭
 	table.DoClose()
+	t.Log("\n\n")
+}
+
+//测试过滤器
+func TestFilter(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
+
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD0,
+		IndexType: index.IDX_TYPE_PK,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD1,
+		IndexType: index.IDX_TYPE_STRING,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD2,
+		IndexType: index.IDX_TYPE_INTEGER,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD3,
+		IndexType: index.IDX_TYPE_STRING_SEG,
+	}); err != nil {
+		panic(err)
+	}
+
+	docId, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: 15, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻",	TEST_FIELD2: 30,TEST_FIELD3: "喜欢养生, 也喜欢文艺"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	//喜欢美食, 并且年龄在18-22之间的人
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+		{FieldName:TEST_FIELD2, FilterType:basic.FILT_BETWEEN, Begin:18, End:22},
+	})
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//喜欢美食, 并且姓李的人
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+	})
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+
+	//落地
+	err = table.Persist()
+	if err != nil {
+		panic(fmt.Sprintf("Persist Error:%s", err))
+		table.DoClose()
+	}
+
+	//喜欢美食, 并且年龄在18-22之间的人
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+		{FieldName:TEST_FIELD2, FilterType:basic.FILT_BETWEEN, Begin:18, End:22},
+	})
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//喜欢美食, 并且姓李的人
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+	})
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+
+	//再次新增一个文档, 应该随着Close落盘固化
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004",TEST_FIELD1: "爱新觉罗", TEST_FIELD2: 69, TEST_FIELD3: "喜欢美食, 更喜欢打仗"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	//再次新增一个文档,
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10005",TEST_FIELD1: "李世民",	TEST_FIELD2: 50,TEST_FIELD3: "喜欢秋香和美食"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+	})
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
+	table.DoClose()
+
+	t.Log("\n\n")
+}
+
+//测试加载表后, 使用过滤器
+func TestFilterLoad(t *testing.T) {
+	table, err := LoadTable("/tmp/spider", TEST_TABLE)
+	if err != nil {
+		panic(fmt.Sprintf("Load table Error:%s", err))
+	}
+
+	//喜欢美食, 并且年龄在18-22之间的人
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+		{FieldName:TEST_FIELD2, FilterType:basic.FILT_BETWEEN, Begin:18, End:22},
+	})
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//喜欢美食, 并且姓李的人
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+	})
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
+	table.DoClose()
+
 	t.Log("\n\n")
 }

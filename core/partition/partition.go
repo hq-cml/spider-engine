@@ -550,9 +550,9 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		retDocs = retDocs[:idx]
 	}
 
+	finalRetDocs := []basic.DocNode{}
 	//再使用过滤器
 	if filters != nil && len(filters) > 0 {
-		idx := 0
 		for _, doc := range retDocs {
 			match := true
 			//必须全部的过滤器都满足
@@ -564,11 +564,12 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 				log.Debugf("Partition[%v] QUERY  %v", part.PrtPathName, doc)
 			}
 			if match {
-				retDocs[idx] = doc
-				idx++
+				finalRetDocs = append(finalRetDocs, doc)
 			}
 		}
+	} else {
+		finalRetDocs = retDocs
 	}
 
-	return retDocs, len(retDocs)>0
+	return finalRetDocs, len(finalRetDocs)>0
 }

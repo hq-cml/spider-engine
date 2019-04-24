@@ -60,15 +60,15 @@ type SearchQuery struct {
 }
 
 //过滤接口数据结构，内部都是求交集
-type SearchFilted struct {
-	FieldName string   `json:"_field"`
-	Start     int64    `json:"_start"`
-	End       int64    `json:"_end"`
-	Range     []int64  `json:"_range"`
-	Type      uint8    `json:"_type"`
-	MatchStr  string   `json:"_matchstr"`
-	RangeStr  []string `json:"_rangestr"`
-}
+//type SearchFilted struct {
+//	FieldName string   `json:"_field"`
+//	Start     int64    `json:"_start"`
+//	End       int64    `json:"_end"`
+//	Range     []int64  `json:"_range"`
+//	Type      uint8    `json:"_type"`
+//	MatchStr  string   `json:"_matchstr"`
+//	RangeStr  []string `json:"_rangestr"`
+//}
 
 type SearchFilter struct {
 	FieldName       string
