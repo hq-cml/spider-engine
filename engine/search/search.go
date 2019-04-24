@@ -1,15 +1,13 @@
 package search
 
 import (
-	"strings"
-	"github.com/hq-cml/spider-engine/utils/bitmap"
 )
 /*
  * 搜索引擎的引擎部分
  * 负责搜索功能实现
  */
 
-
+/*
  //从numbers判断pos指定的数,如果
 // type:EQ 只要有一个==, 就算ok
 // type:NEQ 必须全部都是!=, 就算ok

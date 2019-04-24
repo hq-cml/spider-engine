@@ -122,7 +122,7 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 	switch vtype.Name() {
 	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
 		if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
-			return errors.New("Wrong Type")
+			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
 		}
 		value, ok = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
 		if ok != nil {
@@ -131,7 +131,7 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 	case "string":
 		if fwdIdx.indexType == IDX_TYPE_INTEGER {
-			return errors.New("Wrong Type")
+			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
 		}
 		if fwdIdx.indexType == IDX_TYPE_DATE { //日期类型转成时间戳
 			value, err := helper.String2Timestamp(fmt.Sprintf("%v", content))
@@ -146,7 +146,7 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 		//float，bool等变量，走入默认分支，直接按字符串存
 		if fwdIdx.indexType != IDX_TYPE_STRING && fwdIdx.indexType != IDX_TYPE_STRING_SEG &&
 			fwdIdx.indexType != IDX_TYPE_STRING_LIST && fwdIdx.indexType != IDX_TYPE_STRING_SINGLE {
-			return errors.New("Wrong Type")
+			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
 		}
 		fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
 	}

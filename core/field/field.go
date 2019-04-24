@@ -49,8 +49,7 @@ func NewFakeField(fieldname string, start uint32, next uint32, indexType uint16)
 	if indexType == index.IDX_TYPE_STRING ||
 		indexType == index.IDX_TYPE_STRING_SEG ||
 		indexType == index.IDX_TYPE_STRING_LIST ||
-		indexType == index.IDX_TYPE_STRING_SINGLE ||
-		indexType == index.GATHER_TYPE {
+		indexType == index.IDX_TYPE_STRING_SINGLE {
 		ivtIdx = index.NewFakeInvertedIndex(indexType, start, fieldname)
 	}
 
@@ -71,8 +70,7 @@ func NewEmptyField(fieldName string, start uint32, indexType uint16) *Field {
 	if indexType == index.IDX_TYPE_STRING ||
 		indexType == index.IDX_TYPE_STRING_SEG ||
 		indexType == index.IDX_TYPE_STRING_LIST ||
-		indexType == index.IDX_TYPE_STRING_SINGLE ||
-		indexType == index.GATHER_TYPE {
+		indexType == index.IDX_TYPE_STRING_SINGLE {
 		ivtIdx = index.NewEmptyInvertedIndex(indexType, start, fieldName)
 	}
 	//建立正向索引
@@ -101,8 +99,7 @@ func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset
 	if indexType == index.IDX_TYPE_STRING ||
 		indexType == index.IDX_TYPE_STRING_SEG ||
 		indexType == index.IDX_TYPE_STRING_LIST ||
-		indexType == index.IDX_TYPE_STRING_SINGLE ||
-		indexType == index.GATHER_TYPE {
+		indexType == index.IDX_TYPE_STRING_SINGLE {
 		ivtIdx = index.LoadInvertedIndex(btdb, indexType, fieldname, ivtMmap, next)
 	}
 
@@ -125,7 +122,7 @@ func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset
 //增加一个doc
 //Note:
 //只有内存态的字段才能增加Doc
-func (fld *Field) AddDocument(docId uint32, content string) error {
+func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 
 	if docId != fld.NextDocId || fld.inMemory == false || fld.FwdIdx == nil {
 		log.Errf("AddDocument :: Wrong docId %v fld.NextDocId %v fld.profile %v", docId, fld.NextDocId, fld.FwdIdx)
@@ -141,7 +138,11 @@ func (fld *Field) AddDocument(docId uint32, content string) error {
 	if fld.IndexType != index.IDX_TYPE_INTEGER &&
 		fld.IndexType != index.IDX_TYPE_DATE &&
 		fld.IvtIdx != nil {
-		if err := fld.IvtIdx.AddDocument(docId, content); err != nil {
+		contentStr, ok := content.(string)
+		if !ok {
+			return errors.New("Invert index must string")
+		}
+		if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
 			log.Errf("Field --> AddDocument :: Add Invert Document Error %v", err)
 			// return err
 			//TODO 一致性？？
@@ -188,6 +189,25 @@ func (fld *Field) GetString(docId uint32) (string, bool) {
 	}
 
 	return "", false
+}
+
+func (fld *Field) GetInt(docId uint32) (int64, bool) {
+	//Pos是docId在本索引中的位置
+	pos := docId - fld.StartDocId
+	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
+		return fld.FwdIdx.GetInt(pos)
+	}
+
+	return index.MaxInt64, false
+}
+
+func (fld *Field) GetValue(docId uint32) (interface{}, bool) {
+	//Pos是docId在本索引中的位置
+	if fld.IndexType == index.IDX_TYPE_INTEGER || fld.IndexType == index.IDX_TYPE_DATE {
+		return fld.GetInt(docId)
+	} else {
+		return fld.GetString(docId)
+	}
 }
 
 //销毁字段
@@ -293,8 +313,7 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 	if fld.IndexType == index.IDX_TYPE_STRING ||
 		fld.IndexType == index.IDX_TYPE_STRING_SEG ||
 		fld.IndexType == index.IDX_TYPE_STRING_LIST ||
-		fld.IndexType == index.IDX_TYPE_STRING_SINGLE ||
-		fld.IndexType == index.GATHER_TYPE {
+		fld.IndexType == index.IDX_TYPE_STRING_SINGLE {
 
 		ivts := make([]*index.InvertedIndex, 0)
 		for _, fd := range fields {

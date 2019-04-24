@@ -191,7 +191,7 @@ func (part *Partition) DeleteField(fieldname string) error {
 
 //添加文档
 //content, 一篇文档的各个字段的值
-func (part *Partition) AddDocument(docId uint32, content map[string]string) error {
+func (part *Partition) AddDocument(docId uint32, content map[string]interface{}) error {
 
 	if docId != part.NextDocId {
 		log.Errf("Partition --> AddDocument :: Wrong DocId[%v]  NextDocId[%v]", docId, part.NextDocId)
@@ -203,10 +203,12 @@ func (part *Partition) AddDocument(docId uint32, content map[string]string) erro
 			//如果某个字段没传, 则会是空值
 			if err := part.Fields[fieldName].AddDocument(docId, ""); err != nil {
 				log.Errf("Partition --> AddDocument [%v] :: %v", part.PrtPathName, err)
+				return err
 			}
 		} else {
 			if err := part.Fields[fieldName].AddDocument(docId, content[fieldName]); err != nil {
 				log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
+				return err
 			}
 		}
 	}
@@ -289,7 +291,7 @@ func (part *Partition) Remove() error {
 }
 
 //获取详情，单个字段
-func (part *Partition) GetFieldValue(docId uint32, fieldName string) (string, bool) {
+func (part *Partition) GetFieldValue(docId uint32, fieldName string) (interface{}, bool) {
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return "", false
@@ -299,26 +301,27 @@ func (part *Partition) GetFieldValue(docId uint32, fieldName string) (string, bo
 	}
 
 	//获取
-	return part.Fields[fieldName].GetString(docId)
+	return part.Fields[fieldName].GetValue(docId)
 }
 
 //获取整篇文档详情，全部字段
-func (part *Partition) GetDocument(docId uint32) (map[string]string, bool) {
+func (part *Partition) GetDocument(docId uint32) (map[string]interface{}, bool) {
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
 	}
 
+
 	//获取
-	ret := make(map[string]string)
+	ret := make(map[string]interface{})
 	for fieldName, fld := range part.Fields {
-		ret[fieldName], _ = fld.GetString(docId)
+		ret[fieldName], _ = fld.GetValue(docId)
 	}
 	return ret, true
 }
 
 //获取详情，部分字段
-func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (map[string]string, bool) {
+func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (map[string]interface{}, bool) {
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
@@ -329,7 +332,7 @@ func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (ma
 	}
 
 	flag := false
-	ret := make(map[string]string)
+	ret := make(map[string]interface{})
 	for _, fieldName := range fieldNames {
 		if _, ok := part.Fields[fieldName]; ok {
 			ret[fieldName], _ = part.GetFieldValue(docId, fieldName)

@@ -191,7 +191,7 @@ func (se *SpiderEngine) DeleteField(dbName, tableName string, fieldName string) 
 
 
 //新增Doc
-func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]string) (uint32, error) {
+func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]interface{}) (uint32, error) {
 	db, exist := se.DbMap[dbName]
 	if !exist {
 		return 0, errors.New("The db not exist!")
@@ -200,7 +200,7 @@ func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]stri
 }
 
 //获取Doc
-func (se *SpiderEngine) GetDoc(dbName, tableName string, primaryKey string) (map[string]string, bool) {
+func (se *SpiderEngine) GetDoc(dbName, tableName string, primaryKey string) (map[string]interface{}, bool) {
 	db, exist := se.DbMap[dbName]
 	if !exist {
 		return nil, false
@@ -209,7 +209,7 @@ func (se *SpiderEngine) GetDoc(dbName, tableName string, primaryKey string) (map
 }
 
 //改变doc
-func (se *SpiderEngine) UpdateDoc(dbName, tableName string, content map[string]string) (uint32, error) {
+func (se *SpiderEngine) UpdateDoc(dbName, tableName string, content map[string]interface{}) (uint32, error) {
 	db, exist := se.DbMap[dbName]
 	if !exist {
 		return 0, errors.New("The db not exist!")

@@ -264,7 +264,7 @@ func (tbl *Table) DeleteField(fieldname string) error {
 }
 
 //获取文档
-func (tbl *Table) GetDoc(primaryKey string) (map[string]string, bool) {
+func (tbl *Table) GetDoc(primaryKey string) (map[string]interface{}, bool) {
 	docNode, exist := tbl.findDocIdByPrimaryKey(primaryKey)
 	if !exist {
 		return nil, false
@@ -288,7 +288,7 @@ func (tbl *Table) DeleteDoc(primaryKey string) bool {
 }
 
 //新增
-func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
+func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, error) {
 	//校验
 	if len(tbl.BasicFields) == 0 {
 		log.Errf("Field or Partiton is nil")
@@ -312,7 +312,11 @@ func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
 
 	//如果存在主键先添加
 	if tbl.PrimaryKey != "" {
-		tbl.primaryMap[content[tbl.PrimaryKey]] = fmt.Sprintf("%v", newDocId)
+		key, ok := content[tbl.PrimaryKey].(string)
+		if !ok {
+			return 0, errors.New("Primary key must be string")
+		}
+		tbl.primaryMap[key] = fmt.Sprintf("%v", newDocId)
 
 		if tbl.NextDocId % PRIMARY_KEY_MEM_MAXCNT == 0 {
 			tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
@@ -332,7 +336,7 @@ func (tbl *Table) AddDoc(content map[string]string) (uint32, error) {
 // Note:
 // 如果表没有主键，则不支持变更
 // 本质上还是新增，主键不变，但是doc变了
-func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
+func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//校验
 	if len(tbl.BasicFields) == 0 {
 		log.Errf("Field or Partiton is nil")
@@ -364,20 +368,24 @@ func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 	tbl.NextDocId++
 
 	//先标记删除oldDocId
-	oldDocid, found := tbl.findDocIdByPrimaryKey(content[tbl.PrimaryKey])
+	key, ok := content[tbl.PrimaryKey].(string)
+	if !ok {
+		return 0, errors.New("Primary key has exist!")
+	}
+	oldDocid, found := tbl.findDocIdByPrimaryKey(key)
 	if found {
 		tbl.bitMap.Set(uint64(oldDocid.DocId))
 	}
 
 	//再新增docId
-	if err := tbl.changeDocIdByPrimaryKey(content[tbl.PrimaryKey], newDocId); err != nil {
+	if err := tbl.changeDocIdByPrimaryKey(key, newDocId); err != nil {
 		return 0, err
 	}
 
 	//实质内容本质上还是新增，主键不变，但是doc变了
 	err := tbl.memPartition.AddDocument(newDocId, content)
 	if err != nil {
-		log.Errf("tbl.memPartition.AddDocument Error:%v", err)
+		log.Errf("tbl.memPartition.UpdateDocument Error:%v", err)
 		return 0, err
 	}
 	return newDocId, nil
@@ -386,7 +394,7 @@ func (tbl *Table) UpdateDoc(content map[string]string) (uint32, error) {
 //内部获取
 //Note:
 // 不包括主键
-func (tbl *Table) getDocByDocId(docId uint32) (map[string]string, bool) {
+func (tbl *Table) getDocByDocId(docId uint32) (map[string]interface{}, bool) {
 	//校验
 	if docId < tbl.StartDocId || docId >= tbl.NextDocId {
 		return nil, false

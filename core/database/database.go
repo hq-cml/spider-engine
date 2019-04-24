@@ -173,7 +173,7 @@ func (db *Database) DropTable(tableName string) (error) {
 }
 
 //新增Doc
-func (db *Database) AddDoc(tableName string, content map[string]string) (uint32, error) {
+func (db *Database) AddDoc(tableName string, content map[string]interface{}) (uint32, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
 		return 0, errors.New("Table not exist!")
@@ -183,7 +183,7 @@ func (db *Database) AddDoc(tableName string, content map[string]string) (uint32,
 }
 
 //获取Doc
-func (db *Database) GetDoc(tableName string, primaryKey string) (map[string]string, bool) {
+func (db *Database) GetDoc(tableName string, primaryKey string) (map[string]interface{}, bool) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
 		return nil, false
@@ -193,7 +193,7 @@ func (db *Database) GetDoc(tableName string, primaryKey string) (map[string]stri
 }
 
 //改变doc
-func (db *Database) UpdateDoc(tableName string, content map[string]string) (uint32, error) {
+func (db *Database) UpdateDoc(tableName string, content map[string]interface{}) (uint32, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
 		return 0, errors.New("Table not exist!")

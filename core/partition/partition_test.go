@@ -42,13 +42,13 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 		t.Fatal("Should empty!!")
 	}
 
-	user0 := map[string]string {TEST_FIELD1:"张三", TEST_FIELD2:"20", TEST_FIELD3:"张三喜欢游泳,也喜欢美食"}
-	user1 := map[string]string {TEST_FIELD1:"李四", TEST_FIELD2:"30", TEST_FIELD3:"李四喜欢美食,也喜欢文艺"}
-	user2 := map[string]string {TEST_FIELD1:"王二", TEST_FIELD2:"25", TEST_FIELD3:"王二喜欢装逼"}
+	user0 := map[string]interface{} {TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"张三喜欢游泳,也喜欢美食"}
+	user1 := map[string]interface{} {TEST_FIELD1:"李四", TEST_FIELD2:30, TEST_FIELD3:"李四喜欢美食,也喜欢文艺"}
+	user2 := map[string]interface{} {TEST_FIELD1:"王二", TEST_FIELD2:25, TEST_FIELD3:"王二喜欢装逼"}
 
-	memPartition.AddDocument(0, user0)
-	memPartition.AddDocument(1, user1)
-	memPartition.AddDocument(2, user2)
+	err := memPartition.AddDocument(0, user0); if err != nil { panic(err) }
+	err = memPartition.AddDocument(1, user1); if err != nil { panic(err) }
+	err = memPartition.AddDocument(2, user2); if err != nil { panic(err) }
 
 	if memPartition.Fields[TEST_FIELD1].DocCnt != 3 {
 		t.Fatal("wrong number")
@@ -192,9 +192,9 @@ func TestPartitionMerge(t *testing.T) {
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	user0 := map[string]string {TEST_FIELD1:"张三", TEST_FIELD2:"20", TEST_FIELD3:"喜欢游泳,也喜欢美食"}
-	user1 := map[string]string {TEST_FIELD1:"李四", TEST_FIELD2:"30", TEST_FIELD3:"喜欢美食,也喜欢文艺"}
-	user2 := map[string]string {TEST_FIELD1:"王二", TEST_FIELD2:"25", TEST_FIELD3:"喜欢装逼"}
+	user0 := map[string]interface{} {TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"喜欢游泳,也喜欢美食"}
+	user1 := map[string]interface{} {TEST_FIELD1:"李四", TEST_FIELD2:30, TEST_FIELD3:"喜欢美食,也喜欢文艺"}
+	user2 := map[string]interface{} {TEST_FIELD1:"王二", TEST_FIELD2:25, TEST_FIELD3:"喜欢装逼"}
 	part0.AddDocument(0, user0)
 	part0.AddDocument(1, user1)
 	part0.AddDocument(2, user2)
@@ -213,9 +213,9 @@ func TestPartitionMerge(t *testing.T) {
 	if part1.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	user3 := map[string]string {TEST_FIELD1:"赵六", TEST_FIELD2:"22", TEST_FIELD3:"喜欢打牌,也喜欢美食"}
-	user4 := map[string]string {TEST_FIELD1:"钱七", TEST_FIELD2:"29", TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
-	user5 := map[string]string {TEST_FIELD1:"李八", TEST_FIELD2:"24", TEST_FIELD3:"喜欢睡觉"}
+	user3 := map[string]interface{} {TEST_FIELD1:"赵六", TEST_FIELD2:22, TEST_FIELD3:"喜欢打牌,也喜欢美食"}
+	user4 := map[string]interface{} {TEST_FIELD1:"钱七", TEST_FIELD2:29, TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
+	user5 := map[string]interface{} {TEST_FIELD1:"李八", TEST_FIELD2:24, TEST_FIELD3:"喜欢睡觉"}
 	part1.AddDocument(3, user3)
 	part1.AddDocument(4, user4)
 	part1.AddDocument(5, user5)
@@ -287,8 +287,9 @@ func TestPartitionMerge(t *testing.T) {
 	if !ok {
 		t.Fatal("Shuold exist")
 	}
-	if d[TEST_FIELD2] != "25" {
-		t.Fatal("Error")
+	v, ok := d[TEST_FIELD2].(int64)
+	if !ok || v != 25 {
+		t.Fatal("Error", d[TEST_FIELD2])
 	}
 	t.Log(helper.JsonEncode(d))
 
@@ -357,8 +358,9 @@ func TestLoadMerge(t *testing.T) {
 	if !ok {
 		t.Fatal("Shuold exist")
 	}
-	if d[TEST_FIELD2] != "25" {
-		t.Fatal("Error")
+	v, ok := d[TEST_FIELD2].(int64)
+	if !ok || v != 25 {
+		t.Fatal("Error", d[TEST_FIELD2])
 	}
 	t.Log(helper.JsonEncode(d))
 
@@ -393,9 +395,9 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	if part0.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	user0 := map[string]string {TEST_FIELD1:"张三"}
-	user1 := map[string]string {TEST_FIELD1:"李四"}
-	user2 := map[string]string {TEST_FIELD1:"王二"}
+	user0 := map[string]interface{} {TEST_FIELD1:"张三"}
+	user1 := map[string]interface{} {TEST_FIELD1:"李四"}
+	user2 := map[string]interface{} {TEST_FIELD1:"王二"}
 	part0.AddDocument(0, user0)
 	part0.AddDocument(1, user1)
 	part0.AddDocument(2, user2)
@@ -414,9 +416,9 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	if part1.IsEmpty() != true {
 		t.Fatal("Should empty!!")
 	}
-	user3 := map[string]string {TEST_FIELD1:"赵六", TEST_FIELD2:"22", TEST_FIELD3:"喜欢打牌,也喜欢美食"}
-	user4 := map[string]string {TEST_FIELD1:"钱七", TEST_FIELD2:"29", TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
-	user5 := map[string]string {TEST_FIELD1:"李八", TEST_FIELD2:"24", TEST_FIELD3:"喜欢睡觉"}
+	user3 := map[string]interface{} {TEST_FIELD1:"赵六", TEST_FIELD2:22, TEST_FIELD3:"喜欢打牌,也喜欢美食"}
+	user4 := map[string]interface{} {TEST_FIELD1:"钱七", TEST_FIELD2:29, TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
+	user5 := map[string]interface{} {TEST_FIELD1:"李八", TEST_FIELD2:24, TEST_FIELD3:"喜欢睡觉"}
 	part1.AddDocument(3, user3)
 	part1.AddDocument(4, user4)
 	part1.AddDocument(5, user5)
