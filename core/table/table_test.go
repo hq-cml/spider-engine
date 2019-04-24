@@ -611,7 +611,7 @@ func TestFilter(t *testing.T) {
 	if !ok {
 		panic("Can't find")
 	}
-	t.Log(helper.JsonEncode(ids))
+	t.Log("喜欢美食, 并且年龄在18-22之间的人：", helper.JsonEncode(ids))
 
 	//喜欢美食, 并且姓李的人
 	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
@@ -620,8 +620,7 @@ func TestFilter(t *testing.T) {
 	if !ok {
 		panic("Can't find")
 	}
-	t.Log(helper.JsonEncode(ids))
-
+	t.Log("喜欢美食, 并且姓李的人：",helper.JsonEncode(ids))
 
 	//落地
 	err = table.Persist()
@@ -637,7 +636,7 @@ func TestFilter(t *testing.T) {
 	if !ok {
 		panic("Can't find")
 	}
-	t.Log(helper.JsonEncode(ids))
+	t.Log("喜欢美食, 并且年龄在18-22之间的人：", helper.JsonEncode(ids))
 
 	//喜欢美食, 并且姓李的人
 	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
@@ -646,7 +645,7 @@ func TestFilter(t *testing.T) {
 	if !ok {
 		panic("Can't find")
 	}
-	t.Log(helper.JsonEncode(ids))
+	t.Log("喜欢美食, 并且姓李的人：", helper.JsonEncode(ids))
 
 
 	//再次新增一个文档, 应该随着Close落盘固化
@@ -669,7 +668,7 @@ func TestFilter(t *testing.T) {
 	if !ok {
 		panic("Can't find")
 	}
-	t.Log(helper.JsonEncode(ids))
+	t.Log("喜欢美食, 并且姓李的人：", helper.JsonEncode(ids))
 
 	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
 	table.DoClose()
@@ -691,7 +690,7 @@ func TestFilterLoad(t *testing.T) {
 	if !ok {
 		panic("Can't find")
 	}
-	t.Log(helper.JsonEncode(ids))
+	t.Log("喜欢美食, 并且年龄在18-22之间的人：", helper.JsonEncode(ids))
 
 	//喜欢美食, 并且姓李的人
 	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
@@ -700,7 +699,7 @@ func TestFilterLoad(t *testing.T) {
 	if !ok {
 		panic("Can't find")
 	}
-	t.Log(helper.JsonEncode(ids))
+	t.Log("喜欢美食, 并且姓李的人：", helper.JsonEncode(ids))
 
 	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
 	table.DoClose()
