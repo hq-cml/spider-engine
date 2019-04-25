@@ -18,27 +18,34 @@ import (
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
+	"github.com/hq-cml/spider-engine/core/index"
 )
 
 //TODO 配置化
 var (
-	//PARTITION_MIN_DOC_CNT uint32 = 100000
-	PARTITION_MIN_DOC_CNT uint32 = 3 //10w个文档，分区合并的一个参考值
+	PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值
+	//PARTITION_MIN_DOC_CNT uint32 = 3
+)
+
+const (
+	GOD_FIELD_NAME = "#O@H!M*Y&G%O(D#"
 )
 
 // Partition description:段结构
 type Partition struct {
-	StartDocId  uint32                     `json:"startDocId"`
-	NextDocId   uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
-	DocCnt      uint32                     `json:"docCnt"` 	       //分区文档个数
-	PrtPathName string                     `json:"prtPathName"`
-	CoreFields  map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
-	Fields      map[string]*field.Field    `json:"-"`
-	inMemory    bool                       `json:"-"`
-	btdb        btree.Btree                `json:"-"`			   //四套文件，本分区所有字段公用
-	ivtMmap     *mmap.Mmap                 `json:"-"`
-	baseMmap    *mmap.Mmap                 `json:"-"`
-	extMmap     *mmap.Mmap                 `json:"-"`
+	StartDocId      uint32                     `json:"startDocId"`
+	NextDocId       uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
+	DocCnt          uint32                     `json:"docCnt"` 	       //分区文档个数
+	PrtPathName     string                     `json:"prtPathName"`
+	CoreFields      map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
+	GodBaseField    field.BasicField           `json:"godCoreField"`   //上帝视角字段, 用于跨字段倒排索引搜索
+	Fields          map[string]*field.Field    `json:"-"`
+	GodField        *field.Field               `json:"-"`
+	inMemory        bool                       `json:"-"`
+	btdb            btree.Btree                `json:"-"`			   //四套文件，本分区所有字段公用
+	ivtMmap         *mmap.Mmap                 `json:"-"`
+	baseMmap        *mmap.Mmap                 `json:"-"`
+	extMmap         *mmap.Mmap                 `json:"-"`
 }
 
 //新建一个空分区, 包含字段
@@ -66,6 +73,13 @@ func NewEmptyPartitionWithBasicFields(PrtPathName string, start uint32, basicFie
 		part.Fields[fld.FieldName] = emptyField
 	}
 
+	//上帝字段
+	part.GodBaseField = field.BasicField{
+		FieldName: GOD_FIELD_NAME,
+		IndexType: index.IDX_TYPE_GOD,
+	}
+	part.GodField = field.NewEmptyGodField(GOD_FIELD_NAME, start)
+
 	log.Infof("Make New Partition [%v] Success ", PrtPathName)
 	return part
 }
@@ -76,7 +90,7 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 	part := Partition {
 		PrtPathName: prtPathName,
 		Fields:      make(map[string]*field.Field),
-		CoreFields:  make(map[string]field.CoreField),
+		//CoreFields:  make(map[string]field.CoreField),
 	}
 
 	//从meta文件加载partition信息到part
@@ -130,10 +144,16 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 		} else {
 			oldField := field.LoadField(coreField.FieldName, part.StartDocId,
 				part.NextDocId, coreField.IndexType, coreField.FwdOffset, part.DocCnt,
-				part.ivtMmap, part.baseMmap, part.extMmap, part.btdb)
+				part.baseMmap, part.extMmap, part.ivtMmap, part.btdb)
 			part.Fields[coreField.FieldName] = oldField
 		}
 	}
+
+	//加载上帝字段
+	part.GodField = field.LoadField(GOD_FIELD_NAME, part.StartDocId,
+		part.NextDocId, index.IDX_TYPE_GOD, 0, 0,
+		nil, nil, part.ivtMmap, part.btdb)
+
 	return &part, nil
 }
 

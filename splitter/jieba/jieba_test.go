@@ -14,6 +14,6 @@ func TestJieba(t *testing.T) {
 	//s = jw.DoSplit("中华人民共和国", true)
 	//s = jw.DoSplit("中华人民共和国", false)
 	//s = jw.DoSplit("我爱北京天安门", false)
-	s = jw.DoSplit("我爱北京天安门", true)
-	t.Log(strings.Join(s, " | "))
+	s = jw.DoSplit("我爱北京天安门。法国巴黎圣母院. 西班牙,   娃哈哈", false)
+	t.Log(strings.Join(s, "|"))
 }
