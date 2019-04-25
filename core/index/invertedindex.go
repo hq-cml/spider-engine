@@ -106,13 +106,13 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	//根据type进行分词
 	var nodes map[string]basic.DocNode
 	switch rIdx.indexType {
-	case IDX_TYPE_STRING: 			             //全词匹配模式
+	case IDX_TYPE_STRING: 			            //全词匹配模式
 		nodes = SplitWholeWords(docId, content)
 	case IDX_TYPE_STRING_LIST: 					//分号切割模式
 		nodes = SplitSemicolonWords(docId, content)
 	case IDX_TYPE_STRING_SINGLE: 				//单个词模式
 		nodes = SplitRuneWords(docId, content)
-	case IDX_TYPE_STRING_SEG: 					//分词模式
+	case IDX_TYPE_STRING_SEG, IDX_TYPE_GOD:     //分词模式(上帝模式也分词)
 		nodes = SplitTrueWords(docId, content)
 	}
 
@@ -127,7 +127,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	//docId自增
 	rIdx.nextDocId++
 
-	log.Debugf("InvertedIndex AddDocument --> DocId: %v ,Content: %v\n", docId, content)
+	log.Debugf("InvertAddDoc => Field: %v, DocId: %v ,Content: %v\n",rIdx.fieldName, docId, content)
 	return nil
 }
 

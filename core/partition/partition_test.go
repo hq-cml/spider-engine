@@ -195,10 +195,9 @@ func TestPartitionMerge(t *testing.T) {
 	user0 := map[string]interface{} {TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"喜欢游泳,也喜欢美食"}
 	user1 := map[string]interface{} {TEST_FIELD1:"李四", TEST_FIELD2:30, TEST_FIELD3:"喜欢美食,也喜欢文艺"}
 	user2 := map[string]interface{} {TEST_FIELD1:"王二", TEST_FIELD2:25, TEST_FIELD3:"喜欢装逼"}
-	part0.AddDocument(0, user0)
-	part0.AddDocument(1, user1)
-	part0.AddDocument(2, user2)
-
+	err = part0.AddDocument(0, user0); if err != nil { panic(err) }
+	err = part0.AddDocument(1, user1); if err != nil { panic(err) }
+	err = part0.AddDocument(2, user2); if err != nil { panic(err) }
 
 	//创建分区2
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
@@ -216,9 +215,9 @@ func TestPartitionMerge(t *testing.T) {
 	user3 := map[string]interface{} {TEST_FIELD1:"赵六", TEST_FIELD2:22, TEST_FIELD3:"喜欢打牌,也喜欢美食"}
 	user4 := map[string]interface{} {TEST_FIELD1:"钱七", TEST_FIELD2:29, TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
 	user5 := map[string]interface{} {TEST_FIELD1:"李八", TEST_FIELD2:24, TEST_FIELD3:"喜欢睡觉"}
-	part1.AddDocument(3, user3)
-	part1.AddDocument(4, user4)
-	part1.AddDocument(5, user5)
+	err = part1.AddDocument(3, user3); if err != nil { panic(err) }
+	err = part1.AddDocument(4, user4); if err != nil { panic(err) }
+	err = part1.AddDocument(5, user5); if err != nil { panic(err) }
 
 	//新建的两个分区落地
 	//一定要落地先一次，两个分区的btdb才能被正确设置，否则无法进行合并
@@ -398,9 +397,9 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	user0 := map[string]interface{} {TEST_FIELD1:"张三"}
 	user1 := map[string]interface{} {TEST_FIELD1:"李四"}
 	user2 := map[string]interface{} {TEST_FIELD1:"王二"}
-	part0.AddDocument(0, user0)
-	part0.AddDocument(1, user1)
-	part0.AddDocument(2, user2)
+	err = part0.AddDocument(0, user0); if err != nil { panic(err) }
+	err = part0.AddDocument(1, user1); if err != nil { panic(err) }
+	err = part0.AddDocument(2, user2); if err != nil { panic(err) }
 
 
 	//创建分区2, 多了两个字段
@@ -419,9 +418,9 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	user3 := map[string]interface{} {TEST_FIELD1:"赵六", TEST_FIELD2:22, TEST_FIELD3:"喜欢打牌,也喜欢美食"}
 	user4 := map[string]interface{} {TEST_FIELD1:"钱七", TEST_FIELD2:29, TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
 	user5 := map[string]interface{} {TEST_FIELD1:"李八", TEST_FIELD2:24, TEST_FIELD3:"喜欢睡觉"}
-	part1.AddDocument(3, user3)
-	part1.AddDocument(4, user4)
-	part1.AddDocument(5, user5)
+	err = part1.AddDocument(3, user3); if err != nil { panic(err) }
+	err = part1.AddDocument(4, user4); if err != nil { panic(err) }
+	err = part1.AddDocument(5, user5); if err != nil { panic(err) }
 
 	//新建的两个分区落地
 	//一定要落地先一次，两个分区的btdb才能被正确设置，否则无法进行合并
@@ -440,11 +439,9 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	defer part2.DoClose()
 
 	//合并
-	fmt.Println("A-------", part0.GodField.StartDocId, part0.GodField.NextDocId)
-	fmt.Println("B-------", part1.GodField.StartDocId, part1.GodField.NextDocId)
 	err = part2.MergePersistPartitions([]*Partition{part0, part1})
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	//part2.Fields[TEST_FIELD3].IvtIdx.GetBtree().Display(TEST_FIELD3)
@@ -504,4 +501,83 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 
 	t.Log("\n\n")
 
+}
+
+//测试跨字段搜索, 利用上帝视角
+func TestQueryByGodField(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
+
+	//创建空的分区
+	memPartition := NewEmptyPartitionWithBasicFields(patitionName, 0, nil)
+	if memPartition.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+
+	//新增字段
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG})
+	if memPartition.IsEmpty() != true {
+		t.Fatal("Should empty!!")
+	}
+
+	user0 := map[string]interface{}{TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"喜欢游泳,也喜欢美食"}
+	user1 := map[string]interface{}{TEST_FIELD1:"李四", TEST_FIELD2:30, TEST_FIELD3:"李四喜欢美食,也喜欢文艺"}
+	user2 := map[string]interface{}{TEST_FIELD1:"王二", TEST_FIELD2:25, TEST_FIELD3:"喜欢张三"}
+
+	err = memPartition.AddDocument(0, user0); if err != nil {
+		panic(err)
+	}
+	err = memPartition.AddDocument(1, user1); if err != nil {
+		panic(err)
+	}
+	err = memPartition.AddDocument(2, user2); if err != nil {
+		panic(err)
+	}
+
+	list, exist := memPartition.query(GOD_FIELD_NAME, "张三")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 2 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log("上帝视角:张三: ", helper.JsonEncode(list))
+
+	c, _ := memPartition.GetDocument(2)
+	t.Log(helper.JsonEncode(c))
+
+	s1, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	t.Log(s1)
+
+	//持久化落地
+	memPartition.Persist()
+
+	list, exist = memPartition.query(GOD_FIELD_NAME, "张三")
+	if !exist {
+		t.Fatal("Should exist!!")
+	}
+	if len(list) != 2 {
+		t.Fatal("Should 2!!")
+	}
+	t.Log("上帝视角:张三: ", helper.JsonEncode(list))
+
+	d, _ := memPartition.GetDocument(2)
+	t.Log(helper.JsonEncode(d))
+
+	s2, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	t.Log(s2)
+
+	if s1 != s2 {
+		t.Fatal("Should ==")
+	}
+
+	memPartition.DoClose()
+
+	t.Log("\n\n")
 }

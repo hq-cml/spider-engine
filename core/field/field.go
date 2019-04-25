@@ -145,17 +145,20 @@ func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset
 //只有内存态的字段才能增加Doc
 func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 
-	if docId != fld.NextDocId || fld.inMemory == false || fld.FwdIdx == nil {
-		log.Errf("AddDocument :: Wrong docId %v fld.NextDocId %v fld.profile %v", docId, fld.NextDocId, fld.FwdIdx)
+	if docId != fld.NextDocId || fld.inMemory == false {
+		log.Errf("AddDocument :: Wrong docId %v fld.NextDocId %v fld.FwdIdx %v", docId, fld.NextDocId, fld.FwdIdx)
 		return errors.New("[ERROR] Wrong docId")
 	}
 
-	if err := fld.FwdIdx.AddDocument(docId, content); err != nil {
-		log.Errf("Field --> AddDocument :: Add Document Error %v", err)
-		return err
+	//正排新增(上帝视角没有正排)
+	if fld.IndexType != index.IDX_TYPE_GOD {
+		if err := fld.FwdIdx.AddDocument(docId, content); err != nil {
+			log.Errf("Field --> AddDocument :: Add Document Error %v", err)
+			return err
+		}
 	}
 
-	//数字型和时间型不添加倒排索引
+	//倒排新增: 数字型和时间型不添加倒排索引
 	if fld.IndexType != index.IDX_TYPE_INTEGER &&
 		fld.IndexType != index.IDX_TYPE_DATE &&
 		fld.IvtIdx != nil {
@@ -163,10 +166,12 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 		if !ok {
 			return errors.New("Invert index must string")
 		}
-		if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
-			log.Errf("Field --> AddDocument :: Add Invert Document Error %v", err)
-			// return err
-			//TODO 一致性？？
+
+		if len(contentStr) > 0 {
+			if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
+				log.Errf("Field --> AddDocument :: Add Invert Document Error %v", err)
+				return err
+			}
 		}
 	}
 	fld.DocCnt++

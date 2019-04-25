@@ -219,6 +219,8 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		return errors.New("Partition --> AddDocument :: Wrong DocId Number")
 	}
 
+	//各个字段分别新增文档的对应部分
+	godStrs := []string{}
 	for fieldName, iField := range part.Fields {
 		if _, ok := content[fieldName]; !ok {
 			//如果某个字段没传, 则会是空值
@@ -234,22 +236,27 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		}
 
 		//字符类型的字段内容, 汇入上帝视角
-		godStrs := []string{}
 		if iField.IndexType == index.IDX_TYPE_STRING ||
 			iField.IndexType == index.IDX_TYPE_STRING_SEG ||
 			iField.IndexType == index.IDX_TYPE_STRING_LIST ||
 			iField.IndexType == index.IDX_TYPE_STRING_SINGLE {
-
 			if val, ok := content[fieldName]; ok {
 				str, _ := val.(string)
 				godStrs = append(godStrs, str)
 			}
 		}
-		if len(godStrs) > 0 {
-			strVal := strings.Join(godStrs, "。") //汇总, 然后增加倒排
-			part.GodField.AddDocument(docId, strVal)
-		}
 	}
+
+	strVal := ""
+	if len(godStrs) > 0 {
+		strVal = strings.Join(godStrs, "。") //汇总, 然后增加倒排
+	}
+	if err := part.GodField.AddDocument(docId, strVal); err != nil {
+		log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", GOD_FIELD_NAME, strVal, err)
+		return err
+	}
+
+
 	part.NextDocId++
 	part.DocCnt++
 	return nil
@@ -350,7 +357,6 @@ func (part *Partition) GetDocument(docId uint32) (map[string]interface{}, bool) 
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
 	}
-
 
 	//获取
 	ret := make(map[string]interface{})
@@ -561,19 +567,25 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 //查询
 func (part *Partition) query(fieldName string, key interface{}) ([]basic.DocNode, bool) {
 	//校验
-	if _, exist := part.Fields[fieldName]; !exist {
-		log.Errf("Field [%v] not found", fieldName)
-		return nil, false
+	fld, exist := part.Fields[fieldName]
+	if !exist {
+		if fieldName == GOD_FIELD_NAME {
+			fld = part.GodField
+		} else {
+			log.Errf("Field [%v] not found", fieldName)
+			return nil, false
+		}
 	}
 
-	return part.Fields[fieldName].Query(key)
+	return fld.Query(key)
 }
 
 //搜索, 如果keyWord为空, 则取出所有未删除的节点
 //根据搜索结果, 再通过bitmap进行过滤
 func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap,filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 	//校验
-	if _, exist := part.Fields[fieldName]; !exist {
+	_, exist := part.Fields[fieldName]
+	if !exist && fieldName != GOD_FIELD_NAME{
 		log.Errf("Field [%v] not found", fieldName)
 		return nil, false
 	}
@@ -624,6 +636,5 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 	} else {
 		finalRetDocs = retDocs
 	}
-
 	return finalRetDocs, len(finalRetDocs)>0
 }
