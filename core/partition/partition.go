@@ -39,7 +39,7 @@ type Partition struct {
 	DocCnt          uint32                     `json:"docCnt"` 	       //分区文档个数
 	PrtPathName     string                     `json:"prtPathName"`
 	CoreFields      map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
-	GodBaseField    field.BasicField           `json:"godCoreField"`   //上帝视角字段, 用于跨字段倒排索引搜索
+	GodBaseField    field.BasicField           `json:"godField"`       //上帝视角字段, 用于跨字段倒排索引搜索
 	Fields          map[string]*field.Field    `json:"-"`
 	GodField        *field.Field               `json:"-"`
 	inMemory        bool                       `json:"-"`

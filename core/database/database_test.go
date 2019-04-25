@@ -27,7 +27,7 @@ func init() {
 func TestNewDatabase(t *testing.T) {
 	db, err := NewDatabase("/tmp/spider/db1", "db1")
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	_, err = db.CreateTable(TEST_TABLE, []field.BasicField {
@@ -46,24 +46,24 @@ func TestNewDatabase(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	docId, err := db.AddDoc(TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
 	if err != nil {
-		t.Fatal("AddDoc Error:", err)
+		panic(err)
 	}
 	t.Log("Add doc:", docId)
 
 	docId, err = db.AddDoc(TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
 	if err != nil {
-		t.Fatal("AddDoc Error:", err)
+		panic(err)
 	}
 	t.Log("Add doc:", docId)
 
 	err = db.DoClose()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -71,40 +71,40 @@ func TestNewDatabase(t *testing.T) {
 func TestLoadDatabase(t *testing.T) {
 	db, err := LoadDatabase("/tmp/spider/db1", "db1")
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	user, ok := db.GetDoc(TEST_TABLE, "10002")
 	if !ok {
-		t.Fatal("Should exist!")
+		panic("Should exist!")
 	}
 	t.Log("Got the user[10002]:", helper.JsonEncode(user))
 
 	tmp, ok := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "游泳", nil)
 	if ok {
-		t.Fatal("Should not exist!")
+		panic("Should not exist!")
 	}
 	t.Log("Got the doc[游泳]:", helper.JsonEncode(tmp))
 
 	tmp, ok = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "", nil)
 	if !ok {
-		t.Fatal("Should exist!")
+		panic("Should exist!")
 	}
 	t.Log("Got the doc[美食]:", helper.JsonEncode(tmp))
 
 	tmp, ok = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电影", nil)
 	if !ok {
-		t.Fatal("Should exist!")
+		panic("Should exist!")
 	}
 	t.Log("Got the doc[电影]:", helper.JsonEncode(tmp))
 
 	err = db.DropTable(TEST_TABLE)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	err = db.Destory()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 }

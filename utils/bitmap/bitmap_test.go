@@ -19,19 +19,19 @@ func TestNewBitmap(t *testing.T) {
 	t.Log("Create bitmap:", bm.DataMap)
 
 	if bm.FirstOneIdx != -1 {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	if bm.MaxNum != 15 {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	if bm.DataMap.RealCapcity() != 2 {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	if bm.DataMap.Capacity != 10 {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 	t.Log("\n")
 }
@@ -52,7 +52,7 @@ func TestSetGet(t *testing.T) {
 	bm.Set(21)
 	t.Log("After Foreach: ", bm)
 	if(bm.GetBit(21) != 1) {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	bm.Clear(2)
@@ -61,10 +61,10 @@ func TestSetGet(t *testing.T) {
 	bm.Clear(21)
 	t.Log("Clear Foreach: ", bm)
 	if(bm.GetBit(21) == 1) {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 	if(bm.GetBit(3) != 1) {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	bm.Set(31)
@@ -72,13 +72,13 @@ func TestSetGet(t *testing.T) {
 	bm.Set(27)
 	t.Log("Final Foreach: ", bm)
 	if(bm.GetBit(31) != 1) {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	bm.Clear(19)
 	t.Log("Clear Foreach: ", bm)
 	if(bm.Maxpos() != 31) {
-		t.Fatal("wrong", bm.Maxpos())
+		panic(bm.Maxpos())
 	}
 
 	t.Log("\n")
@@ -101,7 +101,7 @@ func TestLoadBitmap(t *testing.T) {
 		bm.GetBit(17) == 1 ||
 		bm.GetBit(23) == 1 ||
 		bm.GetBit(24) == 1 {
-		t.Fatal("wrong data")
+		panic("wrong data")
 	}
 	t.Log("\n")
 }
@@ -113,7 +113,7 @@ func TestClose(t *testing.T) {
 
 	err := bm.Close()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	t.Log("\n")
 }

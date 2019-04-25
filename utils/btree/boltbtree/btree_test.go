@@ -28,11 +28,11 @@ func TestSetGet(t *testing.T) {
 	if _, exist := tree.Buckets["first"]; !exist {
 		err := tree.CreateBucket("first")
 		if err != nil {
-			t.Fatal(err)
+			panic(err)
 		}
 	}
 	if err := tree.Set("first", "aa", "hello"); err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	v, ok := tree.Get("first", "aa")
 	t.Log("Get: ",v, ok)
@@ -54,7 +54,7 @@ func TestMultiSet(t *testing.T) {
 		"bb": "4",
 	})
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	t.Log("\n\n")
@@ -71,20 +71,20 @@ func TestGetFirst(t *testing.T) {
 	tree := GetBoltWrapperInstance()
 	k, v, e := tree.GetFristKV("first")
 	if e != nil {
-		t.Fatal(e)
+		panic(e)
 	}
 	t.Log(k, v, e)
 
 	//多次调用first，得到的值相同，不会帮你自动后移cursor ~
 	k, v, e = tree.GetFristKV("first")
 	if e != nil {
-		t.Fatal(e)
+		panic(e)
 	}
 	t.Log(k, v, e)
 
 	k, v, e = tree.GetFristKV("first")
 	if e != nil {
-		t.Fatal(e)
+		panic(e)
 	}
 	t.Log(k, v, e)
 
@@ -95,7 +95,7 @@ func TestNextKV(t *testing.T) {
 	tree := GetBoltWrapperInstance()
 	k, v, e := tree.GetNextKV("first", "ee")
 	if e != nil {
-		t.Fatal(e)
+		panic(e)
 	}
 	t.Log(k, v, e )
 

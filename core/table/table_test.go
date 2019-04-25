@@ -10,6 +10,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"fmt"
 	"github.com/hq-cml/spider-engine/basic"
+	"github.com/hq-cml/spider-engine/core/partition"
 )
 
 const TEST_TABLE = "user"         //用户
@@ -424,132 +425,6 @@ func TestMergeThenLoad(t *testing.T) {
 	t.Log("\n\n")
 }
 
-//测试碎片化的merge
-func TestMultiMerge(t *testing.T) {
-	//清理目录
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
-	_, err := cmd.Output()
-	if err != nil {
-		os.Exit(1)
-	}
-
-	//新建表
-	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
-
-	//新建字段
-	if err := table.AddField(field.BasicField{
-		FieldName: TEST_FIELD0,
-		IndexType: index.IDX_TYPE_PK,
-	}); err != nil {
-		panic(err)
-	}
-	if err := table.AddField(field.BasicField{
-		FieldName: TEST_FIELD1,
-		IndexType: index.IDX_TYPE_STRING,
-	}); err != nil {
-		panic(err)
-	}
-	if err := table.AddField(field.BasicField{
-		FieldName: TEST_FIELD2,
-		IndexType: index.IDX_TYPE_INTEGER,
-	}); err != nil {
-		panic(err)
-	}
-
-	//增加doc, 表落地
-	docId, _ := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张0",TEST_FIELD2: 20})
-	docId, _ = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李一", TEST_FIELD2: 18})
-	table.Persist()
-
-	//增加doc, 表落地
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二", TEST_FIELD2: 30})
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004",TEST_FIELD1: "陈三", TEST_FIELD2: 35})
-	table.Persist()
-
-	//增加doc, 表落地
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10005",TEST_FIELD1: "黄四", TEST_FIELD2: 30})
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10006",TEST_FIELD1: "何五", TEST_FIELD2: 35})
-	table.Persist()
-
-	//增加doc, 表落地
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10007",TEST_FIELD1: "宋六", TEST_FIELD2: 35})
-	table.Persist()
-
-	//增加doc, 表落地
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10008",TEST_FIELD1: "刘七", TEST_FIELD2: 35})
-	table.Persist()
-
-	//增加doc, 表落地
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10009",TEST_FIELD1: "任八", TEST_FIELD2: 35})
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10010",TEST_FIELD1: "化九", TEST_FIELD2: 35})
-	table.Persist()
-
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10011",TEST_FIELD1: "钟十", TEST_FIELD2: 35})
-	_ = docId
-	t.Log(table.displayInner())
-
-	//测试一下搜索
-	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七", nil)
-	if !ok {
-		panic("shuoud exist")
-	}
-	t.Log(helper.JsonEncode(docs))
-
-	user, ok := table.GetDoc("10003")
-	if !ok {
-		panic("shuoud exist")
-	}
-	t.Log("User[10003]:", helper.JsonEncode(user))
-
-	//启动合并
-	err = table.MergePartitions()
-	if err != nil {
-		panic(fmt.Sprintf("Merge parition Error:%s", err))
-	}
-
-	//再次测试一下搜索
-	docs, ok = table.SearchDocs(TEST_FIELD1, "刘七", nil)
-	if !ok {
-		panic("shuoud exist")
-	}
-	t.Log(helper.JsonEncode(docs))
-
-	user, ok = table.GetDoc("10003")
-	if !ok {
-		panic("shuoud exist")
-	}
-	t.Log("User[10003]:", helper.JsonEncode(user))
-	t.Log(table.displayInner())
-
-	//关闭
-	table.DoClose()
-	t.Log("\n\n")
-}
-
-func TestLoadAgainAgain(t *testing.T) {
-	//加载回来
-	table, err := LoadTable("/tmp/spider", TEST_TABLE)
-	if err != nil {
-		panic(fmt.Sprintf("Load table Error:%s", err))
-	}
-
-	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七", nil)
-	if !ok {
-		panic("shuoud exist")
-	}
-	t.Log(helper.JsonEncode(docs))
-
-	user, ok := table.GetDoc("10003")
-	if !ok {
-		panic("shuoud exist")
-	}
-	t.Log("User[10003]:", helper.JsonEncode(user))
-	t.Log(table.displayInner())
-
-	//关闭
-	table.DoClose()
-	t.Log("\n\n")
-}
 
 //测试过滤器
 func TestFilter(t *testing.T) {
@@ -706,3 +581,215 @@ func TestFilterLoad(t *testing.T) {
 
 	t.Log("\n\n")
 }
+
+//测试上帝视角的跨字段查询
+func TestGodQuery(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
+
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD0,
+		IndexType: index.IDX_TYPE_PK,
+	}); err != nil {
+		panic(err)
+	}
+
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD1,
+		IndexType: index.IDX_TYPE_STRING,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD2,
+		IndexType: index.IDX_TYPE_INTEGER,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD3,
+		IndexType: index.IDX_TYPE_STRING_SEG,
+	}); err != nil {
+		panic(err)
+	}
+
+	docId, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢李四"})
+
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: 28, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻",	TEST_FIELD2: 30,TEST_FIELD3: "喜欢养生"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	//测试倒排搜索(内存)
+	ids, ok := table.SearchDocs(partition.GOD_FIELD_NAME, "李四", nil)
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//测试落地
+	err = table.Persist()
+	if err != nil {
+		panic(fmt.Sprintf("Persist Error:%s", err))
+		table.DoClose()
+	}
+
+	//测试落地后能否直接从磁盘读取
+	t.Log("After Persist")
+
+	ids, ok = table.SearchDocs(partition.GOD_FIELD_NAME, "李四", nil)
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log(helper.JsonEncode(ids))
+
+	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
+	table.DoClose()
+
+	t.Log("\n\n")
+}
+
+//测试碎片化的merge
+func TestMultiMerge(t *testing.T) {
+	//清理目录
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	//新建表
+	table := NewEmptyTable("/tmp/spider", TEST_TABLE)
+
+	//新建字段
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD0,
+		IndexType: index.IDX_TYPE_PK,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD1,
+		IndexType: index.IDX_TYPE_STRING,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD2,
+		IndexType: index.IDX_TYPE_INTEGER,
+	}); err != nil {
+		panic(err)
+	}
+
+	//增加doc, 表落地
+	docId, _ := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张0",TEST_FIELD2: 20})
+	docId, _ = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李一", TEST_FIELD2: 18})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二", TEST_FIELD2: 30})
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004",TEST_FIELD1: "陈三", TEST_FIELD2: 35})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10005",TEST_FIELD1: "黄四", TEST_FIELD2: 30})
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10006",TEST_FIELD1: "何五", TEST_FIELD2: 35})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10007",TEST_FIELD1: "宋六", TEST_FIELD2: 35})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10008",TEST_FIELD1: "刘七", TEST_FIELD2: 35})
+	table.Persist()
+
+	//增加doc, 表落地
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10009",TEST_FIELD1: "任八", TEST_FIELD2: 35})
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10010",TEST_FIELD1: "化九", TEST_FIELD2: 35})
+	table.Persist()
+
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10011",TEST_FIELD1: "钟十", TEST_FIELD2: 35})
+	_ = docId
+	t.Log(table.displayInner())
+
+	//测试一下搜索
+	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七", nil)
+	if !ok {
+		panic("shuoud exist")
+	}
+	t.Log(helper.JsonEncode(docs))
+
+	user, ok := table.GetDoc("10003")
+	if !ok {
+		panic("shuoud exist")
+	}
+	t.Log("User[10003]:", helper.JsonEncode(user))
+
+	//启动合并
+	err = table.MergePartitions()
+	if err != nil {
+		panic(fmt.Sprintf("Merge parition Error:%s", err))
+	}
+
+	//再次测试一下搜索
+	docs, ok = table.SearchDocs(TEST_FIELD1, "刘七", nil)
+	if !ok {
+		panic("shuoud exist")
+	}
+	t.Log(helper.JsonEncode(docs))
+
+	user, ok = table.GetDoc("10003")
+	if !ok {
+		panic("shuoud exist")
+	}
+	t.Log("User[10003]:", helper.JsonEncode(user))
+	t.Log(table.displayInner())
+
+	//关闭
+	table.DoClose()
+	t.Log("\n\n")
+}
+
+func TestLoadAgainAgain(t *testing.T) {
+	//加载回来
+	table, err := LoadTable("/tmp/spider", TEST_TABLE)
+	if err != nil {
+		panic(fmt.Sprintf("Load table Error:%s", err))
+	}
+
+	docs, ok := table.SearchDocs(TEST_FIELD1, "刘七", nil)
+	if !ok {
+		panic("shuoud exist")
+	}
+	t.Log(helper.JsonEncode(docs))
+
+	user, ok := table.GetDoc("10003")
+	if !ok {
+		panic("shuoud exist")
+	}
+	t.Log("User[10003]:", helper.JsonEncode(user))
+	t.Log(table.displayInner())
+
+	//关闭
+	table.DoClose()
+	t.Log("\n\n")
+}
+

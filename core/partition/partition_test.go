@@ -31,7 +31,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	//创建空的分区
 	memPartition := NewEmptyPartitionWithBasicFields(patitionName, 0, nil)
 	if memPartition.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 
 	//新增字段
@@ -39,7 +39,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER})
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG})
 	if memPartition.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 
 	user0 := map[string]interface{} {TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"张三喜欢游泳,也喜欢美食"}
@@ -51,33 +51,33 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	err = memPartition.AddDocument(2, user2); if err != nil { panic(err) }
 
 	if memPartition.Fields[TEST_FIELD1].DocCnt != 3 {
-		t.Fatal("wrong number")
+		panic("wrong number")
 	}
 
 	list, exist := memPartition.query(TEST_FIELD3, "美食")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 2 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = memPartition.query(TEST_FIELD3, "喜欢")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 3 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = memPartition.query(TEST_FIELD3, "游泳")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
@@ -92,28 +92,28 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 
 	list, exist = memPartition.query(TEST_FIELD3, "美食")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 2 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = memPartition.query(TEST_FIELD3, "喜欢")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 3 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = memPartition.query(TEST_FIELD3, "游泳")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
@@ -124,7 +124,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	t.Log(s2)
 
 	if s1 != s2 {
-		t.Fatal("Should ==")
+		panic("Should ==")
 	}
 	memPartition.DoClose()
 
@@ -135,32 +135,32 @@ func TestLoad(t *testing.T) {
 	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
 	part, err := LoadPartition(patitionName)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	list, exist := part.query(TEST_FIELD3, "美食")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 2 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part.query(TEST_FIELD3, "喜欢")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 3 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part.query(TEST_FIELD3, "游泳")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
@@ -187,10 +187,10 @@ func TestPartitionMerge(t *testing.T) {
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part0.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	if part0.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	user0 := map[string]interface{} {TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"喜欢游泳,也喜欢美食"}
 	user1 := map[string]interface{} {TEST_FIELD1:"李四", TEST_FIELD2:30, TEST_FIELD3:"喜欢美食,也喜欢文艺"}
@@ -207,10 +207,10 @@ func TestPartitionMerge(t *testing.T) {
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part1.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	if part1.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	user3 := map[string]interface{} {TEST_FIELD1:"赵六", TEST_FIELD2:22, TEST_FIELD3:"喜欢打牌,也喜欢美食"}
 	user4 := map[string]interface{} {TEST_FIELD1:"钱七", TEST_FIELD2:29, TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
@@ -238,7 +238,7 @@ func TestPartitionMerge(t *testing.T) {
 	//合并
 	err = part2.MergePersistPartitions([]*Partition{part0, part1})
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	//part2.Fields[TEST_FIELD3].IvtIdx.GetBtree().Display(TEST_FIELD3)
@@ -247,57 +247,57 @@ func TestPartitionMerge(t *testing.T) {
 	//合并完毕, 测试合并效果
 	list, exist := part2.query(TEST_FIELD3, "美食")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 3 {
-		t.Fatal("Should 3!!")
+		panic("Should 3!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD3, "喜欢")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 6 {
-		t.Fatal("Should 6!!")
+		panic("Should 6!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD3, "游泳")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 1!!")
+		panic("Should 1!!")
 	}
 
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD1, "李八")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 1!!")
+		panic("Should 1!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	d, ok := part2.GetDocument(2)
 	if !ok {
-		t.Fatal("Shuold exist")
+		panic("Shuold exist")
 	}
 	v, ok := d[TEST_FIELD2].(int64)
 	if !ok || v != 25 {
-		t.Fatal("Error", d[TEST_FIELD2])
+		panic(d[TEST_FIELD2])
 	}
 	t.Log(helper.JsonEncode(d))
 
 	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
 	if !ok {
-		t.Fatal("Shuold exist")
+		panic("Shuold exist")
 	}
 	if s2 != "喜欢美食,也喜欢文艺" {
-		t.Fatal("Error")
+		panic("Error")
 	}
 	t.Log(s2)
 
@@ -312,63 +312,63 @@ func TestLoadMerge(t *testing.T) {
 	patitionName := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2, err := LoadPartition(patitionName)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	//测试Load回来的结果
 	list, exist := part2.query(TEST_FIELD3, "美食")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 3 {
-		t.Fatal("Should 3!!")
+		panic("Should 3!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD3, "喜欢")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 6 {
-		t.Fatal("Should 6!!")
+		panic("Should 6!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD3, "游泳")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 1!!")
+		panic("Should 1!!")
 	}
 
 	t.Log(helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD1, "李八")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 1!!")
+		panic("Should 1!!")
 	}
 	t.Log(helper.JsonEncode(list))
 
 	d, ok := part2.GetDocument(2)
 	if !ok {
-		t.Fatal("Shuold exist")
+		panic("Shuold exist")
 	}
 	v, ok := d[TEST_FIELD2].(int64)
 	if !ok || v != 25 {
-		t.Fatal("Error", d[TEST_FIELD2])
+		panic(d[TEST_FIELD2])
 	}
 	t.Log(helper.JsonEncode(d))
 
 	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
 	if !ok {
-		t.Fatal("Shuold exist")
+		panic("Shuold exist")
 	}
 	if s2 != "喜欢美食,也喜欢文艺" {
-		t.Fatal("Error")
+		panic("Error")
 	}
 	t.Log(s2)
 	t.Log(helper.JsonEncode(part2.CoreFields))
@@ -389,10 +389,10 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
 	})
 	if part0.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	if part0.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	user0 := map[string]interface{} {TEST_FIELD1:"张三"}
 	user1 := map[string]interface{} {TEST_FIELD1:"李四"}
@@ -410,10 +410,10 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
 	})
 	if part1.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	if part1.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 	user3 := map[string]interface{} {TEST_FIELD1:"赵六", TEST_FIELD2:22, TEST_FIELD3:"喜欢打牌,也喜欢美食"}
 	user4 := map[string]interface{} {TEST_FIELD1:"钱七", TEST_FIELD2:29, TEST_FIELD3:"喜欢旅游,也喜欢音乐"}
@@ -450,50 +450,50 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	//合并完毕, 测试合并效果, 测试倒排
 	list, exist := part2.query(TEST_FIELD3, "美食")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 3!!")
+		panic("Should 3!!")
 	}
 	t.Log("美食:", helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD3, "喜欢")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 3 {
-		t.Fatal("Should 3!!")
+		panic("Should 3!!")
 	}
 	t.Log("喜欢:", helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD3, "游泳")
 	if exist {
-		t.Fatal("Should not exist!!")
+		panic("Should not exist!!")
 	}
 	t.Log("游泳:", helper.JsonEncode(list))
 
 	list, exist = part2.query(TEST_FIELD1, "李八")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 1 {
-		t.Fatal("Should 1!!")
+		panic("Should 1!!")
 	}
 	t.Log("李八:", helper.JsonEncode(list))
 
 	//测试正排索引
 	d, ok := part2.GetDocument(2)
 	if !ok {
-		t.Fatal("Shuold exist")
+		panic("Shuold exist")
 	}
 	t.Log("Got doc 2:", helper.JsonEncode(d))
 
 	s2, ok := part2.GetFieldValue(3, TEST_FIELD3)
 	if !ok {
-		t.Fatal("Shuold exist")
+		panic("Shuold exist")
 	}
 	if s2 != "喜欢打牌,也喜欢美食" {
-		t.Fatal("Error")
+		panic("Error")
 	}
 	t.Log(s2)
 
@@ -515,7 +515,7 @@ func TestQueryByGodField(t *testing.T) {
 	//创建空的分区
 	memPartition := NewEmptyPartitionWithBasicFields(patitionName, 0, nil)
 	if memPartition.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 
 	//新增字段
@@ -523,7 +523,7 @@ func TestQueryByGodField(t *testing.T) {
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER})
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG})
 	if memPartition.IsEmpty() != true {
-		t.Fatal("Should empty!!")
+		panic("Should empty!!")
 	}
 
 	user0 := map[string]interface{}{TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"喜欢游泳,也喜欢美食"}
@@ -542,10 +542,10 @@ func TestQueryByGodField(t *testing.T) {
 
 	list, exist := memPartition.query(GOD_FIELD_NAME, "张三")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 2 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log("上帝视角:张三: ", helper.JsonEncode(list))
 
@@ -560,10 +560,10 @@ func TestQueryByGodField(t *testing.T) {
 
 	list, exist = memPartition.query(GOD_FIELD_NAME, "张三")
 	if !exist {
-		t.Fatal("Should exist!!")
+		panic("Should exist!!")
 	}
 	if len(list) != 2 {
-		t.Fatal("Should 2!!")
+		panic("Should 2!!")
 	}
 	t.Log("上帝视角:张三: ", helper.JsonEncode(list))
 
@@ -574,7 +574,7 @@ func TestQueryByGodField(t *testing.T) {
 	t.Log(s2)
 
 	if s1 != s2 {
-		t.Fatal("Should ==")
+		panic("Should ==")
 	}
 
 	memPartition.DoClose()

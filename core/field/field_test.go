@@ -31,39 +31,39 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	field.AddDocument(3, "火红的萨日朗")
 
 	if field.DocCnt != 4 {
-		t.Fatal("Wrong number")
+		panic("Wrong number")
 	}
 
 	//测试query
 	tmp, b := field.Query("天安门")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	tmp, b = field.Query("火红")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	//测试get
 	s, b := field.GetString(2)
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	if s != "火红的太阳" {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	_, b = field.GetString(4)
 	if b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	//准备落地
@@ -72,7 +72,7 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	defer treedb.Close()
 	t.Log("Before Persist. NextId:", field.NextDocId)
 	if err := field.Persist("/tmp/spider/Partition0", treedb); err != nil {
-		t.Fatal("Wrong:", err)
+		panic(err)
 	}
 	t.Log("After Persist. NextId:", field.NextDocId)
 
@@ -87,48 +87,48 @@ func TestLoad(t *testing.T) {
 	//从磁盘加载mmap
 	ivtMmap, err := mmap.NewMmap("/tmp/spider/Partition0" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	mmp1, err := mmap.NewMmap("/tmp/spider/Partition0" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 	mmp2, err := mmap.NewMmap("/tmp/spider/Partition0" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 
 	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, mmp1, mmp2, ivtMmap, btdb)
 	//测试query
 	tmp, b := field.Query("天安门")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	tmp, b = field.Query("火红")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	//测试get
 	s, b := field.GetString(2)
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	if s != "火红的太阳" {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	_, b = field.GetString(4)
 	if b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log("\n\n")
 }
@@ -154,12 +154,12 @@ func TestPrepareMerge(t *testing.T) {
 	treedb1 := btree.NewBtree("xx", "/tmp/spider/spider1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb1.Close()
 	if err := field1.Persist("/tmp/spider/Partition1", treedb1); err != nil {
-		t.Fatal("Wrong:", err)
+		panic(err)
 	}
 	treedb2 := btree.NewBtree("xx", "/tmp/spider/spider2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb2.Close()
 	if err := field2.Persist("/tmp/spider/Partition2", treedb2); err != nil {
-		t.Fatal("Wrong:", err)
+		panic(err)
 	}
 	t.Log("\n\n")
 }
@@ -171,15 +171,15 @@ func TestMerge(t *testing.T) {
 	defer btdb1.Close()
 	ivtMmap1, err := mmap.NewMmap("/tmp/spider/Partition1" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	mmp11, err := mmap.NewMmap("/tmp/spider/Partition1" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 	mmp21, err := mmap.NewMmap("/tmp/spider/Partition1" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 
 	field1 := LoadField(TEST_FIELD, 0, 2, index.IDX_TYPE_STRING_SEG, 0, 2, mmp11, mmp21, ivtMmap1, btdb1)
@@ -189,15 +189,15 @@ func TestMerge(t *testing.T) {
 	defer btdb2.Close()
 	ivtMmap2, err := mmap.NewMmap("/tmp/spider/Partition2" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	mmp12, err := mmap.NewMmap("/tmp/spider/Partition2" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 	mmp22, err := mmap.NewMmap("/tmp/spider/Partition2" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 	field2 := LoadField(TEST_FIELD, 2, 4, index.IDX_TYPE_STRING_SEG, 0, 2, mmp12, mmp22, ivtMmap2, btdb2)
 
@@ -207,7 +207,7 @@ func TestMerge(t *testing.T) {
 	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
 	err = field.MergePersistField([]*Field{field1, field2}, "/tmp/spider/Partition", treedb)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	t.Log("Offset:", field.FwdOffset, "Cnt:", field.DocCnt, ". StartId:", field.StartDocId, ". NextId:", field.NextDocId)
 
@@ -215,15 +215,15 @@ func TestMerge(t *testing.T) {
 	//从磁盘加载mmap
 	ivtMmap, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	mmp1, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 	mmp2, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 	field.SetMmap(mmp1, mmp2, ivtMmap)
 
@@ -232,33 +232,33 @@ func TestMerge(t *testing.T) {
 	//测试query
 	tmp, b := field.Query("天安门")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	tmp, b = field.Query("火红")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	//测试get
 	s, b := field.GetString(2)
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	if s != "火红的太阳" {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	_, b = field.GetString(4)
 	if b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log("\n\n")
 }
@@ -271,15 +271,15 @@ func TestLoadMerge(t *testing.T) {
 	//从磁盘加载mmap
 	ivtMmap, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	mmp1, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 	mmp2, err := mmap.NewMmap("/tmp/spider/Partition" + basic.IDX_FILENAME_SUFFIX_FWDEXT, true, 0)
 	if err != nil {
-		t.Fatal("Load Error:", err)
+		panic(err)
 	}
 
 	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, mmp1, mmp2, ivtMmap, btdb)
@@ -289,33 +289,33 @@ func TestLoadMerge(t *testing.T) {
 	//测试query
 	tmp, b := field.Query("天安门")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	tmp, b = field.Query("火红")
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log(helper.JsonEncode(tmp))
 	if len(tmp) != 2 {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	//测试get
 	s, b := field.GetString(2)
 	if !b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	if s != "火红的太阳" {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 
 	_, b = field.GetString(4)
 	if b {
-		t.Fatal("Wrong")
+		panic("Wrong")
 	}
 	t.Log("\n\n")
 }

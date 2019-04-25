@@ -8,7 +8,7 @@ import (
 func TestOpenNoexistFile(t *testing.T) {
 	_, err := os.Open("/tmp/noexist")
 	if err == nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	t.Log("\n")
 }
@@ -16,12 +16,12 @@ func TestOpenNoexistFile(t *testing.T) {
 func TestCreateFile(t *testing.T) {
 	f, err := os.Create("/tmp/xx")
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	fi, err := f.Stat()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	t.Log("Create /tmp/xx success: ", fi.Size(), fi.Mode())
@@ -31,7 +31,7 @@ func TestCreateFile(t *testing.T) {
 func TestNewMmap(t *testing.T) {
 	m, err := NewMmap("/tmp/ee", false, 16)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	defer m.Unmap()
 	t.Log("Create mmap: ", m)
@@ -44,17 +44,17 @@ func TestNewMmap(t *testing.T) {
 func TestLoadMmap(t *testing.T) {
 	m, err := NewMmap("/tmp/ee", true, 0)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	defer m.Unmap()
 	t.Log("Load mmap: ", m)
 
 	if m.GetByte(0) != 'a' {
-		t.Fatal("Data wrong: ", m.GetByte(0))
+		panic(m.GetByte(0))
 	}
 
 	if m.GetString(0, 4) != "abcd" {
-		t.Fatal("Data wrong: ", m.GetString(0, 4))
+		panic(m.GetString(0, 4))
 	}
 	t.Log("\n")
 }
@@ -77,7 +77,7 @@ func (mmp *Mmap) tempCheckNeedExpand(length uint64) (int64, bool) {
 func TestCheckNeedExpand(t *testing.T) {
 	mmp, err := NewMmap("/tmp/cc", false, 4)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	defer mmp.Unmap()
 
@@ -87,21 +87,21 @@ func TestCheckNeedExpand(t *testing.T) {
 	if b == false {
 		t.Log("yes, no expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	tt, b = mmp.tempCheckNeedExpand(4)  //不扩
 	if b == false {
 		t.Log("yes, no expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	tt, b = mmp.tempCheckNeedExpand(5)  //扩一次
 	if b == true {
 		t.Log("yes, should expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	mmp.innerIdx = 11
@@ -109,7 +109,7 @@ func TestCheckNeedExpand(t *testing.T) {
 	if b == true && tt == 16{
 		t.Log("yes, should expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	mmp.innerIdx = 12
@@ -117,7 +117,7 @@ func TestCheckNeedExpand(t *testing.T) {
 	if b == true && tt == 16{
 		t.Log("yes, should expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	mmp.innerIdx = 11
@@ -125,7 +125,7 @@ func TestCheckNeedExpand(t *testing.T) {
 	if b == true && tt == 16{
 		t.Log("yes, should expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	mmp.innerIdx = 11
@@ -133,7 +133,7 @@ func TestCheckNeedExpand(t *testing.T) {
 	if b == true && tt == 32{
 		t.Log("yes, should expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 
 	mmp.innerIdx = 12
@@ -141,7 +141,7 @@ func TestCheckNeedExpand(t *testing.T) {
 	if b == true && tt == 32{
 		t.Log("yes, should expand: ", tt)
 	} else {
-		t.Fatal("wrong")
+		panic("wrong")
 	}
 	t.Log("\n")
 }
@@ -149,23 +149,23 @@ func TestCheckNeedExpand(t *testing.T) {
 func TestExpand(t *testing.T) {
 	mmp, err := NewMmap("/tmp/aa", false, 16)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	t.Log("Before expand:" , mmp)
 	mmp.AppendString("abcdefghijklmnop") //16
 	if mmp.Capacity != 24 || mmp.innerIdx != 24 {
-		t.Fatal("Wrong expand")
+		panic("Wrong expand")
 	}
 	mmp.Unmap()
 
 	mmp, err = NewMmap("/tmp/aa", false, 16)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	t.Log("Before expand:" , mmp)
 	mmp.AppendString("abcdefghijklmnopq") //17
 	if mmp.Capacity != (24 + uint64(APPEND_LEN)) || mmp.innerIdx != 25 {
-		t.Fatal("Wrong expand")
+		panic("Wrong expand")
 	}
 	mmp.Unmap()
 
@@ -179,7 +179,7 @@ func TestSync(t *testing.T) {
 	//t.Skip("Skip fuck")
 	mmp, err := NewMmap("/tmp/cc", true, 0)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 	defer mmp.Unmap()
 	fmt.Println("Cap:", mmp.Capacity, "Idx:", mmp.innerIdx)
