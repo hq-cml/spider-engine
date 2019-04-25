@@ -90,20 +90,41 @@ func NewEmptyField(fieldName string, start uint32, indexType uint16) *Field {
 	}
 }
 
+//新建空字段
+func NewEmptyGodField(fieldName string, start uint32) *Field {
+	//建立反向索引，如果需要的话
+	ivtIdx := index.NewEmptyInvertedIndex(index.IDX_TYPE_GOD, start, fieldName)
+
+	return &Field{
+		FieldName:  fieldName,
+		StartDocId: start,
+		NextDocId:  start,
+		IndexType:  index.IDX_TYPE_GOD,
+		inMemory:   true,
+		IvtIdx:     ivtIdx,
+	}
+}
+
 //加载字段索引
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset uint64,
-	fwdDocCnt uint32, ivtMmap, baseMmap, extMmap *mmap.Mmap, btdb btree.Btree) *Field {
+	fwdDocCnt uint32, baseMmap, extMmap, ivtMmap *mmap.Mmap, btdb btree.Btree) *Field {
 
+	//加载倒排
 	var ivtIdx *index.InvertedIndex
 	if indexType == index.IDX_TYPE_STRING ||
 		indexType == index.IDX_TYPE_STRING_SEG ||
 		indexType == index.IDX_TYPE_STRING_LIST ||
-		indexType == index.IDX_TYPE_STRING_SINGLE {
+		indexType == index.IDX_TYPE_STRING_SINGLE ||
+		indexType == index.IDX_TYPE_GOD {
 		ivtIdx = index.LoadInvertedIndex(btdb, indexType, fieldname, ivtMmap, next)
 	}
 
-	fwdIdx := index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, start, next)
+	//加载正排
+	var fwdIdx *index.ForwardIndex
+	if indexType != index.IDX_TYPE_GOD { //上帝字段没有正排
+		fwdIdx = index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, start, next)
+	}
 
 	return &Field{
 		FieldName:  fieldname,
@@ -134,7 +155,7 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 		return err
 	}
 
-	//数字型和时间型不能加倒排索引
+	//数字型和时间型不添加倒排索引
 	if fld.IndexType != index.IDX_TYPE_INTEGER &&
 		fld.IndexType != index.IDX_TYPE_DATE &&
 		fld.IvtIdx != nil {
@@ -297,23 +318,26 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 	}
 	var err error
 
-	//合并正排索引
-	fwds := make([]*index.ForwardIndex, 0)
-	for _, fd := range fields {
-		fwds = append(fwds, fd.FwdIdx)
-	}
-	err = fld.FwdIdx.MergePersistFwdIndex(fwds, partitionName)
-	//fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
-	if err != nil {
-		log.Errf("Field --> mergeField :: Serialization Error %v", err)
-		return err
+	//合并正排索引(上帝字段没有正排索引)
+	if fld.IndexType != index.IDX_TYPE_GOD {
+		fwds := make([]*index.ForwardIndex, 0)
+		for _, fd := range fields {
+			fwds = append(fwds, fd.FwdIdx)
+		}
+		err = fld.FwdIdx.MergePersistFwdIndex(fwds, partitionName)
+		//fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
+		if err != nil {
+			log.Errf("Field --> mergeField :: Serialization Error %v", err)
+			return err
+		}
 	}
 
 	//如果有倒排索引，则合并
 	if fld.IndexType == index.IDX_TYPE_STRING ||
 		fld.IndexType == index.IDX_TYPE_STRING_SEG ||
 		fld.IndexType == index.IDX_TYPE_STRING_LIST ||
-		fld.IndexType == index.IDX_TYPE_STRING_SINGLE {
+		fld.IndexType == index.IDX_TYPE_STRING_SINGLE ||
+		fld.IndexType == index.IDX_TYPE_GOD {
 
 		ivts := make([]*index.InvertedIndex, 0)
 		for _, fd := range fields {
@@ -334,10 +358,17 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 
 	//加载回控制数据
 	fld.btdb = btdb
-	fld.FwdOffset = fld.FwdIdx.GetFwdOffset()
-	fld.DocCnt = fld.FwdIdx.GetDocCnt()
-	fld.StartDocId = fld.FwdIdx.GetStartId()
-	fld.NextDocId = fld.FwdIdx.GetNextId()
+	if fld.FwdIdx != nil {
+		fld.FwdOffset = fld.FwdIdx.GetFwdOffset()
+		fld.DocCnt = fld.FwdIdx.GetDocCnt()
+		fld.StartDocId = fld.FwdIdx.GetStartId()
+		fld.NextDocId = fld.FwdIdx.GetNextId()
+	} else {
+		//这里只会是上帝字段
+		fld.StartDocId = fields[0].StartDocId
+		fld.NextDocId = fields[l-1].NextDocId
+		fld.DocCnt = fld.NextDocId - fld.StartDocId
+	}
 
 	return nil
 }
@@ -346,7 +377,6 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 //过滤（针对的是正排索引）
 func (fld *Field) Filter(docId uint32, filter basic.SearchFilter) bool {
 	if docId >= fld.StartDocId && docId < fld.NextDocId && fld.FwdIdx != nil {
-
 		//Pos是docId在本索引中的位置
 		pos := docId - fld.StartDocId
 		return fld.FwdIdx.Filter(pos, filter)

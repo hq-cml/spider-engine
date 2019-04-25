@@ -19,11 +19,17 @@ const (
 
 	IDX_TYPE_DATE          = 401 //日期型索引，数字类型的变种，只建立正排，转成时间戳存储
 
-	IDX_ONLYSTORE          = 501 //只保存详情，不参与检索
+	IDX_TYPE_GOD           = 501 //上帝视角索引, 用于跨字段搜索, 只有倒排索引, 无正排
+
+	IDX_ONLYSTORE          = 601 //只保存详情，不参与检索
 )
 
 //全局分词器
 var Splitter splitter.Splitter
+
+var punctuationMap = map[string]bool {
+	" ":true, ".":true, ",":true, "，":true, "。":true,
+}
 
 func init() {
 	Splitter = splitter.NewSplitter("jieba")
@@ -76,7 +82,9 @@ func SplitRuneWords(docId uint32, content string) map[string]basic.DocNode {
 func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 
 	terms :=  Splitter.DoSplit(content, false) //TODO true config
-	totalTerm := len(terms)
+
+	terms = trimPunctuation(terms) //过滤无意义的标点
+	totalCnt := len(terms)
 
 	uniqMap := make(map[string]int)
 	for _, term := range terms {
@@ -90,9 +98,21 @@ func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 	for term, tf := range uniqMap {
 		node := basic.DocNode {
 			DocId:  docId,
-			Weight: uint32((float32(tf)/float32(totalTerm)) * 10000), //TODO 这个10000是个魔幻数字
+			Weight: uint32((float32(tf)/float32(totalCnt)) * 10000), //TODO 这个10000是个魔幻数字
 		}
 		m[term] = node
 	}
 	return m
+}
+
+//去除掉标点符号, 空格等
+func trimPunctuation(in []string) []string {
+	out := []string{}
+	for _, v := range in {
+		if _, ok := punctuationMap[v]; !ok {
+			out = append(out, v)
+		}
+	}
+
+	return out
 }

@@ -440,6 +440,8 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	defer part2.DoClose()
 
 	//合并
+	fmt.Println("A-------", part0.GodField.StartDocId, part0.GodField.NextDocId)
+	fmt.Println("B-------", part1.GodField.StartDocId, part1.GodField.NextDocId)
 	err = part2.MergePersistPartitions([]*Partition{part0, part1})
 	if err != nil {
 		t.Fatal(err)

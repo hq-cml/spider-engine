@@ -19,6 +19,7 @@ import (
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/bitmap"
 	"github.com/hq-cml/spider-engine/core/index"
+	"strings"
 )
 
 //TODO 配置化
@@ -218,7 +219,7 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		return errors.New("Partition --> AddDocument :: Wrong DocId Number")
 	}
 
-	for fieldName, _ := range part.Fields {
+	for fieldName, iField := range part.Fields {
 		if _, ok := content[fieldName]; !ok {
 			//如果某个字段没传, 则会是空值
 			if err := part.Fields[fieldName].AddDocument(docId, ""); err != nil {
@@ -230,6 +231,23 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 				log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
 				return err
 			}
+		}
+
+		//字符类型的字段内容, 汇入上帝视角
+		godStrs := []string{}
+		if iField.IndexType == index.IDX_TYPE_STRING ||
+			iField.IndexType == index.IDX_TYPE_STRING_SEG ||
+			iField.IndexType == index.IDX_TYPE_STRING_LIST ||
+			iField.IndexType == index.IDX_TYPE_STRING_SINGLE {
+
+			if val, ok := content[fieldName]; ok {
+				str, _ := val.(string)
+				godStrs = append(godStrs, str)
+			}
+		}
+		if len(godStrs) > 0 {
+			strVal := strings.Join(godStrs, "。") //汇总, 然后增加倒排
+			part.GodField.AddDocument(docId, strVal)
 		}
 	}
 	part.NextDocId++
@@ -267,9 +285,11 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 
 //关闭Partition
 func (part *Partition) DoClose() error {
+	//各个字段关闭
 	for _, fld := range part.Fields {
 		fld.DoClose()
 	}
+	part.GodField.DoClose()
 
 	//统一unmmap掉
 	if part.ivtMmap != nil {
@@ -391,8 +411,8 @@ func (part *Partition) Persist() error {
 	}
 	log.Debugf("Persist Partition File : [%v] Start", part.PrtPathName)
 	var docCnt uint32
+	//当前分区的各个字段分别落地
 	for name, coreField := range part.CoreFields {
-		//当前分区的各个字段分别落地
 		//Note: field.Persist不会自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
 		if err := part.Fields[name].Persist(part.PrtPathName, part.btdb); err != nil {
 			log.Errf("Partition --> Persist %v", err)
@@ -407,6 +427,8 @@ func (part *Partition) Persist() error {
 			return errors.New("Doc cnt not same!!")
 		}
 	}
+	//上帝视角字段落地
+	part.GodField.Persist(part.PrtPathName, part.btdb)
 
 	//存储源信息
 	if err := part.storeMeta(); err != nil {
@@ -435,6 +457,8 @@ func (part *Partition) Persist() error {
 	for name := range part.Fields {
 		part.Fields[name].SetMmap(part.baseMmap, part.extMmap, part.ivtMmap)
 	}
+	part.GodField.SetMmap(nil, nil, part.ivtMmap)
+
 	log.Infof("Persist Partition File : [%v] Finish", part.PrtPathName)
 	return nil
 }
@@ -485,14 +509,23 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		tmp[part.Fields[fieldName].DocCnt] = true
 		part.CoreFields[fieldName] = coreField
 	}
-
 	if len(tmp) > 1 {
 		log.Errf("Doc cnt not consistent!!. %v", tmp)
 		return errors.New("Doc cnt not same!!")
 	}
 
+	//上帝字段合并
+	fs := make([]*field.Field, 0)
+	for _, pt := range parts {
+		fs = append(fs, pt.GodField)
+	}
+	err := part.GodField.MergePersistField(fs, part.PrtPathName, part.btdb)
+	if err != nil {
+		log.Errln("Merge God Partitions failed:", err)
+		return err
+	}
+
 	//加载回mmap
-	var err error
 	part.ivtMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		log.Errln("MergePartitions Error2:", err)
@@ -511,6 +544,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	for name := range part.Fields {
 		part.Fields[name].SetMmap(part.baseMmap, part.extMmap, part.ivtMmap)
 	}
+	part.GodField.SetMmap(nil, nil, part.ivtMmap)
 
 	//内存态 => 磁盘态
 	part.inMemory = false
