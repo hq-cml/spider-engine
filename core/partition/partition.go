@@ -123,7 +123,7 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 	//加载各个Field
 	for _, coreField := range part.CoreFields {
 		if part.DocCnt == 0 {
-			//TODO ?? 这里会进入吗
+			//TODO ?? 这里会进入吗, 做一个测试，刚刚load的table，直接关闭，看看内存分区是否回落地一个0 的分区
 			panic("Unknow error")
 			newField := field.NewEmptyField(coreField.FieldName, part.StartDocId, coreField.IndexType)
 			part.Fields[coreField.FieldName] = newField
