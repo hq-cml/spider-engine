@@ -41,7 +41,7 @@ func TestSplitWords(t *testing.T) {
 
 //********************* 倒排索引 *********************
 func TestAddDoc(t *testing.T) {
-	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STR_SPLITER, 0, TEST_TREE)
 	rIdx.AddDocument(0, "我爱北京天安门")
 	rIdx.AddDocument(1, "天安门上太阳升")
 	rIdx.AddDocument(2, "火红的太阳")
@@ -51,7 +51,7 @@ func TestAddDoc(t *testing.T) {
 }
 
 func TestQureyTermInMemAndPersist(t *testing.T) {
-	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STR_SPLITER, 0, TEST_TREE)
 	rIdx.AddDocument(0, "我爱北京天安门")
 	rIdx.AddDocument(1, "天安门上太阳升")
 	rIdx.AddDocument(2, "火红的太阳")
@@ -80,7 +80,7 @@ func TestQureyTermInMemAndPersist(t *testing.T) {
 
 func TestQureyTermInFile(t *testing.T) {
 	//新建索引
-	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STRING_SEG, 0, TEST_TREE)
+	rIdx := NewEmptyInvertedIndex(IDX_TYPE_STR_SPLITER, 0, TEST_TREE)
 	rIdx.inMemory = false //写死, 强制走磁盘
 
 	//从磁盘加载btree
@@ -121,7 +121,7 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引1 => 落地索引1 => 再加载索引1
 	tree1 := btree.NewBtree("xx", "/tmp/spider/spider_1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree1.Close()
-	rIdx1 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
+	rIdx1 := NewEmptyInvertedIndex(IDX_TYPE_STR_LIST, 0, TEST_TREE)
 	rIdx1.AddDocument(0, "c;f")
 	rIdx1.AddDocument(1, "a;c")
 	rIdx1.AddDocument(2, "f;a")
@@ -136,7 +136,7 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引2 => 落地索引2 => 再加载索引2
 	tree2 := btree.NewBtree("xx", "/tmp/spider/spider_2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree2.Close()
-	rIdx2 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 3, TEST_TREE)
+	rIdx2 := NewEmptyInvertedIndex(IDX_TYPE_STR_LIST, 3, TEST_TREE)
 	rIdx2.AddDocument(3, "b;d")
 	rIdx2.AddDocument(4, "d;c")
 	rIdx2.AddDocument(5, "b;c")
@@ -151,7 +151,7 @@ func TestMergeIndex(t *testing.T) {
 	//建一颗B+树 => 建立索引3 => 落地索引3 => 再加载索引3
 	tree3 := btree.NewBtree("xx", "/tmp/spider/spider_3" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree3.Close()
-	rIdx3 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 6, TEST_TREE)
+	rIdx3 := NewEmptyInvertedIndex(IDX_TYPE_STR_LIST, 6, TEST_TREE)
 	rIdx3.AddDocument(6, "c;e")
 	rIdx3.AddDocument(7, "a;e")
 	rIdx3.AddDocument(8, "c;a")
@@ -166,7 +166,7 @@ func TestMergeIndex(t *testing.T) {
 	//合并 => 读一下试一下
 	tree := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer tree.Close()
-	rIdx0 := NewEmptyInvertedIndex(IDX_TYPE_STRING_LIST, 0, TEST_TREE)
+	rIdx0 := NewEmptyInvertedIndex(IDX_TYPE_STR_LIST, 0, TEST_TREE)
 	err = rIdx0.MergePersistIvtIndex([]*InvertedIndex{rIdx1, rIdx2, rIdx3}, "/tmp/spider/Partition", tree)
 	if err != nil {
 		panic(err)
@@ -190,7 +190,7 @@ func TestMergeIndex(t *testing.T) {
 	t.Log("NextId:", rIdx0.nextDocId)
 
 	//加载回来 => 读一下试一下
-	rIdx := LoadInvertedIndex(tree, IDX_TYPE_STRING_LIST, TEST_TREE, ivtMmap, 9)
+	rIdx := LoadInvertedIndex(tree, IDX_TYPE_STR_LIST, TEST_TREE, ivtMmap, 9)
 	term, _, ok = rIdx.btdb.GetFristKV(TEST_TREE)
 	for ok {
 		nodes, exist := rIdx.QueryTerm(term)
@@ -241,7 +241,7 @@ func TestNewAndAddDoc(t *testing.T) {
 	t.Log("0: ", sv)
 
 
-	idx3 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx3 := NewEmptyForwardIndex(IDX_TYPE_STR_WHOLE, 0) //数字型存入字符
 	err = idx3.AddDocument(0, "abc")
 	if err != nil {
 		panic(err)
@@ -290,7 +290,7 @@ func TestPersist(t *testing.T) {
 	}
 	t.Log("Persist ", "/tmp/spider/Partition.int.fwd. Offset:", offset, ". Cnt:", cnt)
 
-	idx3 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx3 := NewEmptyForwardIndex(IDX_TYPE_STR_WHOLE, 0) //数字型存入字符
 	err = idx3.AddDocument(0, "abc"); if err != nil {panic(err)}
 	err = idx3.AddDocument(1, "efg"); if err != nil {panic(err)}
 	offset, cnt, err = idx3.Persist("/tmp/spider/Partition.string")
@@ -333,7 +333,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	idx2 := LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 0, 0, 2)
+	idx2 := LoadForwardIndex(IDX_TYPE_STR_WHOLE, mmp1, mmp2, 0, 0, 0, 2)
 
 	sv, b := idx2.GetString(0)
 	if !b || sv != "abc" {
@@ -411,15 +411,15 @@ func TestMergeFwdIndex(t *testing.T) {
 }
 
 func TestMergeFwdIndexString(t *testing.T) {
-	idx1 := NewEmptyForwardIndex(IDX_TYPE_STRING, 0) //数字型存入字符
+	idx1 := NewEmptyForwardIndex(IDX_TYPE_STR_WHOLE, 0) //数字型存入字符
 	idx1.AddDocument(0, "abc")
 	idx1.AddDocument(1, "def")
 
-	idx2 := NewEmptyForwardIndex(IDX_TYPE_STRING, 2) //数字型存入字符
+	idx2 := NewEmptyForwardIndex(IDX_TYPE_STR_WHOLE, 2) //数字型存入字符
 	idx2.AddDocument(2, "ghi")
 	idx2.AddDocument(3, "jkl")
 
-	idx0 := NewEmptyForwardIndex(IDX_TYPE_STRING, 9999) //9999没用，会被覆盖
+	idx0 := NewEmptyForwardIndex(IDX_TYPE_STR_WHOLE, 9999) //9999没用，会被覆盖
 
 	err := idx0.MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.string.fwd.merge")
 	if err != nil {
@@ -455,7 +455,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 	t.Log("3: ", iv)
 
 	//Load回来验证
-	idx := LoadForwardIndex(IDX_TYPE_STRING, mmp1, mmp2, 0, 4, 0, 4)
+	idx := LoadForwardIndex(IDX_TYPE_STR_WHOLE, mmp1, mmp2, 0, 4, 0, 4)
 	iv, b = idx.GetString(0)
 	if !b || iv != "abc" {
 		panic(iv)

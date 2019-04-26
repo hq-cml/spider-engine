@@ -46,10 +46,11 @@ type BasicField struct {
 func NewFakeField(fieldname string, start uint32, next uint32, indexType uint16) *Field {
 	fwdIdx := index.NewFakeForwardIndex(indexType, start, next)
 	var ivtIdx *index.InvertedIndex
-	if indexType == index.IDX_TYPE_STRING ||
-		indexType == index.IDX_TYPE_STRING_SEG ||
-		indexType == index.IDX_TYPE_STRING_LIST ||
-		indexType == index.IDX_TYPE_STRING_SINGLE {
+	if indexType == index.IDX_TYPE_STR_WHOLE ||
+		indexType == index.IDX_TYPE_STR_SPLITER ||
+		indexType == index.IDX_TYPE_STR_LIST ||
+		indexType == index.IDX_TYPE_STR_WORD ||
+		indexType == index.IDX_TYPE_GOD {
 		ivtIdx = index.NewFakeInvertedIndex(indexType, start, fieldname)
 	}
 
@@ -67,10 +68,10 @@ func NewFakeField(fieldname string, start uint32, next uint32, indexType uint16)
 func NewEmptyField(fieldName string, start uint32, indexType uint16) *Field {
 	//建立反向索引，如果需要的话
 	var ivtIdx *index.InvertedIndex
-	if indexType == index.IDX_TYPE_STRING ||
-		indexType == index.IDX_TYPE_STRING_SEG ||
-		indexType == index.IDX_TYPE_STRING_LIST ||
-		indexType == index.IDX_TYPE_STRING_SINGLE {
+	if indexType == index.IDX_TYPE_STR_WHOLE ||
+		indexType == index.IDX_TYPE_STR_SPLITER ||
+		indexType == index.IDX_TYPE_STR_LIST ||
+		indexType == index.IDX_TYPE_STR_WORD { //上帝视角有专门的函数去创建, 这里不创建
 		ivtIdx = index.NewEmptyInvertedIndex(indexType, start, fieldName)
 	}
 	//建立正向索引
@@ -90,7 +91,7 @@ func NewEmptyField(fieldName string, start uint32, indexType uint16) *Field {
 	}
 }
 
-//新建空字段
+//新建空上帝视角字段
 func NewEmptyGodField(fieldName string, start uint32) *Field {
 	//建立反向索引，如果需要的话
 	ivtIdx := index.NewEmptyInvertedIndex(index.IDX_TYPE_GOD, start, fieldName)
@@ -112,10 +113,10 @@ func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset
 
 	//加载倒排
 	var ivtIdx *index.InvertedIndex
-	if indexType == index.IDX_TYPE_STRING ||
-		indexType == index.IDX_TYPE_STRING_SEG ||
-		indexType == index.IDX_TYPE_STRING_LIST ||
-		indexType == index.IDX_TYPE_STRING_SINGLE ||
+	if indexType == index.IDX_TYPE_STR_WHOLE ||
+		indexType == index.IDX_TYPE_STR_SPLITER ||
+		indexType == index.IDX_TYPE_STR_LIST ||
+		indexType == index.IDX_TYPE_STR_WORD ||
 		indexType == index.IDX_TYPE_GOD {
 		ivtIdx = index.LoadInvertedIndex(btdb, indexType, fieldname, ivtMmap, next)
 	}
@@ -158,16 +159,18 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 		}
 	}
 
-	//倒排新增: 数字型和时间型不添加倒排索引
+	//倒排新增: 数字型和时间型不添加倒排索引, 纯文本模式也不需要倒排
 	if fld.IndexType != index.IDX_TYPE_INTEGER &&
 		fld.IndexType != index.IDX_TYPE_DATE &&
+		fld.IndexType != index.IDX_TYPE_PURE_TEXT &&
+		fld.IndexType != index.IDX_TYPE_PK &&      //主键只在高层Table起作用
 		fld.IvtIdx != nil {
 		contentStr, ok := content.(string)
 		if !ok {
 			return errors.New("Invert index must string")
 		}
 
-		if len(contentStr) > 0 {
+		if len(contentStr) > 0 { //空字段没必要倒排了
 			if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
 				log.Errf("Field --> AddDocument :: Add Invert Document Error %v", err)
 				return err
@@ -198,7 +201,11 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 //给定一个查询词query，找出doc的列表
 //Note：这个就是利用倒排索引
 func (fld *Field) Query(key interface{}) ([]basic.DocNode, bool) {
-	if fld.IvtIdx == nil {
+	if fld.IndexType == index.IDX_TYPE_INTEGER ||
+		fld.IndexType == index.IDX_TYPE_DATE ||
+		fld.IndexType == index.IDX_TYPE_PURE_TEXT ||
+		fld.IndexType == index.IDX_TYPE_PK ||  //主键只在高层Table起作用
+		fld.IvtIdx == nil {
 		return nil, false
 	}
 
@@ -338,10 +345,10 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 	}
 
 	//如果有倒排索引，则合并
-	if fld.IndexType == index.IDX_TYPE_STRING ||
-		fld.IndexType == index.IDX_TYPE_STRING_SEG ||
-		fld.IndexType == index.IDX_TYPE_STRING_LIST ||
-		fld.IndexType == index.IDX_TYPE_STRING_SINGLE ||
+	if fld.IndexType == index.IDX_TYPE_STR_WHOLE ||
+		fld.IndexType == index.IDX_TYPE_STR_SPLITER ||
+		fld.IndexType == index.IDX_TYPE_STR_LIST ||
+		fld.IndexType == index.IDX_TYPE_STR_WORD ||
 		fld.IndexType == index.IDX_TYPE_GOD {
 
 		ivts := make([]*index.InvertedIndex, 0)

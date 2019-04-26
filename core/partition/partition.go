@@ -235,11 +235,11 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 			}
 		}
 
-		//字符类型的字段内容, 汇入上帝视角
-		if iField.IndexType == index.IDX_TYPE_STRING ||
-			iField.IndexType == index.IDX_TYPE_STRING_SEG ||
-			iField.IndexType == index.IDX_TYPE_STRING_LIST ||
-			iField.IndexType == index.IDX_TYPE_STRING_SINGLE {
+		//字符类型的字段内容(不包括纯文本类型), 汇入上帝视角
+		if iField.IndexType == index.IDX_TYPE_STR_WHOLE ||
+			iField.IndexType == index.IDX_TYPE_STR_SPLITER ||
+			iField.IndexType == index.IDX_TYPE_STR_LIST ||
+			iField.IndexType == index.IDX_TYPE_STR_WORD {
 			if val, ok := content[fieldName]; ok {
 				str, _ := val.(string)
 				godStrs = append(godStrs, str)
@@ -255,7 +255,6 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", GOD_FIELD_NAME, strVal, err)
 		return err
 	}
-
 
 	part.NextDocId++
 	part.DocCnt++

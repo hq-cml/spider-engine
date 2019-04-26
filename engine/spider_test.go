@@ -42,13 +42,13 @@ func TestInitSpider(t *testing.T) {
 			IndexType: index.IDX_TYPE_PK,
 		},{
 			FieldName: TEST_FIELD1,
-			IndexType: index.IDX_TYPE_STRING,
+			IndexType: index.IDX_TYPE_STR_WHOLE,
 		},{
 			FieldName: TEST_FIELD2,
 			IndexType: index.IDX_TYPE_INTEGER,
 		},{
 			FieldName: TEST_FIELD3,
-			IndexType: index.IDX_TYPE_STRING_SEG,
+			IndexType: index.IDX_TYPE_STR_SPLITER,
 		},
 	})
 	if err != nil {

@@ -106,14 +106,18 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	//根据type进行分词
 	var nodes map[string]basic.DocNode
 	switch rIdx.indexType {
-	case IDX_TYPE_STRING: 			            //全词匹配模式
+	case IDX_TYPE_STR_WHOLE: 			            //全词匹配模式
 		nodes = SplitWholeWords(docId, content)
-	case IDX_TYPE_STRING_LIST: 					//分号切割模式
+	case IDX_TYPE_STR_LIST: 					//分号切割模式
 		nodes = SplitSemicolonWords(docId, content)
-	case IDX_TYPE_STRING_SINGLE: 				//单个词模式
+	case IDX_TYPE_STR_WORD: 				//单个词模式
 		nodes = SplitRuneWords(docId, content)
-	case IDX_TYPE_STRING_SEG, IDX_TYPE_GOD:     //分词模式(上帝模式也分词)
+	case IDX_TYPE_STR_SPLITER:   			    //分词模式
 		nodes = SplitTrueWords(docId, content)
+	case IDX_TYPE_GOD:     						//上帝模式--按分词处理
+		nodes = SplitTrueWords(docId, content)
+	default:
+		return errors.New(fmt.Sprintf("Type %v can't add invertIndex", rIdx.indexType))
 	}
 
 	//分词结果填入内存索引

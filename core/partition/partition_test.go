@@ -14,6 +14,7 @@ const TEST_TABLE = "user"
 const TEST_FIELD1 = "user_name"
 const TEST_FIELD2 = "user_age"
 const TEST_FIELD3 = "user_desc"
+const TEST_FIELD4 = "pure_text"
 
 func init() {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
@@ -35,16 +36,17 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 
 	//新增字段
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE})
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER})
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STR_SPLITER})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD4, IndexType:index.IDX_TYPE_PURE_TEXT})
 	if memPartition.IsEmpty() != true {
 		panic("Should empty!!")
 	}
 
-	user0 := map[string]interface{} {TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"张三喜欢游泳,也喜欢美食"}
-	user1 := map[string]interface{} {TEST_FIELD1:"李四", TEST_FIELD2:30, TEST_FIELD3:"李四喜欢美食,也喜欢文艺"}
-	user2 := map[string]interface{} {TEST_FIELD1:"王二", TEST_FIELD2:25, TEST_FIELD3:"王二喜欢装逼"}
+	user0 := map[string]interface{} {TEST_FIELD1:"张三", TEST_FIELD2:20, TEST_FIELD3:"张三喜欢游泳,也喜欢美食", TEST_FIELD4:"我爱北京天安门"}
+	user1 := map[string]interface{} {TEST_FIELD1:"李四", TEST_FIELD2:30, TEST_FIELD3:"李四喜欢美食,也喜欢文艺", TEST_FIELD4:"天安门上太阳升"}
+	user2 := map[string]interface{} {TEST_FIELD1:"王二", TEST_FIELD2:25, TEST_FIELD3:"王二喜欢装逼", TEST_FIELD4:"伟大领袖毛主席"}
 
 	err := memPartition.AddDocument(0, user0); if err != nil { panic(err) }
 	err = memPartition.AddDocument(1, user1); if err != nil { panic(err) }
@@ -81,11 +83,20 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
+	list, exist = memPartition.query(TEST_FIELD4, "天安门") //测试纯文本字段
+	if exist {
+		panic("Should not exist!!")
+	}
+	t.Log("天安门:", helper.JsonEncode(list))
+
 	c, _ := memPartition.GetDocument(2)
 	t.Log(helper.JsonEncode(c))
 
 	s1, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
 	t.Log(s1)
+
+	s3, _ := memPartition.GetFieldValue(1, TEST_FIELD4) //测试纯文本字段
+	t.Log("纯文本字段:", s3)
 
 	//持久化落地
 	memPartition.Persist()
@@ -126,6 +137,16 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	if s1 != s2 {
 		panic("Should ==")
 	}
+
+	list, exist = memPartition.query(TEST_FIELD4, "天安门") //测试纯文本字段
+	if exist {
+		panic("Should not exist!!")
+	}
+	t.Log("天安门:", helper.JsonEncode(list))
+
+	s3, _ = memPartition.GetFieldValue(1, TEST_FIELD4) //测试纯文本字段
+	t.Log("纯文本字段:", s3)
+
 	memPartition.DoClose()
 
 	t.Log("\n\n")
@@ -182,9 +203,9 @@ func TestPartitionMerge(t *testing.T) {
 	patitionName0 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
 	//创建分区1
 	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, []field.BasicField{
-		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE},
 		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
-		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STR_SPLITER},
 	})
 	if part0.IsEmpty() != true {
 		panic("Should empty!!")
@@ -202,9 +223,9 @@ func TestPartitionMerge(t *testing.T) {
 	//创建分区2
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
 	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, []field.BasicField{
-		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE},
 		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
-		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STR_SPLITER},
 	})
 	if part1.IsEmpty() != true {
 		panic("Should empty!!")
@@ -229,9 +250,9 @@ func TestPartitionMerge(t *testing.T) {
 	//外插花一个分区, 准备合并
 	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, []field.BasicField{
-		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE},
 		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
-		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STR_SPLITER},
 	})
 	defer part2.DoClose()
 
@@ -386,7 +407,7 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	patitionName0 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 0)
 	//创建分区1
 	part0 := NewEmptyPartitionWithBasicFields(patitionName0, 0, []field.BasicField{
-		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE},
 	})
 	if part0.IsEmpty() != true {
 		panic("Should empty!!")
@@ -405,9 +426,9 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	//创建分区2, 多了两个字段
 	patitionName1 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 1)
 	part1 := NewEmptyPartitionWithBasicFields(patitionName1, 3, []field.BasicField{
-		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE},
 		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
-		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STR_SPLITER},
 	})
 	if part1.IsEmpty() != true {
 		panic("Should empty!!")
@@ -432,9 +453,9 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	//外插花一个分区, 准备合并
 	patitionName2 := fmt.Sprintf("%v%v_%v", "/tmp/spider/", TEST_TABLE, 2)
 	part2 := NewEmptyPartitionWithBasicFields(patitionName2, 6, []field.BasicField{
-		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING},
+		{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE},
 		{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER},
-		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG},
+		{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STR_SPLITER},
 	})
 	defer part2.DoClose()
 
@@ -519,9 +540,9 @@ func TestQueryByGodField(t *testing.T) {
 	}
 
 	//新增字段
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STRING})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD1, IndexType:index.IDX_TYPE_STR_WHOLE})
 	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD2, IndexType:index.IDX_TYPE_INTEGER})
-	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STRING_SEG})
+	memPartition.AddField(field.BasicField{FieldName:TEST_FIELD3, IndexType:index.IDX_TYPE_STR_SPLITER})
 	if memPartition.IsEmpty() != true {
 		panic("Should empty!!")
 	}

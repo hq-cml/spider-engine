@@ -144,8 +144,8 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 		}
 	default:
 		//float，bool等变量，走入默认分支，直接按字符串存
-		if fwdIdx.indexType != IDX_TYPE_STRING && fwdIdx.indexType != IDX_TYPE_STRING_SEG &&
-			fwdIdx.indexType != IDX_TYPE_STRING_LIST && fwdIdx.indexType != IDX_TYPE_STRING_SINGLE {
+		if fwdIdx.indexType != IDX_TYPE_STR_WHOLE && fwdIdx.indexType != IDX_TYPE_STR_SPLITER &&
+			fwdIdx.indexType != IDX_TYPE_STR_LIST && fwdIdx.indexType != IDX_TYPE_STR_WORD {
 			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
 		}
 		fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
@@ -245,8 +245,9 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 	}
 
 	//类型校验
-	if fwdIdx.indexType != IDX_TYPE_STRING && fwdIdx.indexType != IDX_TYPE_STRING_SEG &&
-		fwdIdx.indexType != IDX_TYPE_STRING_LIST && fwdIdx.indexType != IDX_TYPE_STRING_SINGLE {
+	if fwdIdx.indexType != IDX_TYPE_STR_WHOLE && fwdIdx.indexType != IDX_TYPE_STR_SPLITER &&
+		fwdIdx.indexType != IDX_TYPE_STR_LIST && fwdIdx.indexType != IDX_TYPE_STR_WORD &&
+		fwdIdx.indexType != IDX_TYPE_PURE_TEXT {
 		return "", false
 	}
 

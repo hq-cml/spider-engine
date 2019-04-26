@@ -40,7 +40,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD1,
-		IndexType: index.IDX_TYPE_STRING,
+		IndexType: index.IDX_TYPE_STR_WHOLE,
 	}); err != nil {
 		panic(err)
 	}
@@ -52,7 +52,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD3,
-		IndexType: index.IDX_TYPE_STRING_SEG,
+		IndexType: index.IDX_TYPE_STR_SPLITER,
 	}); err != nil {
 		panic(err)
 	}
@@ -444,7 +444,7 @@ func TestFilter(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD1,
-		IndexType: index.IDX_TYPE_STRING,
+		IndexType: index.IDX_TYPE_STR_WHOLE,
 	}); err != nil {
 		panic(err)
 	}
@@ -456,7 +456,7 @@ func TestFilter(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD3,
-		IndexType: index.IDX_TYPE_STRING_SEG,
+		IndexType: index.IDX_TYPE_STR_SPLITER,
 	}); err != nil {
 		panic(err)
 	}
@@ -601,7 +601,7 @@ func TestGodQuery(t *testing.T) {
 
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD1,
-		IndexType: index.IDX_TYPE_STRING,
+		IndexType: index.IDX_TYPE_STR_WHOLE,
 	}); err != nil {
 		panic(err)
 	}
@@ -613,7 +613,7 @@ func TestGodQuery(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD3,
-		IndexType: index.IDX_TYPE_STRING_SEG,
+		IndexType: index.IDX_TYPE_STR_SPLITER,
 	}); err != nil {
 		panic(err)
 	}
@@ -687,7 +687,7 @@ func TestMultiMerge(t *testing.T) {
 	}
 	if err := table.AddField(field.BasicField{
 		FieldName: TEST_FIELD1,
-		IndexType: index.IDX_TYPE_STRING,
+		IndexType: index.IDX_TYPE_STR_WHOLE,
 	}); err != nil {
 		panic(err)
 	}

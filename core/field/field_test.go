@@ -22,7 +22,7 @@ func init() {
 }
 
 func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
-	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
+	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STR_SPLITER)
 
 	//add doc
 	field.AddDocument(0, "我爱北京天安门")
@@ -98,7 +98,7 @@ func TestLoad(t *testing.T) {
 		panic(err)
 	}
 
-	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, mmp1, mmp2, ivtMmap, btdb)
+	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STR_SPLITER, 0, 3, mmp1, mmp2, ivtMmap, btdb)
 	//测试query
 	tmp, b := field.Query("天安门")
 	if !b {
@@ -142,11 +142,11 @@ func TestPrepareMerge(t *testing.T) {
 		os.Exit(1)
 	}
 
-	field1 := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
+	field1 := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STR_SPLITER)
 	field1.AddDocument(0, "我爱北京天安门")
 	field1.AddDocument(1, "天安门上太阳升")
 
-	field2 := NewEmptyField(TEST_FIELD, 2, index.IDX_TYPE_STRING_SEG)
+	field2 := NewEmptyField(TEST_FIELD, 2, index.IDX_TYPE_STR_SPLITER)
 	field2.AddDocument(2, "火红的太阳")
 	field2.AddDocument(3, "火红的萨日朗")
 
@@ -182,7 +182,7 @@ func TestMerge(t *testing.T) {
 		panic(err)
 	}
 
-	field1 := LoadField(TEST_FIELD, 0, 2, index.IDX_TYPE_STRING_SEG, 0, 2, mmp11, mmp21, ivtMmap1, btdb1)
+	field1 := LoadField(TEST_FIELD, 0, 2, index.IDX_TYPE_STR_SPLITER, 0, 2, mmp11, mmp21, ivtMmap1, btdb1)
 
 	//加载field2
 	btdb2 := btree.NewBtree("xx", "/tmp/spider/spider2" + basic.IDX_FILENAME_SUFFIX_BTREE)
@@ -199,12 +199,12 @@ func TestMerge(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	field2 := LoadField(TEST_FIELD, 2, 4, index.IDX_TYPE_STRING_SEG, 0, 2, mmp12, mmp22, ivtMmap2, btdb2)
+	field2 := LoadField(TEST_FIELD, 2, 4, index.IDX_TYPE_STR_SPLITER, 0, 2, mmp12, mmp22, ivtMmap2, btdb2)
 
 	//准备合并
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
-	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STRING_SEG)
+	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STR_SPLITER)
 	err = field.MergePersistField([]*Field{field1, field2}, "/tmp/spider/Partition", treedb)
 	if err != nil {
 		panic(err)
@@ -282,7 +282,7 @@ func TestLoadMerge(t *testing.T) {
 		panic(err)
 	}
 
-	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STRING_SEG, 0, 3, mmp1, mmp2, ivtMmap, btdb)
+	field := LoadField(TEST_FIELD, 0, 3, index.IDX_TYPE_STR_SPLITER, 0, 3, mmp1, mmp2, ivtMmap, btdb)
 
 	field.btdb.Display(TEST_FIELD)
 
