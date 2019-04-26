@@ -18,24 +18,24 @@ import (
 )
 
 //MMap封装结构
-//首部隐藏了8个字节, 保存了InternalIdx值, 用于二次加载映射
+//首部隐藏了8个字节, 保存了innerIdx值, 用于二次加载映射
 type Mmap struct {
 	DataBytes []byte
 	Path      string
 	Capacity  uint64   //容量, 这个是算上了HEADER_LEN的. 所以真实容量是Capacity-HEADER_LEN
-	innerIdx  uint64   //内部操作指针, 从(0+HEADER_LEN)开始, 指向下一次要append的位置
+	innerIdx  uint64   //内部操作指针, 从(0+HEADER_LEN)开始, 指向下一次要append操作的位置
 	FilePtr   *os.File //底层file句柄
 }
 
 const (
-	APPEND_LEN uint64 = 1024 * 1024  //1M
-	HEADER_LEN = 8   		    //头部, 保存InnerIdx便于落盘后加载
+	APPEND_LEN = 1024 * 1024  //1M, 默认的扩容长度
+	HEADER_LEN = 8   		  //头部, 保存InnerIdx便于落盘后加载
 )
 
 //创建文件, 并建立mmap映射
 //load参数:
 // true-加载已有文件(文件不存在则报错), 此时size无效
-// false-创建新文件(如果存在旧文件会被清空), 此时若size=0则会安排默认大小
+// false-创建新文件(如果存在旧文件会被清空), 此时若size<0则会安排默认大小
 func NewMmap(filePath string, load bool, size uint64) (*Mmap, error) {
 
 	mmp := &Mmap {
@@ -96,23 +96,28 @@ func (mmp *Mmap) RealCapcity() uint64 {
 	return mmp.Capacity - HEADER_LEN
 }
 
-//判断是否应该扩容, 如果应该, 则进一步确认扩多大
+//底层的边界, 超过这个值, 无论读写都将触发Panic
+func (mmp *Mmap) Boundary() int {
+	return len(mmp.DataBytes)
+}
+
+//判断是否应该扩容, 如果应该, 则进一步计算扩多大
 func (mmp *Mmap) checkNeedExpand(length uint64) (uint64, bool) {
 	if mmp.innerIdx+ length > mmp.Capacity {
 		var i uint64 = 1
 
-		for mmp.innerIdx+ length  > mmp.Capacity + i * uint64(APPEND_LEN) {
+		for mmp.innerIdx + length  >= mmp.Capacity + i * uint64(APPEND_LEN) {
 			i ++
 		}
 
-		return i * APPEND_LEN, true
+		return (i * APPEND_LEN), true
 	} else {
 		return 0, false
 	}
 }
 
 //扩容
-func (mmp *Mmap) doExpand(length uint64) error {
+func (mmp *Mmap) DoExpand(length uint64) error {
 	//trucate file, 扩容
 	err := syscall.Ftruncate(int(mmp.FilePtr.Fd()), int64(mmp.Capacity + length))
 	if err != nil {
@@ -210,7 +215,7 @@ func (mmp *Mmap) SetUInt64(start uint64, value uint64) {
 func (mmp *Mmap) AppendInt64(value int64) error {
 	expLen, b := mmp.checkNeedExpand(8)
 	if b {
-		if err := mmp.doExpand(expLen); err != nil {
+		if err := mmp.DoExpand(expLen); err != nil {
 			return err
 		}
 	}
@@ -221,7 +226,7 @@ func (mmp *Mmap) AppendInt64(value int64) error {
 func (mmp *Mmap) AppendUInt64(value uint64) error {
 	expLen, b := mmp.checkNeedExpand(8)
 	if b {
-		if err := mmp.doExpand(expLen); err != nil {
+		if err := mmp.DoExpand(expLen); err != nil {
 			return err
 		}
 	}
@@ -234,7 +239,7 @@ func (mmp *Mmap) AppendBytes(value []byte) error {
 	length := uint64(len(value))
 	expLen, b := mmp.checkNeedExpand(length)
 	if b {
-		if err := mmp.doExpand(expLen); err != nil {
+		if err := mmp.DoExpand(expLen); err != nil {
 			return err
 		}
 	}
@@ -295,6 +300,7 @@ func (mmp *Mmap) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("The Mmap => \n")
 	buf.WriteString(fmt.Sprintf("  Capcity: %d\n", mmp.Capacity))
-	buf.WriteString(fmt.Sprintf("  InternalIdx: %d\n", mmp.innerIdx))
+	buf.WriteString(fmt.Sprintf("  InnerIdx: %d\n", mmp.innerIdx))
+	buf.WriteString(fmt.Sprintf("  Length of DataBytes: %d\n", len(mmp.DataBytes)))
 	return buf.String()
 }

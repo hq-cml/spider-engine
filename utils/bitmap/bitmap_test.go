@@ -18,9 +18,9 @@ func TestNewBitmap(t *testing.T) {
 	t.Log("Create bitmap:", bm)
 	t.Log("Create bitmap:", bm.DataMap)
 
-	if bm.FirstOneIdx != -1 {
-		panic("wrong")
-	}
+	//if bm.FirstOneIdx != -1 {
+	//	panic("wrong")
+	//}
 
 	if bm.MaxNum != 15 {
 		panic("wrong")
@@ -51,7 +51,7 @@ func TestSetGet(t *testing.T) {
 	bm.Set(15)
 	bm.Set(21)
 	t.Log("After Foreach: ", bm)
-	if(bm.GetBit(21) != 1) {
+	if(bm.Get(21) != 1) {
 		panic("wrong")
 	}
 
@@ -60,10 +60,10 @@ func TestSetGet(t *testing.T) {
 	bm.Clear(15)
 	bm.Clear(21)
 	t.Log("Clear Foreach: ", bm)
-	if(bm.GetBit(21) == 1) {
+	if(bm.Get(21) == 1) {
 		panic("wrong")
 	}
-	if(bm.GetBit(3) != 1) {
+	if(bm.Get(3) != 1) {
 		panic("wrong")
 	}
 
@@ -71,7 +71,7 @@ func TestSetGet(t *testing.T) {
 	bm.Set(19)
 	bm.Set(27)
 	t.Log("Final Foreach: ", bm)
-	if(bm.GetBit(31) != 1) {
+	if(bm.Get(31) != 1) {
 		panic("wrong")
 	}
 
@@ -90,32 +90,57 @@ func TestLoadBitmap(t *testing.T) {
 	t.Log("Load bitmap:", bm)
 	t.Log("Load bitmap:", bm.DataMap)
 
-	if bm.GetBit(3) != 1 ||
-		bm.GetBit(10) != 1 ||
-		bm.GetBit(27) != 1 ||
-		bm.GetBit(31) != 1 ||
-		bm.GetBit(2) == 1 ||
-		bm.GetBit(4) == 1 ||
-		bm.GetBit(5) == 1 ||
-		bm.GetBit(11) == 1 ||
-		bm.GetBit(17) == 1 ||
-		bm.GetBit(23) == 1 ||
-		bm.GetBit(24) == 1 {
+	if bm.Get(3) != 1 ||
+		bm.Get(10) != 1 ||
+		bm.Get(27) != 1 ||
+		bm.Get(31) != 1 ||
+		bm.Get(2) == 1 ||
+		bm.Get(4) == 1 ||
+		bm.Get(5) == 1 ||
+		bm.Get(11) == 1 ||
+		bm.Get(17) == 1 ||
+		bm.Get(23) == 1 ||
+		bm.Get(24) == 1 {
 		panic("wrong data")
 	}
 	t.Log("\n")
 }
 
+//and do expand
 func TestClose(t *testing.T) {
 	bm := NewBitmapSize(0, "/tmp/bitmap.dat", true)
 
-	bm.Set(16)
+	err := bm.DoExpand()
+	if err != nil {
+		panic(err)
+	}
 
-	err := bm.Close()
+	err = bm.Close()
 	if err != nil {
 		panic(err)
 	}
 	t.Log("\n")
 }
 
+func TestLoadAfterExpand(t *testing.T) {
+	bm := NewBitmapSize(0, "/tmp/bitmap.dat", true)
+
+	t.Log("Load bitmap:", bm)
+	t.Log("Load bitmap:", bm.DataMap)
+
+	if bm.Get(3) != 1 ||
+		bm.Get(10) != 1 ||
+		bm.Get(27) != 1 ||
+		bm.Get(31) != 1 ||
+		bm.Get(2) == 1 ||
+		bm.Get(4) == 1 ||
+		bm.Get(5) == 1 ||
+		bm.Get(11) == 1 ||
+		bm.Get(17) == 1 ||
+		bm.Get(23) == 1 ||
+		bm.Get(24) == 1 {
+		panic("wrong data")
+	}
+	t.Log("\n")
+}
 

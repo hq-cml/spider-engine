@@ -70,7 +70,7 @@ func NewEmptyTable(path, name string) *Table {
 
 	//bitmap文件新建
 	btmpName := table.genBitMapName()
-	table.bitMap = bitmap.NewBitmap(btmpName, false)
+	table.bitMap = bitmap.NewDefaultBitmap(btmpName, false)
 
 	return &table
 }
@@ -121,7 +121,7 @@ func LoadTable(path, name string) (*Table, error) {
 
 	//加载bitmap
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
-	tbl.bitMap = bitmap.NewBitmap(btmpPath, true)
+	tbl.bitMap = bitmap.NewDefaultBitmap(btmpPath, true)
 
 	//如果表存在主键，则直接加载主键专用btree和内存map
 	if tbl.PrimaryKey != "" {
@@ -455,7 +455,7 @@ func (tbl *Table) findDocIdByPrimaryKey(key string) (basic.DocNode, bool) {
 		val = int(vv)
 	}
 
-	if tbl.bitMap.GetBit(uint64(val)) == 1 {
+	if tbl.bitMap.IsSet(uint64(val)) {
 		return basic.DocNode{}, false
 	}
 

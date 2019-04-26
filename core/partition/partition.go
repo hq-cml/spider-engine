@@ -607,7 +607,7 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		idx := 0
 		for _, doc := range retDocs{
 			//保留未删除的
-			if bitmap.GetBit(uint64(doc.DocId)) == 0 {
+			if bitmap.IsSet(uint64(doc.DocId)) {
 				retDocs[idx] = doc
 				idx++
 			}

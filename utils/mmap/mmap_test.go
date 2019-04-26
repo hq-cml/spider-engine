@@ -26,6 +26,7 @@ func TestCreateFile(t *testing.T) {
 
 	t.Log("Create /tmp/xx success: ", fi.Size(), fi.Mode())
 	t.Log("\n")
+	t.Log("\n")
 }
 
 func TestNewMmap(t *testing.T) {
@@ -38,6 +39,7 @@ func TestNewMmap(t *testing.T) {
 	m.AppendByte('a')
 	m.AppendString("bcd")
 	t.Log("After append: ", m)
+	t.Log("\n")
 	t.Log("\n")
 }
 
@@ -58,6 +60,28 @@ func TestLoadMmap(t *testing.T) {
 	}
 	t.Log("\n")
 }
+
+////测试越界Panic
+//func TestPanic(t *testing.T) {
+//	m, err := NewMmap("/tmp/ee", true, 0)
+//	if err != nil {
+//		panic(err)
+//	}
+//	defer m.Unmap()
+//	t.Log("Load mmap: ", m)
+//
+//	m.DataBytes[23] = 'x'
+//	t.Log("Ok")
+//
+//	m.DataBytes[24] = 'y'  //write panic
+//	t.Log("Ok")
+//
+//	_ = m.DataBytes[24]    //read panic
+//	t.Log("Ok")
+//
+//	t.Log("\n")
+//	t.Log("\n")
+//}
 
 //临时测试函数
 func (mmp *Mmap) tempCheckNeedExpand(length uint64) (int64, bool) {

@@ -262,14 +262,14 @@ func (fwdIdx *ForwardIndex) GetString(pos uint32) (string, bool) {
 	}
 	//string类型间接从文件获取
 	realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
-	if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
+	if (int(realOffset) >= fwdIdx.baseMmap.Boundary()) {
 		return "", false
 	}
 	if fwdIdx.extMmap == nil {
 		return "", false
 	}
 	extOffset := fwdIdx.baseMmap.ReadUInt64(realOffset)
-	if (int(extOffset) >= len(fwdIdx.extMmap.DataBytes)) {
+	if (int(extOffset) >= fwdIdx.extMmap.Boundary()) {
 		return "", false
 	}
 	strLen := fwdIdx.extMmap.ReadUInt64(extOffset)
@@ -300,7 +300,7 @@ func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 			return MaxInt64, false
 		}
 		realOffset := fwdIdx.fwdOffset + uint64(pos) * DATA_BYTE_CNT
-		if (int(realOffset) >= len(fwdIdx.baseMmap.DataBytes)) {
+		if (int(realOffset) >= fwdIdx.baseMmap.Boundary()) {
 			return MaxInt64, false
 		}
 		return fwdIdx.baseMmap.ReadInt64(realOffset), true
