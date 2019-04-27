@@ -63,20 +63,23 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic(err)
 	}
 
-	docId, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游", TEST_FIELD4: 77})
+	docId, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",
+		TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游", TEST_FIELD4: 77})
 
 	if err != nil {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
 	}
 	t.Log("Add DocId:", docId)
 
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: 28, TEST_FIELD3: "喜欢电影,也喜欢美食", TEST_FIELD4: 88})
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四",
+		TEST_FIELD2: 28, TEST_FIELD3: "喜欢电影,也喜欢美食", TEST_FIELD4: 88})
 	if err != nil {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
 	}
 	t.Log("Add DocId:", docId)
 
-	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻",	TEST_FIELD2: 30,TEST_FIELD3: "喜欢养生", TEST_FIELD4: 99})
+	docId, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻",
+		TEST_FIELD2: 30,TEST_FIELD3: "喜欢养生", TEST_FIELD4: 99})
 	if err != nil {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
 	}

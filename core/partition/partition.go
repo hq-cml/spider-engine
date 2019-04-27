@@ -581,7 +581,8 @@ func (part *Partition) query(fieldName string, key interface{}) ([]basic.DocNode
 
 //搜索, 如果keyWord为空, 则取出所有未删除的节点
 //根据搜索结果, 再通过bitmap进行过滤
-func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap,filters []basic.SearchFilter) ([]basic.DocNode, bool) {
+func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap,
+		filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 	//校验
 	_, exist := part.Fields[fieldName]
 	if !exist && fieldName != GOD_FIELD_NAME{
@@ -602,12 +603,13 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 			return retDocs, false
 		}
 	}
+
 	//再用bitmap去掉已删除的数据
 	if bitmap != nil {
 		idx := 0
 		for _, doc := range retDocs{
 			//保留未删除的
-			if bitmap.IsSet(uint64(doc.DocId)) {
+			if !bitmap.IsSet(uint64(doc.DocId)) {
 				retDocs[idx] = doc
 				idx++
 			}
@@ -615,8 +617,8 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		retDocs = retDocs[:idx]
 	}
 
-	finalRetDocs := []basic.DocNode{}
 	//再使用过滤器
+	finalRetDocs := []basic.DocNode{}
 	if filters != nil && len(filters) > 0 {
 		for _, doc := range retDocs {
 			match := true

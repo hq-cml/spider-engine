@@ -437,29 +437,29 @@ func (tbl *Table) changeDocIdByPrimaryKey(key string, docId uint32) error {
 
 //根据主键找到内部的docId
 func (tbl *Table) findDocIdByPrimaryKey(key string) (basic.DocNode, bool) {
-	//现在内存map中找
-	var val int
+	var docId int
 	var err error
 
+	//先尝试在内存map中找，没有则再去磁盘btree中找
 	if v, exist := tbl.primaryMap[key]; exist {
-		val , err = strconv.Atoi(v)
+		docId, err = strconv.Atoi(v)
 		if err != nil {
 			return basic.DocNode{}, false
 		}
 	} else {
-		//再在磁盘btree中找
 		vv, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
 		if !ok {
 			return basic.DocNode{}, false
 		}
-		val = int(vv)
+		docId = int(vv)
 	}
 
-	if tbl.bitMap.IsSet(uint64(val)) {
+	//校验是否已经删除
+	if tbl.bitMap.IsSet(uint64(docId)) {
 		return basic.DocNode{}, false
 	}
 
-	return basic.DocNode{DocId: uint32(val)}, true
+	return basic.DocNode{DocId: uint32(docId)}, true
 }
 
 //表落地
