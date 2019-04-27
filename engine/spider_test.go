@@ -55,13 +55,13 @@ func TestInitSpider(t *testing.T) {
 		panic(err)
 	}
 
-	docId, err := spider.AddDoc(TEST_DATABASE, TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+	docId, _, err := spider.AddDoc(TEST_DATABASE, TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
 	if err != nil {
 		panic(err)
 	}
 	t.Log("Add doc:", docId)
 
-	docId, err = spider.AddDoc(TEST_DATABASE, TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+	docId, _, err = spider.AddDoc(TEST_DATABASE, TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
 	if err != nil {
 		panic(err)
 	}

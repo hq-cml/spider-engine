@@ -46,20 +46,21 @@ type Table struct {
 	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键！！！
 	primaryBtdb    btree.Btree            //主键专用倒排索引（内存态）
 	primaryMap     map[string]string      //主键专用倒排索引（磁盘态），主键不会重复，直接map[string]string
-	bitMap         *bitmap.Bitmap         //用于文档删除标记 //TODO 这个太大，太占磁盘，后面搞成动态的
+	delFlagBitMap  *bitmap.Bitmap         //用于文档删除标记
 	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
 }
 
 const (
-	PRIMARY_KEY_MEM_MAXCNT = 50000   //TODO 放小了测试
+	PRIMARY_KEY_MEM_MAXCNT     = 50000           //TODO 放小了测试
+	DEFAULT_PRIMARY_FIELD_NAME = "#Def%Pri$Key@" //系统默认主键名称
 )
 
 //新建空表
-func NewEmptyTable(path, name string) *Table {
+func newEmptyTable(path, name string) *Table {
 	if string(path[len(path)-1]) != "/" {
 		path = path + "/"
 	}
-	table := Table{
+	tab := Table{
 		TableName:    name,
 		PrtPathNames: make([]string, 0),
 		partitions:   make([]*partition.Partition, 0),
@@ -69,10 +70,10 @@ func NewEmptyTable(path, name string) *Table {
 	}
 
 	//bitmap文件新建
-	btmpName := table.genBitMapName()
-	table.bitMap = bitmap.NewDefaultBitmap(btmpName, false)
+	btmpName := tab.genBitMapName()
+	tab.delFlagBitMap = bitmap.NewDefaultBitmap(btmpName, false)
 
-	return &table
+	return &tab
 }
 
 //产出一块空的内存分区
@@ -87,6 +88,34 @@ func (tbl *Table) generateMemPartition() {
 
 	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(prtPathName, tbl.NextDocId, basicFields)
 	tbl.Prefix++ //自增
+}
+
+//创建表
+//如果用户没有传主键，则系统自动补充一个主键
+func CreateTable(path, tableName string, fields []field.BasicField) (*Table, error) {
+	tab := newEmptyTable(path, tableName)
+
+	hasKey := false
+	for _, bf := range fields {
+		err := tab.AddField(bf);
+		if err != nil {
+			return nil, err
+		}
+
+		if bf.IndexType == index.IDX_TYPE_PK {
+			hasKey = true
+		}
+	}
+
+	//如果没有主键，则自动补充主键
+	if hasKey {
+		tab.AddField(field.BasicField {
+			IndexType: index.IDX_TYPE_PK,
+			FieldName: DEFAULT_PRIMARY_FIELD_NAME,
+		})
+	}
+
+	return tab, nil
 }
 
 //从文件加载一张表
@@ -121,9 +150,9 @@ func LoadTable(path, name string) (*Table, error) {
 
 	//加载bitmap
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
-	tbl.bitMap = bitmap.NewDefaultBitmap(btmpPath, true)
+	tbl.delFlagBitMap = bitmap.NewDefaultBitmap(btmpPath, true)
 
-	//如果表存在主键，则直接加载主键专用btree和内存map
+	//如果存在主键，则直接加载主键专用btree并初始化内存map
 	if tbl.PrimaryKey != "" {
 		primaryName := tbl.genPrimaryBtName()
 		tbl.primaryBtdb = btree.NewBtree("", primaryName)
@@ -139,7 +168,7 @@ func (tbl *Table) storeMeta() error {
 	metaFileName := tbl.genMetaName()
 	data := helper.JsonEncodeIndent(tbl)
 	if data != "" {
-		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
+		if err := helper.OverWriteToFile([]byte(data), metaFileName); err != nil {
 			return err
 		}
 	} else {
@@ -160,6 +189,9 @@ func (tbl *Table) storeMeta() error {
 // 分区的变动，会锁表
 func (tbl *Table) AddField(basicField field.BasicField) error {
 	//校验
+	if basicField.IndexType == index.IDX_TYPE_PK && tbl.PrimaryKey != "" {
+		return errors.New("Primary key has exist!")
+	}
 	if _, exist := tbl.BasicFields[basicField.FieldName]; exist {
 		log.Warnf("Field %v have Exist ", basicField.FieldName)
 		return errors.New(fmt.Sprintf("Field %v have Exist ", basicField.FieldName))
@@ -168,16 +200,12 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 	//实施新增
 	tbl.BasicFields[basicField.FieldName] = basicField
 	if basicField.IndexType == index.IDX_TYPE_PK {
-		//主键新增单独处理
-		if tbl.PrimaryKey != "" {
-			return errors.New("Primary key has exist!")
-		}
 		tbl.PrimaryKey = basicField.FieldName
 		primaryName := tbl.genPrimaryBtName()
 		tbl.primaryBtdb = btree.NewBtree("", primaryName)
 		tbl.primaryBtdb.AddTree(basicField.FieldName)
 	} else {
-		//锁表
+		//TODO 锁表? 位置存疑
 		tbl.mutex.Lock()
 		defer tbl.mutex.Unlock()
 
@@ -221,13 +249,11 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 //如果内存分区非空, 则会先落地内存分区
 func (tbl *Table) DeleteField(fieldname string) error {
 	//校验
-	if _, exist := tbl.BasicFields[fieldname]; !exist {
-		log.Warnf("Field %v not found ", fieldname)
-		return nil
-	}
 	if fieldname == tbl.PrimaryKey {
-		log.Warnf("Field %v is primaryBtdb key can not delete ", fieldname)
-		return nil
+		return errors.New("Can not del primary key!")
+	}
+	if _, exist := tbl.BasicFields[fieldname]; !exist {
+		return errors.New(fmt.Sprintf("Field %v not found ", fieldname))
 	}
 
 	//锁表
@@ -269,12 +295,18 @@ func (tbl *Table) GetDoc(primaryKey string) (map[string]interface{}, bool) {
 	if !exist {
 		return nil, false
 	}
-	tmp, ok := tbl.getDocByDocId(docNode.DocId)
+	ret, ok := tbl.getDocByDocId(docNode.DocId)
 	if !ok {
 		return nil, false
 	}
-	tmp[tbl.PrimaryKey] = primaryKey
-	return tmp, true
+
+	//如果表主键是系统自动生成的，则返回的时候隐藏之，不给用户
+	//如果是用户自己提供的主键，则返回给用户
+	if tbl.PrimaryKey != DEFAULT_PRIMARY_FIELD_NAME {
+		ret[tbl.PrimaryKey] = primaryKey
+	}
+
+	return ret, true
 }
 
 //删除
@@ -282,40 +314,42 @@ func (tbl *Table) GetDoc(primaryKey string) (map[string]interface{}, bool) {
 func (tbl *Table) DeleteDoc(primaryKey string) bool {
 	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
 	if found {
-		return tbl.bitMap.Set(uint64(docId.DocId))
+		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
 	}
 	return true
 }
 
 //新增
-func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, error) {
+func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error) {
 	//校验
 	if len(tbl.BasicFields) == 0 {
-		log.Errf("Field or Partiton is nil")
-		return 0, errors.New("field or partition is nil")
+		return 0, "", errors.New("field is nil")
 	}
 
 	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
 		tbl.generateMemPartition()
-		//意义何在？
-		//if err := tbl.storeMeta(); err != nil {
-		//	tbl.mutex.Unlock()
-		//	return 0, err
-		//}
 		tbl.mutex.Unlock()
 	}
 
 	newDocId := tbl.NextDocId
 	tbl.NextDocId++
 
-	//如果存在主键先添加
+	//处理主键新增
+	var key string
 	if tbl.PrimaryKey != "" {
-		key, ok := content[tbl.PrimaryKey].(string)
-		if !ok {
-			return 0, errors.New("Primary key must be string")
+		var ok bool
+		if v, exist := content[tbl.PrimaryKey]; exist {
+			key, ok = v.(string)
+			if !ok {
+				return 0, "", errors.New("Primary key must be string")
+			}
+		} else {
+			//用户没传主键，则系统自动生成一个主键
+			key = helper.GenUuid()
 		}
+
 		tbl.primaryMap[key] = fmt.Sprintf("%v", newDocId)
 
 		if tbl.NextDocId % PRIMARY_KEY_MEM_MAXCNT == 0 {
@@ -323,13 +357,14 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, error) {
 			tbl.primaryMap = make(map[string]string)
 		}
 	}
+
 	//其他字段新增Doc
 	err := tbl.memPartition.AddDocument(newDocId, content)
 	if err != nil {
-		log.Errf("tbl.memPartition.AddDocument Error:%v", err)
-		return 0, err
+		log.Errf("tbl.memPartition AddDocument Error:%v", err)
+		return 0, "", err
 	}
-	return newDocId, nil
+	return newDocId, key, nil
 }
 
 //变更文档
@@ -374,7 +409,7 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	}
 	oldDocid, found := tbl.findDocIdByPrimaryKey(key)
 	if found {
-		tbl.bitMap.Set(uint64(oldDocid.DocId))
+		tbl.delFlagBitMap.Set(uint64(oldDocid.DocId))
 	}
 
 	//再新增docId
@@ -393,7 +428,7 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 
 //内部获取
 //Note:
-// 不包括主键
+// 不包括主键!
 func (tbl *Table) getDocByDocId(docId uint32) (map[string]interface{}, bool) {
 	//校验
 	if docId < tbl.StartDocId || docId >= tbl.NextDocId {
@@ -455,7 +490,7 @@ func (tbl *Table) findDocIdByPrimaryKey(key string) (basic.DocNode, bool) {
 	}
 
 	//校验是否已经删除
-	if tbl.bitMap.IsSet(uint64(docId)) {
+	if tbl.delFlagBitMap.IsSet(uint64(docId)) {
 		return basic.DocNode{}, false
 	}
 
@@ -516,8 +551,8 @@ func (tbl *Table) DoClose() error {
 		tbl.primaryBtdb.Close()
 	}
 	//关闭btmp
-	if tbl.bitMap != nil {
-		tbl.bitMap.Close()
+	if tbl.delFlagBitMap != nil {
+		tbl.delFlagBitMap.Close()
 	}
 	log.Infof("Close Table [%v] Finish", tbl.TableName)
 	return nil
@@ -652,7 +687,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 
 	//各个磁盘分区执行搜索
 	for _, prt := range tbl.partitions {
-		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.bitMap, filters)
+		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)
 		if ok {
 			exist = true
 			retDocs = append(retDocs, ids...)
@@ -661,7 +696,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 
 	//内存分区执行搜索
 	if tbl.memPartition != nil {
-		ids, ok := tbl.memPartition.SearchDocs(fieldName, keyWord, tbl.bitMap, filters)
+		ids, ok := tbl.memPartition.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)
 		if ok {
 			exist = true
 			retDocs = append(retDocs, ids...)

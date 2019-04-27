@@ -87,7 +87,7 @@ func (db *Database) storeMeta() error {
 	metaFileName := db.genMetaName()
 	data := helper.JsonEncodeIndent(db)
 	if data != "" {
-		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
+		if err := helper.OverWriteToFile([]byte(data), metaFileName); err != nil {
 			return err
 		}
 	} else {
@@ -130,11 +130,9 @@ func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*t
 	}
 
 	//创建表和字段
-	tab := table.NewEmptyTable(path, tableName)
-	for _, bf := range fields {
-		if err := tab.AddField(bf); err != nil {
-			return nil, err
-		}
+	tab, err := table.CreateTable(path, tableName, fields)
+	if err != nil {
+		return nil, err
 	}
 
 	//关联进入db
@@ -173,10 +171,10 @@ func (db *Database) DropTable(tableName string) (error) {
 }
 
 //新增Doc
-func (db *Database) AddDoc(tableName string, content map[string]interface{}) (uint32, error) {
+func (db *Database) AddDoc(tableName string, content map[string]interface{}) (uint32, string, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
-		return 0, errors.New("Table not exist!")
+		return 0, "", errors.New("Table not exist!")
 	}
 
 	return tab.AddDoc(content)

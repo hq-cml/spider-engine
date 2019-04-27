@@ -394,7 +394,7 @@ func (part *Partition) storeMeta() error {
 	metaFileName := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META
 	data := helper.JsonEncodeIndent(part)
 	if data != "" {
-		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
+		if err := helper.OverWriteToFile([]byte(data), metaFileName); err != nil {
 			return err
 		}
 	} else {

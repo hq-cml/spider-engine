@@ -74,7 +74,7 @@ func (se *SpiderEngine) storeMeta() error {
 	metaFileName := se.genMetaName()
 	data := helper.JsonEncodeIndent(se)
 	if data != "" {
-		if err := helper.WriteToFile([]byte(data), metaFileName); err != nil {
+		if err := helper.OverWriteToFile([]byte(data), metaFileName); err != nil {
 			return err
 		}
 	} else {
@@ -191,10 +191,10 @@ func (se *SpiderEngine) DeleteField(dbName, tableName string, fieldName string) 
 
 
 //新增Doc
-func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]interface{}) (uint32, error) {
+func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]interface{}) (uint32, string, error) {
 	db, exist := se.DbMap[dbName]
 	if !exist {
-		return 0, errors.New("The db not exist!")
+		return 0, "", errors.New("The db not exist!")
 	}
 	return db.AddDoc(tableName, content)
 }

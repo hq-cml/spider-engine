@@ -52,7 +52,7 @@ func Mkdir(path string) bool {
 // 写文件
 // Note：
 //   覆盖写，不是追加写
-func WriteToFile(data []byte, filePath string) error {
+func OverWriteToFile(data []byte, filePath string) error {
 	fout, err := os.Create(filePath)
 	if err != nil {
 		return err
