@@ -32,6 +32,9 @@ import (
 // 主键和其他字段不同，单独用一个btree实例存储，不分区
 // 最新的文档增加只会操作内存态分区，到达阈值后回落地或者和其他分区合并落地
 // 文档的删除采用假删除，通过bitmap标记
+//
+// 为了性能的尽量提升和逻辑简单，priFwdMap可能存在一定量的脏数据（因为doc的编辑和删除操作导致）
+// 不过由于bitmap和priIvtMap为主查询，priFwdMapz只是辅助，所以不会影响正确性
 type Table struct {
 	TableName      string                      `json:"tableName"`
 	Path           string                      `json:"pathName"`
@@ -42,17 +45,19 @@ type Table struct {
 	Prefix         uint64                      `json:"prefix"`
 	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
-	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
-	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键字段！！！
-	primaryBtdb    btree.Btree            //主键专用倒排索引（内存态）
-	primaryMap     map[string]string      //主键专用倒排索引（磁盘态），主键不会重复，直接map[string]string
-	delFlagBitMap  *bitmap.Bitmap         //用于文档删除标记
-	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
+	memPartition  *partition.Partition   //内存态的分区,分区不包括逐渐
+	partitions    []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键字段！！！
+	priBtdb       btree.Btree            //主键专用正排 & 倒排索引（磁盘态）
+	priIvtMap     map[string]string      //主键专用倒排索引（内存态），primaryKey => docId
+	priFwdMap     map[string]string      //主键专正排排索引（内存态），docId => primaryKey
+	delFlagBitMap *bitmap.Bitmap         //用于文档删除标记
+	mutex         sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
 }
 
 const (
-	PRIMARY_KEY_MEM_MAXCNT     = 50000           //TODO 放小了测试
 	DEFAULT_PRIMARY_FIELD_NAME = "#Def%Pri$Key@" //系统默认主键名称
+	PRI_FWD_BTREE_NAME = "pri_fwd_tree"
+	PRI_IVT_BTREE_NAME = "pri_ivt_tree"
 )
 
 //新建空表
@@ -66,7 +71,8 @@ func newEmptyTable(path, name string) *Table {
 		partitions:   make([]*partition.Partition, 0),
 		Path:         path,
 		BasicFields:  make(map[string]field.BasicField),
-		primaryMap:   make(map[string]string),
+		priIvtMap:    make(map[string]string),
+		priFwdMap:    make(map[string]string),
 	}
 
 	//bitmap文件新建
@@ -154,8 +160,9 @@ func LoadTable(path, name string) (*Table, error) {
 	//如果存在主键，则直接加载主键专用btree并初始化内存map
 	if tbl.PrimaryKey != "" {
 		primaryName := tbl.genPrimaryBtName()
-		tbl.primaryBtdb = btree.NewBtree("", primaryName)
-		tbl.primaryMap = make(map[string]string)
+		tbl.priBtdb = btree.NewBtree("", primaryName)
+		tbl.priIvtMap = make(map[string]string)
+		tbl.priFwdMap = make(map[string]string)
 	}
 
 	log.Infof("Load Table %v success", tbl.TableName)
@@ -163,7 +170,7 @@ func LoadTable(path, name string) (*Table, error) {
 }
 
 //落地表的元信息
-func (tbl *Table) storeMeta() error {
+func (tbl *Table) storeMetaAndBtdb() error {
 	metaFileName := tbl.genMetaName()
 	data := helper.JsonEncodeIndent(tbl)
 	if data != "" {
@@ -176,8 +183,12 @@ func (tbl *Table) storeMeta() error {
 
 	//将内存态的主键，全部落盘到btree
 	if tbl.PrimaryKey != "" {
-		tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
-		tbl.primaryMap = make(map[string]string)
+		fmt.Println("A------------", tbl.priIvtMap)
+		fmt.Println("A------------", tbl.priFwdMap)
+		tbl.priBtdb.MutiSet(PRI_IVT_BTREE_NAME, tbl.priIvtMap)
+		tbl.priBtdb.MutiSet(PRI_FWD_BTREE_NAME, tbl.priFwdMap)
+		tbl.priIvtMap = make(map[string]string)
+		tbl.priFwdMap = make(map[string]string)
 	}
 	return nil
 }
@@ -201,8 +212,9 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 		//主键独立操作
 		tbl.PrimaryKey = basicField.FieldName
 		primaryName := tbl.genPrimaryBtName()
-		tbl.primaryBtdb = btree.NewBtree("", primaryName)
-		tbl.primaryBtdb.AddTree(basicField.FieldName)
+		tbl.priBtdb = btree.NewBtree("", primaryName)
+		tbl.priBtdb.AddTree(PRI_IVT_BTREE_NAME)
+		tbl.priBtdb.AddTree(PRI_FWD_BTREE_NAME)
 	} else {
 		//TODO 锁表? 位置存疑
 		tbl.mutex.Lock()
@@ -239,9 +251,9 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 	}
 
 	//元信息落地
-	err := tbl.storeMeta()
+	err := tbl.storeMetaAndBtdb()
 	if err != nil {
-		return errors.New("storeMeta Error:" + err.Error())
+		return errors.New("storeMetaAndBtdb Error:" + err.Error())
 	}
 
 	return nil
@@ -285,9 +297,9 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	}
 
 	//元信息落地
-	err := tbl.storeMeta()
+	err := tbl.storeMetaAndBtdb()
 	if err != nil {
-		return errors.New("storeMeta Error:" + err.Error())
+		return errors.New("storeMetaAndBtdb Error:" + err.Error())
 	}
 	return nil
 }
@@ -303,8 +315,8 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 		return nil, false
 	}
 
-	//如果表主键是系统自动生成的，则返回的时候隐藏之，不给用户
-	//如果是用户自己提供的主键，则返回给用户
+	//如果表主键是系统自动生成的，则正在详情中隐藏不体现
+	//如果是用户自己提供的主键，则体现在详情中
 	if tbl.PrimaryKey != DEFAULT_PRIMARY_FIELD_NAME {
 		tmp[tbl.PrimaryKey] = primaryKey
 	}
@@ -316,17 +328,7 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 	return &detail, true
 }
 
-//删除
-//标记假删除
-func (tbl *Table) DeleteDoc(primaryKey string) bool {
-	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
-	if found {
-		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
-	}
-	return true
-}
-
-//新增
+//新增文档
 func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error) {
 	//校验
 	if len(tbl.BasicFields) == 0 {
@@ -357,12 +359,8 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 			key = helper.GenUuid()
 		}
 
-		tbl.primaryMap[key] = fmt.Sprintf("%v", newDocId)
-
-		if tbl.NextDocId % PRIMARY_KEY_MEM_MAXCNT == 0 {
-			tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
-			tbl.primaryMap = make(map[string]string)
-		}
+		tbl.priIvtMap[key] = fmt.Sprintf("%v", newDocId)
+		tbl.priFwdMap[fmt.Sprintf("%v", newDocId)] = key
 	}
 
 	//其他字段新增Doc
@@ -374,10 +372,28 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	return newDocId, key, nil
 }
 
+
+//删除
+//标记假删除
+func (tbl *Table) DelDoc(primaryKey string) bool {
+	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
+	if found {
+		//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了，会在btdb留下一点脏数据
+		//不过不过不会影响到正确性，因为以bitmap的删除标记为准
+		delete(tbl.priIvtMap, primaryKey)
+		delete(tbl.priFwdMap, fmt.Sprintf("%v", docId))
+
+		//核心删除
+		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
+	}
+
+	return true
+}
+
 //变更文档
 // Note:
 // 如果表没有主键，则不支持变更
-// 本质上还是新增，主键不变，但是doc变了
+// 本质上还是新增，主键不变，但是docId变了
 func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//校验
 	if len(tbl.BasicFields) == 0 {
@@ -396,11 +412,6 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
 		tbl.generateMemPartition()
-		//意义何在？
-		//if err := tbl.storeMeta(); err != nil {
-		//	tbl.mutex.Unlock()
-		//	return 0, err
-		//}
 		tbl.mutex.Unlock()
 	}
 
@@ -416,11 +427,27 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	oldDocid, found := tbl.findDocIdByPrimaryKey(key)
 	if found {
 		tbl.delFlagBitMap.Set(uint64(oldDocid.DocId))
+	} else {
+		return 0, errors.New(fmt.Sprintf("Can not find the doc %v. Del faield!", key))
 	}
 
-	//再新增docId
-	if err := tbl.changeDocIdByPrimaryKey(key, newDocId); err != nil {
-		return 0, err
+	//变更指向 key=>docId
+	if _, exist := tbl.priIvtMap[key]; exist {
+		tbl.priIvtMap[key] = strconv.Itoa(int(newDocId))           //直接覆盖
+		delete(tbl.priFwdMap, strconv.Itoa(int(oldDocid.DocId)))   //捎带手删一下，不会留下脏数据
+		tbl.priFwdMap[strconv.Itoa(int(newDocId))] = key           //设置辅助映射
+	} else {
+		//对于已经落盘的主键，就会在PRI_FWD_BTREE_NAME存下一点脏数据
+		err := tbl.priBtdb.Set(PRI_IVT_BTREE_NAME, key, fmt.Sprintf("%v", newDocId))
+		if err != nil {
+			log.Errf("Update Put key error  %v", err)
+			return 0, err
+		}
+		err = tbl.priBtdb.Set(PRI_FWD_BTREE_NAME, fmt.Sprintf("%v", newDocId), key)
+		if err != nil {
+			log.Errf("Update Put key error  %v", err)
+			return 0, err
+		}
 	}
 
 	//实质内容本质上还是新增，主键不变，但是doc变了
@@ -460,47 +487,53 @@ func (tbl *Table) getDocByDocId(docId uint32) (map[string]interface{}, bool) {
 	return nil, false
 }
 
-//内部变更篡改了docId
-func (tbl *Table) changeDocIdByPrimaryKey(key string, docId uint32) error {
-	if _, exist := tbl.primaryMap[key]; exist {
-		val := strconv.Itoa(int(docId))
-		tbl.primaryMap[key] = val
-		return nil
-	}
-
-	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, fmt.Sprintf("%v", docId))
-	if err != nil {
-		log.Errf("Update Put key error  %v", err)
-		return err
-	}
-	return nil
-}
-
 //根据主键找到内部的docId
-func (tbl *Table) findDocIdByPrimaryKey(key string) (basic.DocNode, bool) {
+func (tbl *Table) findDocIdByPrimaryKey(key string) (*basic.DocNode, bool) {
 	var docId int
 	var err error
 
 	//先尝试在内存map中找，没有则再去磁盘btree中找
-	if v, exist := tbl.primaryMap[key]; exist {
+	if v, exist := tbl.priIvtMap[key]; exist {
+		fmt.Println("C--------------")
 		docId, err = strconv.Atoi(v)
 		if err != nil {
-			return basic.DocNode{}, false
+			return nil, false
 		}
 	} else {
-		vv, ok := tbl.primaryBtdb.GetInt(tbl.PrimaryKey, key)
+		fmt.Println("D--------------")
+		vv, ok := tbl.priBtdb.GetInt(PRI_IVT_BTREE_NAME, key)
 		if !ok {
-			return basic.DocNode{}, false
+			return nil, false
 		}
 		docId = int(vv)
 	}
 
 	//校验是否已经删除
 	if tbl.delFlagBitMap.IsSet(uint64(docId)) {
-		return basic.DocNode{}, false
+		return nil, false
 	}
 
-	return basic.DocNode{DocId: uint32(docId)}, true
+	return &basic.DocNode{DocId: uint32(docId)}, true
+}
+
+//根据主键找到内部的docId
+func (tbl *Table) findPrimaryKeyByDocId(docId uint32) (string, bool) {
+	//校验是否已经删除
+	if tbl.delFlagBitMap.IsSet(uint64(docId)) {
+		return "", false
+	}
+
+	docIdStr := fmt.Sprintf("%v", docId)
+	//先尝试在内存map中找，没有则再去磁盘btree中找
+	if v, exist := tbl.priFwdMap[docIdStr]; exist {
+		return v, true
+	} else {
+		vv, ok := tbl.priBtdb.GetStr(PRI_FWD_BTREE_NAME, docIdStr)
+		if !ok {
+			return "", false
+		}
+		return vv, true
+	}
 }
 
 //表落地
@@ -533,7 +566,7 @@ func (tbl *Table) persistMemPartition() error {
 	tbl.PrtPathNames = append(tbl.PrtPathNames, tmpPartition.PrtPathName)
 	tbl.memPartition = nil
 
-	return tbl.storeMeta()
+	return tbl.storeMetaAndBtdb()
 }
 
 //关闭一张表
@@ -547,15 +580,17 @@ func (tbl *Table) DoClose() error {
 	if tbl.memPartition != nil {
 		tbl.persistMemPartition() //内存分区落地
 	}
+	
 	//逐个关闭磁盘分区
 	for _, prt := range tbl.partitions {
 		prt.DoClose()
 	}
+
 	//关闭主键btdb，如果有
-	if tbl.primaryBtdb != nil {
-		tbl.primaryBtdb.MutiSet(tbl.PrimaryKey, tbl.primaryMap)
-		tbl.primaryBtdb.Close()
+	if tbl.priBtdb != nil {
+		tbl.priBtdb.Close()
 	}
+
 	//关闭btmp
 	if tbl.delFlagBitMap != nil {
 		tbl.delFlagBitMap.Close()
@@ -674,7 +709,7 @@ func (tbl *Table) MergePartitions() error {
 	}
 
 	//存储meta
-	err := tbl.storeMeta()
+	err := tbl.storeMetaAndBtdb()
 
 	if err != nil {
 		return err

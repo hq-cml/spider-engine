@@ -8,7 +8,7 @@ import (
 
 // 索引类型说明
 const (
-	IDX_TYPE_PK            = 101 //主键类型，特殊，只有倒排，使用独立的B+树存储
+	IDX_TYPE_PK            = 101 //主键类型，特殊，primarykey和docid一一映射，正排和倒排都维护在一颗独立的B+树中
 
 	IDX_TYPE_STR_WHOLE     = 201 //字符型索引, 全词匹配，倒排搜索，用于姓名等字段
 	IDX_TYPE_STR_SPLITER   = 202 //字符型索引, 切词匹配，倒排搜索，用于全文索引

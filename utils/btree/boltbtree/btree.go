@@ -60,6 +60,16 @@ func (bt *BoltBTree) GetInt(treeName, key string) (int64, bool) {
 	return i, true
 }
 
+//get int
+func (bt *BoltBTree) GetStr(treeName, key string) (string, bool) {
+	vstr, ok := bt.wrapper.Get(treeName, key)
+	if !ok {
+		return "", false
+	}
+
+	return vstr, true
+}
+
 //inc
 func (bt *BoltBTree) Inc(treeName, key string) error {
 	v, ok := bt.GetInt(treeName, key)

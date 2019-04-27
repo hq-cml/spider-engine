@@ -7,9 +7,10 @@ import "github.com/hq-cml/spider-engine/utils/btree/boltbtree"
  */
 type Btree interface {
 	AddTree(treeName string) error
-	Set(treeName, key,value string) error
+	Set(treeName, key, value string) error
 	MutiSet(treeName string, kv map[string]string) error
 	GetInt(treeName, key string) (int64, bool)
+	GetStr(treeName, key string) (string, bool)
 	Inc(treeName, key string) error
 	GetFristKV(treeName string) (string, uint32, bool)
 	GetNextKV(treeName, key string) (string, uint32, bool)

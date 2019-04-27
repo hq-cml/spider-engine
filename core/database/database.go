@@ -207,7 +207,7 @@ func (db *Database) DeleteDoc(tableName string, primaryKey string) (bool) {
 		return false
 	}
 
-	return tab.DeleteDoc(primaryKey)
+	return tab.DelDoc(primaryKey)
 }
 
 //搜索

@@ -242,9 +242,9 @@ func TestLoad(t *testing.T) {
 	t.Log(helper.JsonEncode(tmp))
 
 	//测试删除
-	b := table.DeleteDoc("10005")
+	b := table.DelDoc("10005")
 	if !b {
-		panic("DeleteDoc Err")
+		panic("DelDoc Err")
 	}
 	docNode, exist = table.findDocIdByPrimaryKey("10005") //找回来试试
 	if exist {
