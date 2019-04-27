@@ -24,13 +24,22 @@ type Bitmap struct {
 }
 
 // NewBitmap 使用默认容量实例化一个Bitmap
-func NewDefaultBitmap(indexname string, loadFile bool) *Bitmap {
-	return NewBitmapSize(BitmapDefNum, indexname, loadFile)
+func NewBitmap(indexname string, size int) *Bitmap {
+	if size <= 0 {
+		return newBitmapSize(BitmapDefNum, indexname, false)
+	}
+	return newBitmapSize(size, indexname, false)
+}
+
+//加载一个bitmap
+func LoadBitmap(indexname string) *Bitmap {
+	return newBitmapSize(0, indexname, true)
 }
 
 //根据指定的 size 实例化一个 Bitmap
 //如果size非8的整数倍, 则会进行修正
-func NewBitmapSize(size int, fileName string, loadFile bool) *Bitmap {
+//如果load为true，则size失效
+func newBitmapSize(size int, fileName string, loadFile bool) *Bitmap {
 	if size > BitmapMaxMax {
 		//panic("No suport bitmap size!!!")
 		return nil
@@ -101,7 +110,7 @@ func (bm *Bitmap)newFile(indexName string) error {
 	return nil
 }
 
-//BitMap扩大(2倍)
+//BitMap扩大(涨1倍)
 func (bm *Bitmap)DoExpand() error {
 	var err error
 

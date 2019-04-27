@@ -42,6 +42,7 @@ type Table struct {
 	PrimaryKey     string                      `json:"primaryKey"`
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
+	MaxDocNum      uint32                      `json:"maxDocNum"`
 	Prefix         uint64                      `json:"prefix"`
 	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
@@ -56,8 +57,10 @@ type Table struct {
 
 const (
 	DEFAULT_PRIMARY_FIELD_NAME = "#Def%Pri$Key@" //系统默认主键名称
-	PRI_FWD_BTREE_NAME = "pri_fwd_tree"
-	PRI_IVT_BTREE_NAME = "pri_ivt_tree"
+	PRI_FWD_BTREE_NAME 		   = "pri_fwd_tree"
+	PRI_IVT_BTREE_NAME         = "pri_ivt_tree"
+	//BitmapOrgNum             = 8 			     //test
+	BitmapOrgNum               = 0x01 << 27      //16M 文件, 表示最大1.3亿的文档
 )
 
 //新建空表
@@ -77,7 +80,8 @@ func newEmptyTable(path, name string) *Table {
 
 	//bitmap文件新建
 	btmpName := tab.genBitMapName()
-	tab.delFlagBitMap = bitmap.NewDefaultBitmap(btmpName, false)
+	tab.delFlagBitMap = bitmap.NewBitmap(btmpName, BitmapOrgNum)
+	tab.MaxDocNum = BitmapOrgNum
 
 	return &tab
 }
@@ -154,7 +158,7 @@ func LoadTable(path, name string) (*Table, error) {
 
 	//加载bitmap
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
-	tbl.delFlagBitMap = bitmap.NewDefaultBitmap(btmpPath, true)
+	tbl.delFlagBitMap = bitmap.LoadBitmap(btmpPath)
 
 	//如果存在主键，则直接加载主键专用btree并初始化内存map
 	if tbl.PrimaryKey != "" {
@@ -301,6 +305,21 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	return nil
 }
 
+//BitMap扩大
+func (tbl *Table) doExpandBitMap() error{
+	tbl.mutex.Lock()
+	defer tbl.mutex.Unlock()
+
+	err := tbl.delFlagBitMap.DoExpand()
+	if err != nil {
+		log.Errf("Expand error: %v", err)
+		return err
+	}
+	tbl.MaxDocNum = uint32(tbl.delFlagBitMap.MaxNum + 1)
+
+	return nil
+}
+
 //获取文档
 func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 	docNode, exist := tbl.findDocIdByPrimaryKey(primaryKey)
@@ -343,6 +362,11 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	newDocId := tbl.NextDocId
 	tbl.NextDocId++
 
+	//bitmap自动扩容
+	if newDocId == tbl.MaxDocNum {
+		tbl.doExpandBitMap()
+	}
+
 	//处理主键新增
 	var key string
 	if tbl.PrimaryKey != "" {
@@ -369,7 +393,6 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	}
 	return newDocId, key, nil
 }
-
 
 //删除
 //标记假删除
@@ -416,6 +439,11 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//本质上仍然是新增文档
 	newDocId := tbl.NextDocId
 	tbl.NextDocId++
+
+	//bitmap自动扩容
+	if newDocId == tbl.MaxDocNum {
+		tbl.doExpandBitMap()
+	}
 
 	//先标记删除oldDocId
 	key, ok := content[tbl.PrimaryKey].(string)

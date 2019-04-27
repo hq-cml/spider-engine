@@ -428,6 +428,97 @@ func TestMergeThenLoad(t *testing.T) {
 	t.Log("\n\n")
 }
 
+//测试bitmap自动增长
+//这个用例需要将BitmapOrgNum改成8，方可测试
+func TestExpandBitmap(t *testing.T) {
+	t.Skip() //这个用例需要将BitmapOrgNum改成8，方可测试
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	table := newEmptyTable("/tmp/spider", TEST_TABLE)
+
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD0,
+		IndexType: index.IDX_TYPE_PK,
+	}); err != nil {
+		panic(err)
+	}
+
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD1,
+		IndexType: index.IDX_TYPE_STR_WHOLE,
+	}); err != nil {
+		panic(err)
+	}
+
+	docId, _, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004", TEST_FIELD1: "张三"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10005", TEST_FIELD1: "李四"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10006",TEST_FIELD1: "王二麻"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10007", TEST_FIELD1: "张三"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10008", TEST_FIELD1: "李四"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	if table.MaxDocNum != 8 || table.delFlagBitMap.MaxNum != 7 { //此时观察bitmap文件是9Byte
+		panic("MaxDocNum shoud be 8")
+	}
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	if table.MaxDocNum != 16 || table.delFlagBitMap.MaxNum != 15 { //此时观察bitmap文件是10Byte
+		panic("MaxDocNum shoud be 16")
+	}
+
+	table.DoClose()
+	t.Log("\n\n")
+}
 
 //测试过滤器
 func TestFilter(t *testing.T) {
@@ -796,4 +887,3 @@ func TestLoadAgainAgain(t *testing.T) {
 
 	t.Log("\n\n")
 }
-
