@@ -113,7 +113,6 @@ func CreateTable(path, tableName string, fields []field.BasicField) (*Table, err
 
 	//如果没有主键，则自动补充主键
 	if !hasKey {
-		fmt.Println("A----------------------")
 		tab.AddField(field.BasicField {
 			IndexType: index.IDX_TYPE_PK,
 			FieldName: DEFAULT_PRIMARY_FIELD_NAME,
@@ -183,8 +182,6 @@ func (tbl *Table) storeMetaAndBtdb() error {
 
 	//将内存态的主键，全部落盘到btree
 	if tbl.PrimaryKey != "" {
-		fmt.Println("A------------", tbl.priIvtMap)
-		fmt.Println("A------------", tbl.priFwdMap)
 		tbl.priBtdb.MutiSet(PRI_IVT_BTREE_NAME, tbl.priIvtMap)
 		tbl.priBtdb.MutiSet(PRI_FWD_BTREE_NAME, tbl.priFwdMap)
 		tbl.priIvtMap = make(map[string]string)
@@ -315,15 +312,16 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 		return nil, false
 	}
 
-	//如果表主键是系统自动生成的，则正在详情中隐藏不体现
-	//如果是用户自己提供的主键，则体现在详情中
+	//如果表主键是系统自动生成的，则在详情中隐藏不体现
+	//否则，如果是用户自己提供的主键，则体现在详情中
 	if tbl.PrimaryKey != DEFAULT_PRIMARY_FIELD_NAME {
 		tmp[tbl.PrimaryKey] = primaryKey
 	}
 
-	detail := basic.DocInfo{}
-	detail.Key = primaryKey
-	detail.Detail = tmp
+	detail := basic.DocInfo{
+		Key: primaryKey,
+		Detail:tmp,
+	}
 
 	return &detail, true
 }
@@ -381,7 +379,7 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 		//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了，会在btdb留下一点脏数据
 		//不过不过不会影响到正确性，因为以bitmap的删除标记为准
 		delete(tbl.priIvtMap, primaryKey)
-		delete(tbl.priFwdMap, fmt.Sprintf("%v", docId))
+		delete(tbl.priFwdMap, fmt.Sprintf("%v", docId.DocId))
 
 		//核心删除
 		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
@@ -494,13 +492,11 @@ func (tbl *Table) findDocIdByPrimaryKey(key string) (*basic.DocNode, bool) {
 
 	//先尝试在内存map中找，没有则再去磁盘btree中找
 	if v, exist := tbl.priIvtMap[key]; exist {
-		fmt.Println("C--------------")
 		docId, err = strconv.Atoi(v)
 		if err != nil {
 			return nil, false
 		}
 	} else {
-		fmt.Println("D--------------")
 		vv, ok := tbl.priBtdb.GetInt(PRI_IVT_BTREE_NAME, key)
 		if !ok {
 			return nil, false
@@ -580,7 +576,7 @@ func (tbl *Table) DoClose() error {
 	if tbl.memPartition != nil {
 		tbl.persistMemPartition() //内存分区落地
 	}
-	
+
 	//逐个关闭磁盘分区
 	for _, prt := range tbl.partitions {
 		prt.DoClose()
@@ -749,15 +745,21 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 			return nil, false
 		}
 
-		//如果表主键是系统自动生成的，则返回的时候隐藏之，不给用户
-		//如果是用户自己提供的主键，则返回给用户
-		//if tbl.PrimaryKey != DEFAULT_PRIMARY_FIELD_NAME {
-		//	tmp[tbl.PrimaryKey] = primaryKey
-		//}
+		primaryKey, ok := tbl.findPrimaryKeyByDocId(id.DocId)
+		if !ok {
+			return nil, false
+		}
 
-		detail := basic.DocInfo{}
-		//detail.Key = primaryKey
-		detail.Detail = tmp
+		//如果表主键是系统自动生成的，则在详情中隐藏不体现
+		//否则，如果是用户自己提供的主键，则体现在详情中
+		if tbl.PrimaryKey != DEFAULT_PRIMARY_FIELD_NAME {
+			tmp[tbl.PrimaryKey] = primaryKey
+		}
+
+		detail := basic.DocInfo{
+			Key: primaryKey,
+			Detail:tmp,
+		}
 
 		retDocs = append(retDocs, detail)
 	}
@@ -796,4 +798,16 @@ func (tbl *Table) genPrimaryBtName() string {
 func (tbl *Table) genPrtPathName() string {
 	prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位补零
 	return prtPathName
+}
+
+func (tbl *Table) GetIvtMap() map[string]string {
+	return tbl.priIvtMap
+}
+
+func (tbl *Table) GetFwdMap() map[string]string {
+	return tbl.priFwdMap
+}
+
+func (tbl *Table) GetBtdb() btree.Btree {
+	return tbl.priBtdb
 }
