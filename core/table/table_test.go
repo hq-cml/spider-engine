@@ -234,12 +234,12 @@ func TestLoad(t *testing.T) {
 	if docId != 5 {
 		panic("Error")
 	}
-	content, exist = table.GetDoc("10005") //找回来试试
+	tmp, exist := table.GetDoc("10005") //找回来试试
 	if !exist {
 		panic("Should exist")
 		table.DoClose()
 	}
-	t.Log(helper.JsonEncode(content))
+	t.Log(helper.JsonEncode(tmp))
 
 	//测试删除
 	b := table.DeleteDoc("10005")
@@ -316,7 +316,7 @@ func TestMerge(t *testing.T) {
 	}
 
 	//找一个已经删除的来试试
-	content, exist := table.GetDoc("10005")
+	_, exist := table.GetDoc("10005")
 	if exist {
 		panic("Should not exist")
 	} else {
@@ -324,7 +324,7 @@ func TestMerge(t *testing.T) {
 	}
 
 	//新增一个试试看
-	content = map[string]interface{}{TEST_FIELD0: "10005",TEST_FIELD1: "祝枝山",	TEST_FIELD2: 33,TEST_FIELD3: "喜欢石榴"}
+	content := map[string]interface{}{TEST_FIELD0: "10005",TEST_FIELD1: "祝枝山",	TEST_FIELD2: 33,TEST_FIELD3: "喜欢石榴"}
 	docId, _, err := table.AddDoc(content)
 	if err != nil {
 		panic(fmt.Sprintf("Update doc Error:%s", err))
@@ -368,11 +368,11 @@ func TestMerge(t *testing.T) {
 	t.Log("唐伯虎", helper.JsonEncode(ids)) //测试最后一个由Persist落地的文档
 
 	//搜索一个重新增加的doc
-	content, exist = table.GetDoc("10005") //找回来试试
+	tmp, exist := table.GetDoc("10005") //找回来试试
 	if !exist {
 		panic("Should exist")
 	}
-	t.Log(helper.JsonEncode(content))
+	t.Log(helper.JsonEncode(tmp))
 
 	//关闭
 	table.DoClose()
@@ -404,12 +404,12 @@ func TestMergeThenLoad(t *testing.T) {
 	}
 	docId := docNode.DocId
 	t.Log("Get doc ", docId)
-	content,exist = table.getDocByDocId(docId)
+	tmp,exist := table.getDocByDocId(docId)
 	if !exist {
 		panic("Should exist")
 		table.DoClose()
 	}
-	t.Log("User[10002]:", helper.JsonEncode(content))
+	t.Log("User[10002]:", helper.JsonEncode(tmp))
 
 
 	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", nil)
@@ -793,6 +793,7 @@ func TestLoadAgainAgain(t *testing.T) {
 
 	//关闭
 	table.DoClose()
+
 	t.Log("\n\n")
 }
 

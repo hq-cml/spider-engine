@@ -2,11 +2,11 @@ package database
 
 import (
 	"testing"
+	"github.com/hq-cml/spider-engine/utils/helper"
 	"os/exec"
 	"os"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/core/index"
-	"github.com/hq-cml/spider-engine/utils/helper"
 )
 
 const TEST_TABLE = "user"         //用户
@@ -14,6 +14,8 @@ const TEST_FIELD0 = "user_id"
 const TEST_FIELD1 = "user_name"
 const TEST_FIELD2 = "user_age"
 const TEST_FIELD3 = "user_desc"
+
+var temp_pk string
 
 func init() {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
@@ -24,17 +26,20 @@ func init() {
 }
 
 //测试新建库，新建表，增加文档，关闭库表等
+//不提供主键，那么就依赖
 func TestNewDatabase(t *testing.T) {
 	db, err := NewDatabase("/tmp/spider/db1", "db1")
 	if err != nil {
 		panic(err)
 	}
 
+	//测试不提供主键
 	_, err = db.CreateTable(TEST_TABLE, []field.BasicField {
+		//{
+		//	FieldName: TEST_FIELD0,
+		//	IndexType: index.IDX_TYPE_PK,
+		//},
 		{
-			FieldName: TEST_FIELD0,
-			IndexType: index.IDX_TYPE_PK,
-		},{
 			FieldName: TEST_FIELD1,
 			IndexType: index.IDX_TYPE_STR_WHOLE,
 		},{
@@ -49,17 +54,19 @@ func TestNewDatabase(t *testing.T) {
 		panic(err)
 	}
 
-	docId, _, err := db.AddDoc(TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+	docId, key, err := db.AddDoc(TEST_TABLE,
+		map[string]interface{}{TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
 	if err != nil {
 		panic(err)
 	}
-	t.Log("Add doc:", docId)
+	t.Log("Add doc:", docId, key)
 
-	docId, _, err = db.AddDoc(TEST_TABLE, map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+	docId, temp_pk, err = db.AddDoc(TEST_TABLE,
+		map[string]interface{}{TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
 	if err != nil {
 		panic(err)
 	}
-	t.Log("Add doc:", docId)
+	t.Log("Add doc:", docId, temp_pk)
 
 	err = db.DoClose()
 	if err != nil {
@@ -74,11 +81,12 @@ func TestLoadDatabase(t *testing.T) {
 		panic(err)
 	}
 
-	user, ok := db.GetDoc(TEST_TABLE, "10002")
+	//!!!!这里从临时变量里面拿到了主键
+	user, ok := db.GetDoc(TEST_TABLE, temp_pk)
 	if !ok {
 		panic("Should exist!")
 	}
-	t.Log("Got the user[10002]:", helper.JsonEncode(user))
+	t.Log("Got the user[",temp_pk,"]:", helper.JsonEncode(user))
 
 	tmp, ok := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "游泳", nil)
 	if ok {
@@ -98,13 +106,13 @@ func TestLoadDatabase(t *testing.T) {
 	}
 	t.Log("Got the doc[电影]:", helper.JsonEncode(tmp))
 
-	err = db.DropTable(TEST_TABLE)
-	if err != nil {
-		panic(err)
-	}
-
-	err = db.Destory()
-	if err != nil {
-		panic(err)
-	}
+	//err = db.DropTable(TEST_TABLE)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//
+	//err = db.Destory()
+	//if err != nil {
+	//	panic(err)
+	//}
 }

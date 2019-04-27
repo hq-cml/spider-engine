@@ -35,7 +35,7 @@ import (
 type Table struct {
 	TableName      string                      `json:"tableName"`
 	Path           string                      `json:"pathName"`
-	BasicFields    map[string]field.BasicField `json:"fields"`       //包括主键
+	BasicFields    map[string]field.BasicField `json:"fields"`       //包括主键 //TODO 是否需要去掉
 	PrimaryKey     string                      `json:"primaryKey"`
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
@@ -43,7 +43,7 @@ type Table struct {
 	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
 	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
-	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键！！！
+	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键字段！！！
 	primaryBtdb    btree.Btree            //主键专用倒排索引（内存态）
 	primaryMap     map[string]string      //主键专用倒排索引（磁盘态），主键不会重复，直接map[string]string
 	delFlagBitMap  *bitmap.Bitmap         //用于文档删除标记
@@ -108,7 +108,8 @@ func CreateTable(path, tableName string, fields []field.BasicField) (*Table, err
 	}
 
 	//如果没有主键，则自动补充主键
-	if hasKey {
+	if !hasKey {
+		fmt.Println("A----------------------")
 		tab.AddField(field.BasicField {
 			IndexType: index.IDX_TYPE_PK,
 			FieldName: DEFAULT_PRIMARY_FIELD_NAME,
@@ -290,12 +291,12 @@ func (tbl *Table) DeleteField(fieldname string) error {
 }
 
 //获取文档
-func (tbl *Table) GetDoc(primaryKey string) (map[string]interface{}, bool) {
+func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 	docNode, exist := tbl.findDocIdByPrimaryKey(primaryKey)
 	if !exist {
 		return nil, false
 	}
-	ret, ok := tbl.getDocByDocId(docNode.DocId)
+	tmp, ok := tbl.getDocByDocId(docNode.DocId)
 	if !ok {
 		return nil, false
 	}
@@ -303,10 +304,14 @@ func (tbl *Table) GetDoc(primaryKey string) (map[string]interface{}, bool) {
 	//如果表主键是系统自动生成的，则返回的时候隐藏之，不给用户
 	//如果是用户自己提供的主键，则返回给用户
 	if tbl.PrimaryKey != DEFAULT_PRIMARY_FIELD_NAME {
-		ret[tbl.PrimaryKey] = primaryKey
+		tmp[tbl.PrimaryKey] = primaryKey
 	}
 
-	return ret, true
+	detail := basic.DocInfo{}
+	detail.Key = primaryKey
+	detail.Detail = tmp
+
+	return &detail, true
 }
 
 //删除
@@ -680,9 +685,9 @@ func (tbl *Table) MergePartitions() error {
 }
 
 //表内搜索
-func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocNode, bool) {
+func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool) {
 
-	retDocs := []basic.DocNode{}
+	docIds := []basic.DocNode{}
 	exist := false
 
 	//各个磁盘分区执行搜索
@@ -690,7 +695,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)
 		if ok {
 			exist = true
-			retDocs = append(retDocs, ids...)
+			docIds = append(docIds, ids...)
 		}
 	}
 
@@ -699,8 +704,29 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 		ids, ok := tbl.memPartition.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)
 		if ok {
 			exist = true
-			retDocs = append(retDocs, ids...)
+			docIds = append(docIds, ids...)
 		}
+	}
+
+	//结果组装
+	retDocs := []basic.DocInfo{}
+	for _, id := range docIds {
+		tmp, ok := tbl.getDocByDocId(id.DocId)
+		if !ok {
+			return nil, false
+		}
+
+		//如果表主键是系统自动生成的，则返回的时候隐藏之，不给用户
+		//如果是用户自己提供的主键，则返回给用户
+		//if tbl.PrimaryKey != DEFAULT_PRIMARY_FIELD_NAME {
+		//	tmp[tbl.PrimaryKey] = primaryKey
+		//}
+
+		detail := basic.DocInfo{}
+		//detail.Key = primaryKey
+		detail.Detail = tmp
+
+		retDocs = append(retDocs, detail)
 	}
 
 	return retDocs, exist

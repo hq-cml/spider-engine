@@ -9,6 +9,11 @@ type DocNode struct {
 	Weight uint32
 }
 
+type DocInfo struct {
+	Key    string
+	Detail map[string]interface{}
+}
+
 var DOC_NODE_SIZE int
 
 func init() {
