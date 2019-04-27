@@ -200,7 +200,7 @@ func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]inte
 }
 
 //获取Doc
-func (se *SpiderEngine) GetDoc(dbName, tableName string, primaryKey string) (map[string]interface{}, bool) {
+func (se *SpiderEngine) GetDoc(dbName, tableName string, primaryKey string) (*basic.DocInfo, bool) {
 	db, exist := se.DbMap[dbName]
 	if !exist {
 		return nil, false
@@ -227,7 +227,8 @@ func (se *SpiderEngine) DeleteDoc(dbName, tableName string, primaryKey string) (
 }
 
 //搜索
-func (se *SpiderEngine) SearchDocs(dbName, tableName, fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocNode, bool) {
+func (se *SpiderEngine) SearchDocs(dbName, tableName, fieldName,
+		keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool) {
 	db, exist := se.DbMap[dbName]
 	if !exist {
 		return nil, false

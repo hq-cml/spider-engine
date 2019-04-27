@@ -284,7 +284,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) e
 		}
 
 		//B+树录入
-		err = btdb.Set(rIdx.fieldName, term, uint64(offset))
+		err = btdb.Set(rIdx.fieldName, term, fmt.Sprintf("%v", offset))
 		if err != nil {
 			log.Errf("Persist :: Error %v", err)
 			//造成不一致了哦，或者说写脏了一块数据，但是以后也不会被引用到，因为btree里面没落盘
@@ -435,7 +435,7 @@ func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partit
 			return errors.New("Write Error")
 		}
 
-		err = btdb.Set(fieldName, minTerm, uint64(offset))
+		err = btdb.Set(fieldName, minTerm, fmt.Sprintf("%v", offset))
 		if err != nil {
 			log.Errf("Invert --> Merge :: Error:%v, fieldName: %v, term: %v, len(term): %v", err, fieldName, minTerm, len(minTerm))
 			return err

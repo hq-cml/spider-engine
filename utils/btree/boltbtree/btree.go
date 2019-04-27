@@ -37,8 +37,8 @@ func (bt *BoltBTree) AddTree(treeName string) error {
 }
 
 //Set
-func (bt *BoltBTree) Set(treeName, key string, value uint64) error {
-	return bt.wrapper.Set(treeName, key, fmt.Sprintf("%v", value))
+func (bt *BoltBTree) Set(treeName, key, val string) error {
+	return bt.wrapper.Set(treeName, key, val)
 }
 
 //Multi Set

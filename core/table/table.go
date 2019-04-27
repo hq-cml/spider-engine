@@ -467,7 +467,7 @@ func (tbl *Table) changeDocIdByPrimaryKey(key string, docId uint32) error {
 		return nil
 	}
 
-	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, uint64(docId))
+	err := tbl.primaryBtdb.Set(tbl.PrimaryKey, key, fmt.Sprintf("%v", docId))
 	if err != nil {
 		log.Errf("Update Put key error  %v", err)
 		return err
