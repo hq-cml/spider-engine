@@ -35,7 +35,7 @@ import (
 type Table struct {
 	TableName      string                      `json:"tableName"`
 	Path           string                      `json:"pathName"`
-	BasicFields    map[string]field.BasicField `json:"fields"`       //包括主键 //TODO 是否需要去掉
+	BasicFields    map[string]field.BasicField `json:"fields"`       //不包括主键！！
 	PrimaryKey     string                      `json:"primaryKey"`
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
@@ -81,9 +81,7 @@ func (tbl *Table) generateMemPartition() {
 	prtPathName := tbl.genPrtPathName()
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
-		if f.IndexType != index.IDX_TYPE_PK { //剔除主键，其他字段建立架子
-			basicFields = append(basicFields, f)
-		}
+		basicFields = append(basicFields, f)
 	}
 
 	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(prtPathName, tbl.NextDocId, basicFields)
@@ -199,8 +197,8 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 	}
 
 	//实施新增
-	tbl.BasicFields[basicField.FieldName] = basicField
 	if basicField.IndexType == index.IDX_TYPE_PK {
+		//主键独立操作
 		tbl.PrimaryKey = basicField.FieldName
 		primaryName := tbl.genPrimaryBtName()
 		tbl.primaryBtdb = btree.NewBtree("", primaryName)
@@ -210,6 +208,10 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 		tbl.mutex.Lock()
 		defer tbl.mutex.Unlock()
 
+		//基础信息注册
+		tbl.BasicFields[basicField.FieldName] = basicField
+
+		//新增字段生效到后续的新分区中
 		if tbl.memPartition == nil {
 			//如果内存分区为nil，则直接新增一个内存分区，新增出来的分区已经包含了新的新增字段
 			tbl.generateMemPartition()
@@ -379,8 +381,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//校验
 	if len(tbl.BasicFields) == 0 {
-		log.Errf("Field or Partiton is nil")
-		return 0, errors.New("field or partition is nil")
+		return 0, errors.New("field is nil")
 	}
 	//如果表没有主键，则不支持变更
 	if tbl.PrimaryKey == "" {
@@ -627,10 +628,7 @@ func (tbl *Table) MergePartitions() error {
 	//准备好非主键字段信息备用
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
-		//主键分区是独立的存在，没必要参与到分区合并中
-		if f.IndexType != index.IDX_TYPE_PK {
-			basicFields = append(basicFields, f)
-		}
+		basicFields = append(basicFields, f)
 	}
 
 	//从startIdx开始, 一点点尝试出最佳的分区合并方式
