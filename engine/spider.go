@@ -66,10 +66,6 @@ func (se *SpiderEngine) genMetaName() string {
 	return fmt.Sprintf("%v%v%v", se.Path, "spider", basic.IDX_FILENAME_SUFFIX_META)
 }
 
-func (se *SpiderEngine) Start() {
-
-}
-
 func (se *SpiderEngine) storeMeta() error {
 	metaFileName := se.genMetaName()
 	data := helper.JsonEncodeIndent(se)
@@ -236,3 +232,12 @@ func (se *SpiderEngine) SearchDocs(dbName, tableName, fieldName,
 	return db.SearchDocs(tableName, fieldName, keyWord, filters)
 }
 
+//TODO
+func (se *SpiderEngine) Start() {
+	//go new goutine
+}
+
+//TODO
+func (se *SpiderEngine) Stop() string {
+	return "see you again"
+}

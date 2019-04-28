@@ -13,6 +13,5 @@ type SpiderEngineConf struct {
 	Step                bool      //调试用, 一步步的走
 }
 
-func NewSpiderEngineConf() *SpiderEngineConf {
-	return &SpiderEngineConf{}
-}
+/************************************ 全局Conf变量 **********************************/
+var	GlobalConf *SpiderEngineConf
