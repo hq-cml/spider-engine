@@ -1,0 +1,10 @@
+2019/04/28 20:56:31 [DEBUG] Hello world
+2019/04/28 20:56:31 [DEBUG][/data/share/golang/src/github.com/hq-cml/spider-engine/utils/log/log_test.go 14]Hello world
+2019/04/28 20:56:31 [INFO] Hello world
+2019/04/28 20:56:31 [WARN] Hello world
+2019/04/28 20:56:31 [FATAL] Hello world
+2019/04/28 20:57:43 [DEBUG] Hello world
+2019/04/28 20:57:43 [DEBUG][/data/share/golang/src/github.com/hq-cml/spider-engine/utils/log/log_test.go 14]Hello world
+2019/04/28 20:57:43 [INFO] Hello world
+2019/04/28 20:57:43 [WARN] Hello world
+2019/04/28 20:57:43 [FATAL] Hello world

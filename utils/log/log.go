@@ -6,6 +6,9 @@ package log
 import (
 	"log"
 	"os"
+	"runtime"
+	"strconv"
+	"strings"
 )
 
 type SpiderLog struct {
@@ -25,6 +28,17 @@ var spiderLog SpiderLog
 
 func init() {
 	InitLog("", "debug")
+}
+
+func getFileLen() (string, string){
+	_, file, line, ok := runtime.Caller(2)
+	if !ok {
+		return "", ""
+	}
+	tmp := strings.Split(file, "/")
+	sFile := tmp[len(tmp) - 1]
+
+	return sFile, strconv.Itoa(line)
 }
 
 func InitLog(path string, level string) {
@@ -61,7 +75,8 @@ func InitLog(path string, level string) {
 
 func Debugf(format string, v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_DEBUG {return}
-	spiderLog.Printf("[DEBUG] "+format, v...)
+	file, line := getFileLen()
+	spiderLog.Printf("[DEBUG]"+"[" + file + " " + line + "] "+format, v...)
 }
 
 func Debugln(v ...interface{}) {
@@ -73,7 +88,11 @@ func Debugln(v ...interface{}) {
 
 func Debug(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_DEBUG {return}
-	v1 := []interface{}{"[DEBUG]"}
+	file, line := getFileLen()
+	v1 := []interface{}{
+		"[DEBUG]",
+		"[" + file + " " + line + "] ",
+	}
 	v1 = append(v1, v...)
 	spiderLog.Print(v1...)
 }
@@ -92,7 +111,11 @@ func Infoln(v ...interface{}) {
 
 func Info(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_INFO {return}
-	v1 := []interface{}{"[INFO]"}
+	file, line := getFileLen()
+	v1 := []interface{}{
+		"[INFO]",
+		"[" + file + " " + line + "] ",
+	}
 	v1 = append(v1, v...)
 	spiderLog.Print(v1...)
 }

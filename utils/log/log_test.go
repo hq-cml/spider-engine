@@ -9,6 +9,11 @@ func TestLogDebug(t *testing.T) {
 	Debugln("Hello world")
 }
 
+func TestLogDebugV(t *testing.T) {
+	InitLog("s.log", "debug")
+	Debug("Hello world")
+}
+
 func TestLogInfo(t *testing.T) {
 	InitLog("s.log", "info")
 	Infoln("Hello world")
