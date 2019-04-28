@@ -46,13 +46,14 @@ type Table struct {
 	Prefix         uint64                      `json:"prefix"`
 	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
-	memPartition  *partition.Partition   //内存态的分区,分区不包括逐渐
-	partitions    []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键字段！！！
-	priBtdb       btree.Btree            //主键专用正排 & 倒排索引（磁盘态）
-	priIvtMap     map[string]string      //主键专用倒排索引（内存态），primaryKey => docId
-	priFwdMap     map[string]string      //主键专正排排索引（内存态），docId => primaryKey
-	delFlagBitMap *bitmap.Bitmap         //用于文档删除标记
-	mutex         sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
+	close          bool
+	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
+	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键字段！！！
+	priBtdb        btree.Btree            //主键专用正排 & 倒排索引（磁盘态）
+	priIvtMap      map[string]string      //主键专用倒排索引（内存态），primaryKey => docId
+	priFwdMap      map[string]string      //主键专正排排索引（内存态），docId => primaryKey
+	delFlagBitMap  *bitmap.Bitmap         //用于文档删除标记
+	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
 }
 
 const (
@@ -68,7 +69,7 @@ func newEmptyTable(path, name string) *Table {
 	if string(path[len(path)-1]) != "/" {
 		path = path + "/"
 	}
-	tab := Table{
+	tab := Table {
 		TableName:    name,
 		PrtPathNames: make([]string, 0),
 		partitions:   make([]*partition.Partition, 0),
@@ -200,6 +201,9 @@ func (tbl *Table) storeMetaAndBtdb() error {
 // 分区的变动，会锁表
 func (tbl *Table) AddField(basicField field.BasicField) error {
 	//校验
+	if tbl.close {
+		return errors.New("Table is closed!")
+	}
 	if basicField.IndexType == index.IDX_TYPE_PK && tbl.PrimaryKey != "" {
 		return errors.New("Primary key has exist!")
 	}
@@ -265,6 +269,9 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 //如果内存分区非空, 则会先落地内存分区
 func (tbl *Table) DeleteField(fieldname string) error {
 	//校验
+	if tbl.close {
+		return errors.New("Table is closed!")
+	}
 	if fieldname == tbl.PrimaryKey {
 		return errors.New("Can not del primary key!")
 	}
@@ -322,6 +329,9 @@ func (tbl *Table) doExpandBitMap() error{
 
 //获取文档
 func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
+	if tbl.close {
+		return nil, false
+	}
 	docNode, exist := tbl.findDocIdByPrimaryKey(primaryKey)
 	if !exist {
 		return nil, false
@@ -348,26 +358,14 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 //新增文档
 func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error) {
 	//校验
+	if tbl.close {
+		return 0, "", errors.New("Table is closed!")
+	}
 	if len(tbl.BasicFields) == 0 {
 		return 0, "", errors.New("field is nil")
 	}
 
-	//如果内存分区为空，则新建
-	if tbl.memPartition == nil {
-		tbl.mutex.Lock()
-		tbl.generateMemPartition()
-		tbl.mutex.Unlock()
-	}
-
-	newDocId := tbl.NextDocId
-	tbl.NextDocId++
-
-	//bitmap自动扩容
-	if newDocId == tbl.MaxDocNum {
-		tbl.doExpandBitMap()
-	}
-
-	//处理主键新增
+	//获取主键
 	var key string
 	if tbl.PrimaryKey != "" {
 		var ok bool
@@ -380,7 +378,31 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 			//用户没传主键，则系统自动生成一个主键
 			key = helper.GenUuid()
 		}
+	}
 
+	//主键不能重复
+	_, exist := tbl.findDocIdByPrimaryKey(key)
+	if exist {
+		return 0, "", errors.New("Duplicate Primary Key! " + key)
+	}
+
+	//如果内存分区为空，则新建
+	if tbl.memPartition == nil {
+		tbl.mutex.Lock()
+		tbl.generateMemPartition()
+		tbl.mutex.Unlock()
+	}
+
+	newDocId := tbl.NextDocId
+	tbl.NextDocId++
+
+	//bitmap判断自动扩容
+	if newDocId == tbl.MaxDocNum {
+		tbl.doExpandBitMap()
+	}
+
+	//处理主键新增
+	if tbl.PrimaryKey != "" {
 		tbl.priIvtMap[key] = fmt.Sprintf("%v", newDocId)
 		tbl.priFwdMap[fmt.Sprintf("%v", newDocId)] = key
 	}
@@ -391,12 +413,17 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		log.Errf("tbl.memPartition AddDocument Error:%v", err)
 		return 0, "", err
 	}
+
 	return newDocId, key, nil
 }
 
 //删除
 //标记假删除
 func (tbl *Table) DelDoc(primaryKey string) bool {
+	//校验
+	if tbl.close {
+		return false
+	}
 	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
 	if found {
 		//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了，会在btdb留下一点脏数据
@@ -417,6 +444,9 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 // 本质上还是新增，主键不变，但是docId变了
 func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//校验
+	if tbl.close {
+		return 0, errors.New("Table is closed!")
+	}
 	if len(tbl.BasicFields) == 0 {
 		return 0, errors.New("field is nil")
 	}
@@ -564,7 +594,9 @@ func (tbl *Table) findPrimaryKeyByDocId(docId uint32) (string, bool) {
 //Note:
 // 本质上就是内存分区落地
 func (tbl *Table) Persist() error {
-
+	if tbl.close {
+		return errors.New("Table is closed!")
+	}
 	if tbl.memPartition == nil {
 		return nil
 	}
@@ -595,6 +627,9 @@ func (tbl *Table) persistMemPartition() error {
 
 //关闭一张表
 func (tbl *Table) DoClose() error {
+	if tbl.close {
+		return nil
+	}
 	//锁表
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
@@ -619,13 +654,17 @@ func (tbl *Table) DoClose() error {
 	if tbl.delFlagBitMap != nil {
 		tbl.delFlagBitMap.Close()
 	}
+	tbl.close = true
 	log.Infof("Close Table [%v] Finish", tbl.TableName)
 	return nil
 }
 
 //销毁一张表在磁盘的文件
 func (tbl *Table) Destroy() error {
-	tbl.DoClose()
+	err := tbl.DoClose()
+	if err != nil {
+		return err
+	}
 
 	//锁表
 	//tbl.mutex.Lock()
@@ -658,6 +697,10 @@ func (tbl *Table) Destroy() error {
 //合并表内分区
 //TODO 合并时机需要自动化
 func (tbl *Table) MergePartitions() error {
+	if tbl.close {
+		return errors.New("Table is closed!")
+	}
+
 	var startIdx int = -1
 
 	//锁表
@@ -743,7 +786,9 @@ func (tbl *Table) MergePartitions() error {
 
 //表内搜索
 func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool) {
-
+	if tbl.close {
+		return nil, false
+	}
 	docIds := []basic.DocNode{}
 	exist := false
 

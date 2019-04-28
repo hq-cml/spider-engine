@@ -246,6 +246,12 @@ func (db *Database) genMetaName() string {
 
 //删除库
 func (db *Database) Destory() error {
+	//关闭库
+	err := db.DoClose()
+	if err != nil {
+		return err
+	}
+
 	//表逐个销毁
 	for _, tab := range db.TableMap {
 		if err := tab.Destroy(); err != nil {
