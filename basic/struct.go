@@ -44,11 +44,6 @@ const (
 	IDX_FILENAME_SUFFIX_BITMAP = ".btmp"
 )
 
-const (
-	MODIFY_TYPE_ADD    uint8 = 1
-	MODIFY_TYPE_UPDATE uint8 = 2
-)
-
 /*************************************************************************
 索引查询接口
 索引查询分为 查询和过滤, 统计，子查询四种
@@ -63,17 +58,6 @@ type SearchQuery struct {
 	Value     string `json:"_value"`   //要过滤的值
 	Type      uint64 `json:"_type"`    //过滤类型
 }
-
-//过滤接口数据结构，内部都是求交集
-//type SearchFilted struct {
-//	FieldName string   `json:"_field"`
-//	Start     int64    `json:"_start"`
-//	End       int64    `json:"_end"`
-//	Range     []int64  `json:"_range"`
-//	Type      uint8    `json:"_type"`
-//	MatchStr  string   `json:"_matchstr"`
-//	RangeStr  []string `json:"_rangestr"`
-//}
 
 type SearchFilter struct {
 	FieldName       string
