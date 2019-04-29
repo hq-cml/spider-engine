@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
+	"fmt"
 )
 
 type SpiderLog struct {
@@ -30,15 +30,15 @@ func init() {
 	InitLog("", "debug")
 }
 
-func getFileLen() (string, string){
+func getFileLenPrefix() string {
 	_, file, line, ok := runtime.Caller(2)
 	if !ok {
-		return "", ""
+		return ""
 	}
 	tmp := strings.Split(file, "/")
 	sFile := tmp[len(tmp) - 1]
 
-	return sFile, strconv.Itoa(line)
+	return fmt.Sprintf("[%s, %v] ", sFile, line)
 }
 
 func InitLog(path string, level string) {
@@ -75,66 +75,66 @@ func InitLog(path string, level string) {
 
 func Debugf(format string, v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_DEBUG {return}
-	file, line := getFileLen()
-	spiderLog.Printf("[DEBUG]"+"[" + file + " " + line + "] "+format, v...)
+	prefix := fmt.Sprintf("[DEBUG]%v", getFileLenPrefix())
+	spiderLog.Printf(prefix + format, v...)
 }
 
 func Debugln(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_DEBUG {return}
-	v1 := []interface{}{"[DEBUG]"}
+	prefix := fmt.Sprintf("[DEBUG]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Println(v1...)
 }
 
 func Debug(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_DEBUG {return}
-	file, line := getFileLen()
-	v1 := []interface{}{
-		"[DEBUG]",
-		"[" + file + " " + line + "] ",
-	}
+	prefix := fmt.Sprintf("[DEBUG]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Print(v1...)
 }
 
 func Infof(format string, v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_INFO {return}
-	spiderLog.Printf("[INFO] "+format, v...)
+	prefix := fmt.Sprintf("[ INFO]%v", getFileLenPrefix())
+	spiderLog.Printf(prefix + format, v...)
 }
 
 func Infoln(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_INFO {return}
-	v1 := []interface{}{"[INFO]"}
+	prefix := fmt.Sprintf("[ INFO]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Println(v1...)
 }
 
 func Info(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_INFO {return}
-	file, line := getFileLen()
-	v1 := []interface{}{
-		"[INFO]",
-		"[" + file + " " + line + "] ",
-	}
+	prefix := fmt.Sprintf("[ INFO]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Print(v1...)
 }
 
 func Warnf(format string, v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_WARN {return}
-	spiderLog.Printf("[WARN] "+format, v...)
+	prefix := fmt.Sprintf("[ WARN]%v", getFileLenPrefix())
+	spiderLog.Printf(prefix + format, v...)
 }
 
 func Warnln(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_WARN {return}
-	v1 := []interface{}{"[WARN]"}
+	prefix := fmt.Sprintf("[ WARN]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Println(v1...)
 }
 
 func Warn(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_WARN {return}
-	v1 := []interface{}{"[WARN]"}
+	prefix := fmt.Sprintf("[ WARN]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Print(v1...)
 }
@@ -142,35 +142,44 @@ func Warn(v ...interface{}) {
 
 func Errf(format string, v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_ERR {return}
-	spiderLog.Printf("[ERROR] "+format, v...)
+	prefix := fmt.Sprintf("[ERROR]%v", getFileLenPrefix())
+	spiderLog.Printf(prefix + format, v...)
 }
 
 func Errln(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_ERR {return}
-	v1 := []interface{}{"[ERROR]"}
+	prefix := fmt.Sprintf("[ERROR]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Println(v1...)
 }
 
 func Err(v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_ERR {return}
-	v1 := []interface{}{"[ERROR]"}
+	prefix := fmt.Sprintf("[ERROR]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Print(v1...)
 }
 
 func Fatalf(format string, v ...interface{}) {
-	spiderLog.Fatalf("[FATAL] "+format, v...)
+	if spiderLog.level > SPIDER_LOG_LEVEL_FATAL {return}
+	prefix := fmt.Sprintf("[FATAL]%v", getFileLenPrefix())
+	spiderLog.Fatalf(prefix + format, v...)
 }
 
 func Fatalln(v ...interface{}) {
-	v1 := []interface{}{"[FATAL]"}
+	if spiderLog.level > SPIDER_LOG_LEVEL_FATAL {return}
+	prefix := fmt.Sprintf("[FATAL]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Fatalln(v1...)
 }
 
 func Fatal(v ...interface{}) {
-	v1 := []interface{}{"[FATAL]"}
+	if spiderLog.level > SPIDER_LOG_LEVEL_FATAL {return}
+	prefix := fmt.Sprintf("[FATAL]%v", getFileLenPrefix())
+	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
 	spiderLog.Fatal(v1...)
 }
