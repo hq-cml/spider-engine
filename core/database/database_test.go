@@ -126,12 +126,6 @@ func TestLoadDatabase(t *testing.T) {
 
 //测试一下增加两个相同主键, 逐渐重复校验的效果
 func TestDuplicatePrimaryKey(t *testing.T) {
-	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
-	_, err := cmd.Output()
-	if err != nil {
-		os.Exit(1)
-	}
-
 	db, err := NewDatabase("/tmp/spider/db1", "db1")
 	if err != nil {
 		panic(err)

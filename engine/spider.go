@@ -1,13 +1,15 @@
 package engine
 
 import (
-	"github.com/hq-cml/spider-engine/core/database"
 	"fmt"
-	"github.com/hq-cml/spider-engine/basic"
-	"github.com/hq-cml/spider-engine/utils/helper"
 	"errors"
+	"net/http"
 	"encoding/json"
-	"github.com/hq-cml/spider-engine/core/field"
+	_ "net/http/pprof"
+	"github.com/hq-cml/spider-engine/basic"
+	"github.com/hq-cml/spider-engine/core/database"
+	"github.com/hq-cml/spider-engine/utils/helper"
+	"github.com/hq-cml/spider-engine/utils/log"
 )
 
 type SpiderEngine struct {
@@ -18,7 +20,7 @@ type SpiderEngine struct {
 }
 
 func InitSpider(path string, ver string) (*SpiderEngine, error) {
-	//修正
+	//路径修正
 	if string(path[len(path)-1]) != "/" {
 		path = path + "/"
 	}
@@ -94,150 +96,25 @@ func (se *SpiderEngine) DoClose() error {
 	return nil
 }
 
-//建库
-func (se *SpiderEngine) CreateDatabase(dbName string) (*database.Database, error) {
-	_, exist := se.DbMap[dbName]
-	if exist {
-		return nil, errors.New("The db already exist!")
-	}
-
-	//创建表和字段
-	path := fmt.Sprintf("%s%s", se.Path, dbName)
-	db, err := database.NewDatabase(path, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	//关联进入db
-	se.DbMap[dbName] = db
-	se.DbList = append(se.DbList, dbName)
-
-	return db, nil
-}
-
-//删除库
-func (se *SpiderEngine) DropDatabase(dbName string) (error) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
-	}
-
-	//删除库
-	err := db.Destory()
-	if err != nil {
-		return err
-	}
-
-	//删slice
-	delete(se.DbMap, dbName)
-	for i := 0; i < len(se.DbList); i++ {
-		if se.DbList[i] == dbName {
-			se.DbList = append(se.DbList[:i], se.DbList[i+1:]...)
-		}
-	}
-
-	//更新meta
-	se.storeMeta()
-	return nil
-}
-
-//建表
-func (se *SpiderEngine) CreateTable(dbName, tableName string, fields []field.BasicField) (error) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
-	}
-	_, err := db.CreateTable(tableName, fields)
-	if err != nil {
-		return err
-	}
-	return nil
-
-}
-
-//删除表
-func (se *SpiderEngine) DropTable(dbName, tableName string) (error) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
-	}
-	err := db.DropTable(tableName)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-//增减字段
-func (se *SpiderEngine) AddField(dbName, tableName string, basicField field.BasicField) error {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
-	}
-	return db.AddField(tableName, basicField)
-}
-
-func (se *SpiderEngine) DeleteField(dbName, tableName string, fieldName string) error {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
-	}
-	return db.DeleteField(tableName, fieldName)
-}
-
-
-//新增Doc
-func (se *SpiderEngine) AddDoc(dbName, tableName string, content map[string]interface{}) (uint32, string, error) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return 0, "", errors.New("The db not exist!")
-	}
-	return db.AddDoc(tableName, content)
-}
-
-//获取Doc
-func (se *SpiderEngine) GetDoc(dbName, tableName string, primaryKey string) (*basic.DocInfo, bool) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return nil, false
-	}
-	return db.GetDoc(tableName, primaryKey)
-}
-
-//改变doc
-func (se *SpiderEngine) UpdateDoc(dbName, tableName string, content map[string]interface{}) (uint32, error) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return 0, errors.New("The db not exist!")
-	}
-	return db.UpdateDoc(tableName, content)
-}
-
-//删除Doc
-func (se *SpiderEngine) DeleteDoc(dbName, tableName string, primaryKey string) (bool) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return false
-	}
-	return db.DeleteDoc(tableName, primaryKey)
-}
-
-//搜索
-func (se *SpiderEngine) SearchDocs(dbName, tableName, fieldName,
-		keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return nil, false
-	}
-	return db.SearchDocs(tableName, fieldName, keyWord, filters)
-}
-
 //TODO
 func (se *SpiderEngine) Start() {
-	//go new goutine
+	go func() {
+		//注册路由
+		se.RegisterRouter()
+
+		//启动http服务
+		addr := fmt.Sprintf("%s:%s", basic.GlobalConf.BindIp, basic.GlobalConf.Port)
+		err := http.ListenAndServe(addr, nil)
+		if err != nil {
+			log.Fatal("ListenAndServe: ", err)
+		}
+	}()
+
+	log.Infof("The Spider Engin Start To Work! Version: %s\n", se.Version)
 }
 
 //TODO
 func (se *SpiderEngine) Stop() string {
+	se.DoClose()
 	return "see you again"
 }

@@ -63,6 +63,8 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic(err)
 	}
 
+	table.status = TABLE_STATUS_RUNNING
+
 	docId, key, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",
 		TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游", TEST_FIELD4: 77})
 
@@ -555,6 +557,7 @@ func TestFilter(t *testing.T) {
 		panic(err)
 	}
 
+	table.status = TABLE_STATUS_RUNNING
 	docId, _, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
 	if err != nil {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
@@ -712,8 +715,8 @@ func TestGodQuery(t *testing.T) {
 		panic(err)
 	}
 
+	table.status = TABLE_STATUS_RUNNING
 	docId, _, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢李四"})
-
 	if err != nil {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
 	}
@@ -791,36 +794,36 @@ func TestMultiMerge(t *testing.T) {
 	}); err != nil {
 		panic(err)
 	}
-
+	table.status = TABLE_STATUS_RUNNING
 	//增加doc, 表落地
-	docId, _, _ := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张0",TEST_FIELD2: 20})
-	docId, _, _ = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李一", TEST_FIELD2: 18})
+	docId, _, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张0",TEST_FIELD2: 20}); if err != nil {panic(err) }
+	docId, _, _ = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李一", TEST_FIELD2: 18}); if err != nil {panic(err) }
 	table.Persist()
 
 	//增加doc, 表落地
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二", TEST_FIELD2: 30})
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004",TEST_FIELD1: "陈三", TEST_FIELD2: 35})
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二", TEST_FIELD2: 30}); if err != nil {panic(err) }
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004",TEST_FIELD1: "陈三", TEST_FIELD2: 35}); if err != nil {panic(err) }
 	table.Persist()
 
 	//增加doc, 表落地
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10005",TEST_FIELD1: "黄四", TEST_FIELD2: 30})
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10006",TEST_FIELD1: "何五", TEST_FIELD2: 35})
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10005",TEST_FIELD1: "黄四", TEST_FIELD2: 30}); if err != nil {panic(err) }
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10006",TEST_FIELD1: "何五", TEST_FIELD2: 35}); if err != nil {panic(err) }
 	table.Persist()
 
 	//增加doc, 表落地
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10007",TEST_FIELD1: "宋六", TEST_FIELD2: 35})
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10007",TEST_FIELD1: "宋六", TEST_FIELD2: 35}); if err != nil {panic(err) }
 	table.Persist()
 
 	//增加doc, 表落地
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10008",TEST_FIELD1: "刘七", TEST_FIELD2: 35})
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10008",TEST_FIELD1: "刘七", TEST_FIELD2: 35}); if err != nil {panic(err) }
 	table.Persist()
 
 	//增加doc, 表落地
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10009",TEST_FIELD1: "任八", TEST_FIELD2: 35})
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10010",TEST_FIELD1: "化九", TEST_FIELD2: 35})
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10009",TEST_FIELD1: "任八", TEST_FIELD2: 35}); if err != nil {panic(err) }
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10010",TEST_FIELD1: "化九", TEST_FIELD2: 35}); if err != nil {panic(err) }
 	table.Persist()
 
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10011",TEST_FIELD1: "钟十", TEST_FIELD2: 35})
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10011",TEST_FIELD1: "钟十", TEST_FIELD2: 35}); if err != nil {panic(err) }
 	_ = docId
 	t.Log(table.displayInner())
 

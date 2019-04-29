@@ -99,8 +99,9 @@ func newEmptyTable(path, name string) *Table {
 
 //产出一块空的内存分区
 func (tbl *Table) generateMemPartition() error {
-	if tbl.status != TABLE_STATUS_RUNNING {
-		return errors.New("Table status must be running")
+	if tbl.status != TABLE_STATUS_RUNNING && tbl.status != TABLE_STATUS_INIT &&
+		tbl.status != TABLE_STATUS_LOADING {
+		return errors.New("Table status must be running/init/loading")
 	}
 	prtPathName := tbl.genPrtPathName()
 	var basicFields []field.BasicField
@@ -220,7 +221,7 @@ func (tbl *Table) storeMetaAndBtdb() error {
 // 分区的变动，会锁表
 func (tbl *Table) AddField(basicField field.BasicField) error {
 	//校验
-	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
+	if tbl.status != TABLE_STATUS_RUNNING && tbl.status != TABLE_STATUS_INIT {
 		return errors.New("Table status must be running or init")
 	}
 	if basicField.IndexType == index.IDX_TYPE_PK && tbl.PrimaryKey != "" {
@@ -229,9 +230,6 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 	if _, exist := tbl.BasicFields[basicField.FieldName]; exist {
 		log.Warnf("Field %v have Exist ", basicField.FieldName)
 		return errors.New(fmt.Sprintf("Field %v have Exist ", basicField.FieldName))
-	}
-	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
-		return errors.New("Table status must be running or init")
 	}
 
 	//实施新增
@@ -296,7 +294,7 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 //如果内存分区非空, 则会先落地内存分区
 func (tbl *Table) DeleteField(fieldname string) error {
 	//校验
-	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
+	if tbl.status != TABLE_STATUS_RUNNING && tbl.status != TABLE_STATUS_INIT {
 		return errors.New("Table status must be running or init")
 	}
 	if fieldname == tbl.PrimaryKey {
@@ -304,9 +302,6 @@ func (tbl *Table) DeleteField(fieldname string) error {
 	}
 	if _, exist := tbl.BasicFields[fieldname]; !exist {
 		return errors.New(fmt.Sprintf("Field %v not found ", fieldname))
-	}
-	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
-		return errors.New("Table status must be running or init")
 	}
 
 	//锁表
@@ -703,7 +698,7 @@ func (tbl *Table) DoClose() error {
 
 //销毁一张表在磁盘的文件
 func (tbl *Table) Destroy() error {
-	if tbl.status != TABLE_STATUS_CLOSED || tbl.status != TABLE_STATUS_CLOSING {
+	if tbl.status != TABLE_STATUS_CLOSED && tbl.status != TABLE_STATUS_CLOSING {
 		err := tbl.DoClose()
 		if err != nil {
 			return err

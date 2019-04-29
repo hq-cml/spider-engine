@@ -31,10 +31,10 @@ func TestInitSpider(t *testing.T) {
 		panic(err)
 	}
 
-	_, err = spider.CreateDatabase(TEST_DATABASE)
-	if err != nil {
-		panic(err)
-	}
+	spider.CreateDatabase(TEST_DATABASE)
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	err = spider.CreateTable(TEST_DATABASE, TEST_TABLE, []field.BasicField {
 		{

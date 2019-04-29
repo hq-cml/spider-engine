@@ -69,3 +69,40 @@ type SearchFilter struct {
 	RangeNums       []int64  //用于数字in或not in
 	RangeStrs       []string //用于字符in或not in
 }
+
+const (
+	RET_CODE_OK  = iota
+	RET_CODE_FAILED
+	RET_CODE_ERROR
+)
+
+//Http response body
+type Result struct {
+	Code int			`json:"code"`
+	Msg  string			`json:"msg"`
+	Data interface{}	`json:"data"`
+}
+
+func NewOkResult(data interface{}) *Result {
+	return &Result{
+		Code: RET_CODE_OK,
+		Msg: "ok",
+		Data:data,
+	}
+}
+
+func NewFailedResult(data interface{}) *Result {
+	return &Result{
+		Code: RET_CODE_FAILED,
+		Msg: "failed",
+		Data:data,
+	}
+}
+
+func NewErrorResult(data interface{}) *Result {
+	return &Result{
+		Code: RET_CODE_ERROR,
+		Msg: "error",
+		Data:data,
+	}
+}

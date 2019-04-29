@@ -5,14 +5,12 @@ import (
 	"flag"
 	"time"
 	"runtime"
-	"net/http"
 	"syscall"
 	"os/signal"
 	_ "net/http/pprof"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/engine"
 	"github.com/hq-cml/spider-engine/utils/log"
-	"github.com/hq-cml/spider-engine/engine/config"
 )
 
 //全局配置
@@ -25,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	//配置解析
-	conf, err := config.ParseConfig(*confPath)
+	conf, err := basic.ParseConfig(*confPath)
 	if err != nil {
 		panic("parse conf err:" + err.Error())
 	}
@@ -33,21 +31,17 @@ func main() {
 
 	//创建日志文件并初始化日志句柄
 	log.InitLog(conf.LogPath, conf.LogLevel)
-	log.Infof("------------Spider Begin To Run------------")
+	log.Infof("Begin to start")
 
-	//启动调试器
-	if conf.Pprof {
-		go func() {
-			http.ListenAndServe(":" + conf.PprofPort, nil)
-		}()
+	//初始化并启动引擎主体
+	se, err := engine.InitSpider(conf.DataDir, basic.SPIDER_VERSION)
+	if err != nil {
+		log.Fatalf("Init spider Error:%v", err)
 	}
-
-	//启动引擎主体
-	se := engine.SpiderEngine{}
 	se.Start()
 
 	//阻塞等待程序结束
-	loopWait(&se)
+	loopWait(se)
 	log.Infof("The Engine stop!")
 }
 
