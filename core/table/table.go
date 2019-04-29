@@ -46,7 +46,7 @@ type Table struct {
 	Prefix         uint64                      `json:"prefix"`
 	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
-	close          bool
+	status         uint8
 	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
 	partitions     []*partition.Partition //磁盘态的分区列表--这些分区均不包括主键字段！！！
 	priBtdb        btree.Btree            //主键专用正排 & 倒排索引（磁盘态）
@@ -64,6 +64,15 @@ const (
 	BitmapOrgNum               = 0x01 << 27      //16M 文件, 表示最大1.3亿的文档
 )
 
+const (
+	TABLE_STATUS_INIT uint8 = iota
+	TABLE_STATUS_LOADING
+	TABLE_STATUS_RUNNING
+	TABLE_STATUS_MERGEING
+	TABLE_STATUS_CLOSING
+	TABLE_STATUS_CLOSED
+)
+
 //新建空表
 func newEmptyTable(path, name string) *Table {
 	if string(path[len(path)-1]) != "/" {
@@ -77,6 +86,7 @@ func newEmptyTable(path, name string) *Table {
 		BasicFields:  make(map[string]field.BasicField),
 		priIvtMap:    make(map[string]string),
 		priFwdMap:    make(map[string]string),
+		status:       TABLE_STATUS_INIT,
 	}
 
 	//bitmap文件新建
@@ -88,7 +98,10 @@ func newEmptyTable(path, name string) *Table {
 }
 
 //产出一块空的内存分区
-func (tbl *Table) generateMemPartition() {
+func (tbl *Table) generateMemPartition() error {
+	if tbl.status != TABLE_STATUS_RUNNING {
+		return errors.New("Table status must be running")
+	}
 	prtPathName := tbl.genPrtPathName()
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
@@ -97,6 +110,8 @@ func (tbl *Table) generateMemPartition() {
 
 	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(prtPathName, tbl.NextDocId, basicFields)
 	tbl.Prefix++ //自增
+
+	return nil
 }
 
 //创建表
@@ -123,7 +138,7 @@ func CreateTable(path, tableName string, fields []field.BasicField) (*Table, err
 			FieldName: DEFAULT_PRIMARY_FIELD_NAME,
 		})
 	}
-
+	tab.status = TABLE_STATUS_RUNNING
 	return tab, nil
 }
 
@@ -132,7 +147,7 @@ func LoadTable(path, name string) (*Table, error) {
 	if string(path[len(path)-1]) != "/" {
 		path = path + "/"
 	}
-	tbl := Table{Path:path, TableName:name}
+	tbl := Table{Path:path, TableName:name, status: TABLE_STATUS_LOADING}
 	metaFileName := tbl.genMetaName()
 	buffer, err := helper.ReadFile(metaFileName)
 	if err != nil {
@@ -155,7 +170,10 @@ func LoadTable(path, name string) (*Table, error) {
 	}
 
 	//产出一块空的内存分区
-	tbl.generateMemPartition()
+	err = tbl.generateMemPartition()
+	if err != nil {
+		return nil, err
+	}
 
 	//加载bitmap
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
@@ -170,6 +188,7 @@ func LoadTable(path, name string) (*Table, error) {
 	}
 
 	log.Infof("Load Table %v success", tbl.TableName)
+	tbl.status = TABLE_STATUS_RUNNING
 	return &tbl, nil
 }
 
@@ -201,8 +220,8 @@ func (tbl *Table) storeMetaAndBtdb() error {
 // 分区的变动，会锁表
 func (tbl *Table) AddField(basicField field.BasicField) error {
 	//校验
-	if tbl.close {
-		return errors.New("Table is closed!")
+	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
+		return errors.New("Table status must be running or init")
 	}
 	if basicField.IndexType == index.IDX_TYPE_PK && tbl.PrimaryKey != "" {
 		return errors.New("Primary key has exist!")
@@ -210,6 +229,9 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 	if _, exist := tbl.BasicFields[basicField.FieldName]; exist {
 		log.Warnf("Field %v have Exist ", basicField.FieldName)
 		return errors.New(fmt.Sprintf("Field %v have Exist ", basicField.FieldName))
+	}
+	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
+		return errors.New("Table status must be running or init")
 	}
 
 	//实施新增
@@ -231,8 +253,10 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 		//新增字段生效到后续的新分区中
 		if tbl.memPartition == nil {
 			//如果内存分区为nil，则直接新增一个内存分区，新增出来的分区已经包含了新的新增字段
-			tbl.generateMemPartition()
-
+			err := tbl.generateMemPartition()
+			if err != nil {
+				return err
+			}
 		} else if tbl.memPartition.IsEmpty() {
 			//如果内存分区为空架子，则直接在内存分区新增字段
 			err := tbl.memPartition.AddField(basicField)
@@ -251,7 +275,10 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 			tbl.partitions = append(tbl.partitions, tmpPartition)
 			tbl.PrtPathNames = append(tbl.PrtPathNames, tmpPartition.PrtPathName)
 			//新分区（包含新字段）生成
-			tbl.generateMemPartition()
+			err := tbl.generateMemPartition()
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -269,14 +296,17 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 //如果内存分区非空, 则会先落地内存分区
 func (tbl *Table) DeleteField(fieldname string) error {
 	//校验
-	if tbl.close {
-		return errors.New("Table is closed!")
+	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
+		return errors.New("Table status must be running or init")
 	}
 	if fieldname == tbl.PrimaryKey {
 		return errors.New("Can not del primary key!")
 	}
 	if _, exist := tbl.BasicFields[fieldname]; !exist {
 		return errors.New(fmt.Sprintf("Field %v not found ", fieldname))
+	}
+	if tbl.status != TABLE_STATUS_RUNNING || tbl.status != TABLE_STATUS_INIT {
+		return errors.New("Table status must be running or init")
 	}
 
 	//锁表
@@ -301,7 +331,10 @@ func (tbl *Table) DeleteField(fieldname string) error {
 		tbl.partitions = append(tbl.partitions, tmpPartition)
 		tbl.PrtPathNames = append(tbl.PrtPathNames, tmpPartition.PrtPathName)
 		//产出新的分区(字段已删除）
-		tbl.generateMemPartition()
+		err := tbl.generateMemPartition()
+		if err != nil {
+			return err
+		}
 	}
 
 	//元信息落地
@@ -329,7 +362,7 @@ func (tbl *Table) doExpandBitMap() error{
 
 //获取文档
 func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
-	if tbl.close {
+	if tbl.status != TABLE_STATUS_RUNNING {
 		return nil, false
 	}
 	docNode, exist := tbl.findDocIdByPrimaryKey(primaryKey)
@@ -358,8 +391,8 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 //新增文档
 func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error) {
 	//校验
-	if tbl.close {
-		return 0, "", errors.New("Table is closed!")
+	if tbl.status != TABLE_STATUS_RUNNING {
+		return 0, "", errors.New("Table status must be running!")
 	}
 	if len(tbl.BasicFields) == 0 {
 		return 0, "", errors.New("field is nil")
@@ -389,7 +422,11 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
-		tbl.generateMemPartition()
+		err := tbl.generateMemPartition()
+		if err != nil {
+			tbl.mutex.Unlock()
+			return 0, "", err
+		}
 		tbl.mutex.Unlock()
 	}
 
@@ -421,7 +458,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 //标记假删除
 func (tbl *Table) DelDoc(primaryKey string) bool {
 	//校验
-	if tbl.close {
+	if tbl.status != TABLE_STATUS_RUNNING {
 		return false
 	}
 	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
@@ -444,8 +481,8 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 // 本质上还是新增，主键不变，但是docId变了
 func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//校验
-	if tbl.close {
-		return 0, errors.New("Table is closed!")
+	if tbl.status != TABLE_STATUS_RUNNING {
+		return 0, errors.New("Table status must be running!")
 	}
 	if len(tbl.BasicFields) == 0 {
 		return 0, errors.New("field is nil")
@@ -462,7 +499,11 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
-		tbl.generateMemPartition()
+		err := tbl.generateMemPartition()
+		if err != nil {
+			tbl.mutex.Unlock()
+			return 0, err
+		}
 		tbl.mutex.Unlock()
 	}
 
@@ -594,8 +635,8 @@ func (tbl *Table) findPrimaryKeyByDocId(docId uint32) (string, bool) {
 //Note:
 // 本质上就是内存分区落地
 func (tbl *Table) Persist() error {
-	if tbl.close {
-		return errors.New("Table is closed!")
+	if tbl.status != TABLE_STATUS_RUNNING {
+		return errors.New("Table status must be running!")
 	}
 	if tbl.memPartition == nil {
 		return nil
@@ -627,9 +668,10 @@ func (tbl *Table) persistMemPartition() error {
 
 //关闭一张表
 func (tbl *Table) DoClose() error {
-	if tbl.close {
-		return nil
+	if tbl.status != TABLE_STATUS_RUNNING {
+		return errors.New("Table status must be running!")
 	}
+	tbl.status = TABLE_STATUS_CLOSING
 	//锁表
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
@@ -654,16 +696,18 @@ func (tbl *Table) DoClose() error {
 	if tbl.delFlagBitMap != nil {
 		tbl.delFlagBitMap.Close()
 	}
-	tbl.close = true
 	log.Infof("Close Table [%v] Finish", tbl.TableName)
+	tbl.status = TABLE_STATUS_CLOSED
 	return nil
 }
 
 //销毁一张表在磁盘的文件
 func (tbl *Table) Destroy() error {
-	err := tbl.DoClose()
-	if err != nil {
-		return err
+	if tbl.status != TABLE_STATUS_CLOSED || tbl.status != TABLE_STATUS_CLOSING {
+		err := tbl.DoClose()
+		if err != nil {
+			return err
+		}
 	}
 
 	//锁表
@@ -697,8 +741,8 @@ func (tbl *Table) Destroy() error {
 //合并表内分区
 //TODO 合并时机需要自动化
 func (tbl *Table) MergePartitions() error {
-	if tbl.close {
-		return errors.New("Table is closed!")
+	if tbl.status != TABLE_STATUS_RUNNING {
+		return errors.New("Table status must be running!")
 	}
 
 	var startIdx int = -1
@@ -786,7 +830,7 @@ func (tbl *Table) MergePartitions() error {
 
 //表内搜索
 func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool) {
-	if tbl.close {
+	if tbl.status != TABLE_STATUS_RUNNING {
 		return nil, false
 	}
 	docIds := []basic.DocNode{}

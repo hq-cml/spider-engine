@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"syscall"
 	"os/signal"
+	_ "net/http/pprof"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/engine"
 	"github.com/hq-cml/spider-engine/utils/log"
