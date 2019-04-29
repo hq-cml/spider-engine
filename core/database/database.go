@@ -43,12 +43,14 @@ func NewDatabase(path, name string) (*Database, error) {
 		return nil, errors.New("Failed create dir!")
 	}
 
-	db := &Database{
+	db := &Database {
 		Path:path,
 		DbName:name,
 		TableList:[]string{},
 		TableMap:map[string]*table.Table{},
 	}
+
+	db.storeMeta()
 	return db, nil
 }
 
@@ -139,6 +141,8 @@ func (db *Database) CreateTable(tableName string, fields []field.BasicField) (*t
 	db.TableMap[tableName] = tab
 	db.TableList = append(db.TableList, tableName)
 
+	//存meta
+	db.storeMeta()
 	return tab, nil
 }
 

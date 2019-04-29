@@ -24,6 +24,8 @@ func (se *SpiderEngine) RegisterRouter() {
 	http.HandleFunc("/hello", HelloServer)
 	http.HandleFunc("/_createDb", se.CreateDatabase)
 	http.HandleFunc("/_dropDb", se.DropDatabase)
+	http.HandleFunc("/_createTable", se.CreateTable)
+	http.HandleFunc("/_dropTable", se.DropTable)
 }
 
 //建库
@@ -32,14 +34,14 @@ func (se *SpiderEngine) CreateDatabase(w http.ResponseWriter, req *http.Request)
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 	p := DatabaseParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
@@ -55,13 +57,17 @@ func (se *SpiderEngine) CreateDatabase(w http.ResponseWriter, req *http.Request)
 	db, err := database.NewDatabase(path, p.Database)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v, %v", err, path)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
 	//关联进入db
 	se.DbMap[p.Database] = db
 	se.DbList = append(se.DbList, p.Database)
+
+	//meta落地
+	se.storeMeta()
+
 	log.Infof("Create database: %v", p.Database)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 	return
@@ -74,14 +80,14 @@ func (se *SpiderEngine) DropDatabase(w http.ResponseWriter, req *http.Request) {
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Errf("DropDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 	p := DatabaseParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("DropDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
@@ -96,7 +102,7 @@ func (se *SpiderEngine) DropDatabase(w http.ResponseWriter, req *http.Request) {
 	err = db.Destory()
 	if err != nil {
 		log.Errf("DropDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
@@ -112,7 +118,7 @@ func (se *SpiderEngine) DropDatabase(w http.ResponseWriter, req *http.Request) {
 	err = se.storeMeta()
 	if err != nil {
 		log.Errf("DropDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
@@ -127,40 +133,82 @@ func (se *SpiderEngine) CreateTable(w http.ResponseWriter, req *http.Request) {
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := DatabaseParam{}
+	p := CreateTableParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err)))
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	db, exist := se.DbMap[dbName]
+	db, exist := se.DbMap[p.Database]
 	if !exist {
-		return errors.New("The db not exist!")
+		log.Errf("The db not exist!")
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+		return
 	}
-	_, err := db.CreateTable(tableName, fields)
+	fields := []field.BasicField{}
+	for _, f := range p.Fileds {
+		t, ok := IDX_MAP[f.Type]
+		if !ok {
+			log.Errf("Unsuport index type: %v", f.Type)
+			io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Unsuport index type: " + f.Type)))
+			return
+		}
+		fields = append(fields, field.BasicField{
+			FieldName:  f.Name,
+			IndexType:  t,
+		})
+	}
+	_, err = db.CreateTable(p.Table, fields)
 	if err != nil {
-		return err
+		log.Errf("CreateTable Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
 	}
-	return nil
 
+	log.Infof("Create Table: %v", p.Database + "." + p.Table)
+	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
+	return
 }
 
 //删除表
-func (se *SpiderEngine) DropTable(dbName, tableName string) (error) {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
-	}
-	err := db.DropTable(tableName)
+func (se *SpiderEngine) DropTable(w http.ResponseWriter, req *http.Request) {
+	//参数读取与解析
+	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		return err
+		log.Errf("CreateDatabase Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
 	}
-	return nil
+	p := CreateTableParam{}
+	err = json.Unmarshal(result, &p)
+	if err != nil {
+		log.Errf("CreateDatabase Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+
+	db, exist := se.DbMap[p.Database]
+	if !exist {
+		log.Errf("The db not exist!")
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+		return
+	}
+
+	err = db.DropTable(p.Table)
+	if err != nil {
+		log.Errf("Drop Table Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+
+	log.Infof("Drop Table: %v", p.Database + "." + p.Table)
+	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
+	return
 }
 
 //增减字段

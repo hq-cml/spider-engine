@@ -140,6 +140,7 @@ func CreateTable(path, tableName string, fields []field.BasicField) (*Table, err
 		})
 	}
 	tab.status = TABLE_STATUS_RUNNING
+
 	return tab, nil
 }
 

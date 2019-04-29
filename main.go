@@ -11,6 +11,7 @@ import (
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/engine"
 	"github.com/hq-cml/spider-engine/utils/log"
+	"fmt"
 )
 
 //全局配置
@@ -39,7 +40,7 @@ func main() {
 		log.Fatalf("Init spider Error:%v", err)
 	}
 	se.Start()
-
+	fmt.Println("The spider is running...")
 	//阻塞等待程序结束
 	loopWait(se)
 	log.Infof("The Engine stop!")
