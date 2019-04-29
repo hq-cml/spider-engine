@@ -26,6 +26,8 @@ func (se *SpiderEngine) RegisterRouter() {
 	http.HandleFunc("/_dropDb", se.DropDatabase)
 	http.HandleFunc("/_createTable", se.CreateTable)
 	http.HandleFunc("/_dropTable", se.DropTable)
+	http.HandleFunc("/_addField", se.AddField)
+	http.HandleFunc("/_deleteField", se.DeleteField)
 }
 
 //建库
@@ -212,20 +214,80 @@ func (se *SpiderEngine) DropTable(w http.ResponseWriter, req *http.Request) {
 }
 
 //增减字段
-func (se *SpiderEngine) AddField(dbName, tableName string, basicField field.BasicField) error {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
+func (se *SpiderEngine) AddField(w http.ResponseWriter, req *http.Request) {
+	//参数读取与解析
+	result, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Errf("AddField Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
 	}
-	return db.AddField(tableName, basicField)
+	p := AddFieldParam{}
+	err = json.Unmarshal(result, &p)
+	if err != nil {
+		log.Errf("AddField Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+
+	db, exist := se.DbMap[p.Database]
+	if !exist {
+		log.Errf("The db not exist!")
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+		return
+	}
+
+	t, ok := IDX_MAP[p.Filed.Type]
+	if !ok {
+		log.Errf("Unsuport index type: %v", p.Filed.Type)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Unsuport index type: " + p.Filed.Type)))
+		return
+	}
+
+	field := field.BasicField{
+		FieldName: p.Filed.Name,
+		IndexType: t,
+	}
+
+	err = db.AddField(p.Table, field)
+	if err != nil {
+		log.Errf("AddField Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+	return
 }
 
-func (se *SpiderEngine) DeleteField(dbName, tableName string, fieldName string) error {
-	db, exist := se.DbMap[dbName]
-	if !exist {
-		return errors.New("The db not exist!")
+func (se *SpiderEngine) DeleteField(w http.ResponseWriter, req *http.Request) {
+	//参数读取与解析
+	result, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Errf("DeleteField Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
 	}
-	return db.DeleteField(tableName, fieldName)
+	p := AddFieldParam{}
+	err = json.Unmarshal(result, &p)
+	if err != nil {
+		log.Errf("DeleteField Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+
+	db, exist := se.DbMap[p.Database]
+	if !exist {
+		log.Errf("The db not exist!")
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+		return
+	}
+
+	err = db.DeleteField(p.Table, p.Filed.Name)
+	if err != nil {
+		log.Errf("DeleteField Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+	return
 }
 
 
