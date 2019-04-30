@@ -2,6 +2,7 @@ package engine
 
 import (
 	"github.com/hq-cml/spider-engine/core/index"
+	"github.com/hq-cml/spider-engine/basic"
 )
 
 const (
@@ -55,8 +56,16 @@ type AddDocParam struct {
 }
 
 //获取/删除文档参数
-type GetDocParam struct {
+type DocParam struct {
 	Database   string 	 `json:"database"`
 	Table	   string 	 `json:"table"`
 	PrimaryKey string	 `json:"primaryKey"`
+}
+
+type SearchParam struct {
+	Database   string 	 			`json:"database"`
+	Table	   string 			    `json:"table"`
+	FieldName  string				`json:"fieldName"`
+	Value      string				`json:"value"`
+	Filters    []basic.SearchFilter `json:"filters"`
 }

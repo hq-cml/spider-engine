@@ -19,6 +19,12 @@ type SpiderEngine struct {
 	DbMap    map[string]*database.Database  `json:"-"`
 }
 
+type SpiderStatus struct {
+	Path     string                               `json:"path"`
+	Version  string                         	  `json:"version"`
+	DbMap    map[string]*database.DatabaseStatus  `json:"databases"`
+}
+
 func InitSpider(path string, ver string) (*SpiderEngine, error) {
 	//路径修正
 	if string(path[len(path)-1]) != "/" {
@@ -98,6 +104,17 @@ func (se *SpiderEngine) DoClose() error {
 
 func (se *SpiderEngine) Start() {
 	go func() {
+		//启动前,看看分区是否合并必要
+		for _, db := range se.DbMap {
+			for _, tab := range db.TableMap {
+				err := tab.MergePartitions()
+				if err != nil {
+					log.Fatalf("Table MergePartitions failed! db:%v, table:%v", db.DbName, tab.TableName)
+					return
+				}
+			}
+		}
+
 		//注册路由
 		se.RegisterRouter()
 
@@ -116,4 +133,17 @@ func (se *SpiderEngine) Start() {
 func (se *SpiderEngine) Stop() string {
 	se.DoClose()
 	return "see you again"
+}
+
+func (se *SpiderEngine) GetStatus() *SpiderStatus {
+	mp := map[string]*database.DatabaseStatus{}
+	for k, v := range se.DbMap {
+		mp[k] = v.GetStatus()
+	}
+
+	return &SpiderStatus{
+		Path:    se.Path,
+		Version: se.Version,
+		DbMap:   mp,
+	}
 }

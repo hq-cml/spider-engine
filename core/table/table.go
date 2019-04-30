@@ -43,7 +43,7 @@ type Table struct {
 	StartDocId     uint32                      `json:"startDocId"`
 	NextDocId      uint32                      `json:"nextDocId"`
 	MaxDocNum      uint32                      `json:"maxDocNum"`
-	Prefix         uint64                      `json:"prefix"`
+	PartSuffix     uint64                      `json:"prefix"`
 	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
 	status         uint8
@@ -54,6 +54,16 @@ type Table struct {
 	priFwdMap      map[string]string      //主键专正排排索引（内存态），docId => primaryKey
 	delFlagBitMap  *bitmap.Bitmap         //用于文档删除标记
 	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
+}
+
+type TableStatus struct {
+	TableName      string                      `json:"tableName"`
+	Path           string                      `json:"pathName"`
+	BasicFields    map[string]field.BasicField `json:"fields"`       //不包括主键！！
+	PrimaryKey     string                      `json:"primaryKey"`
+	StartDocId     uint32                      `json:"startDocId"`
+	NextDocId      uint32                      `json:"nextDocId"`
+	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 }
 
 const (
@@ -90,7 +100,7 @@ func newEmptyTable(path, name string) *Table {
 	}
 
 	//bitmap文件新建
-	btmpName := tab.genBitMapName()
+	btmpName := tab.getBitMapName()
 	tab.delFlagBitMap = bitmap.NewBitmap(btmpName, BitmapOrgNum)
 	tab.MaxDocNum = BitmapOrgNum
 
@@ -103,14 +113,14 @@ func (tbl *Table) generateMemPartition() error {
 		tbl.status != TABLE_STATUS_LOADING {
 		return errors.New("Table status must be running/init/loading")
 	}
-	prtPathName := tbl.genPrtPathName()
+	prtPathName := tbl.getPrtPathName()
 	var basicFields []field.BasicField
 	for _, f := range tbl.BasicFields {
 		basicFields = append(basicFields, f)
 	}
 
 	tbl.memPartition = partition.NewEmptyPartitionWithBasicFields(prtPathName, tbl.NextDocId, basicFields)
-	tbl.Prefix++ //自增
+	tbl.PartSuffix++ //自增
 
 	return nil
 }
@@ -150,7 +160,7 @@ func LoadTable(path, name string) (*Table, error) {
 		path = path + "/"
 	}
 	tbl := Table{Path:path, TableName:name, status: TABLE_STATUS_LOADING}
-	metaFileName := tbl.genMetaName()
+	metaFileName := tbl.getMetaName()
 	buffer, err := helper.ReadFile(metaFileName)
 	if err != nil {
 		return nil, err
@@ -181,9 +191,9 @@ func LoadTable(path, name string) (*Table, error) {
 	btmpPath := path + name + basic.IDX_FILENAME_SUFFIX_BITMAP
 	tbl.delFlagBitMap = bitmap.LoadBitmap(btmpPath)
 
-	//如果存在主键，则直接加载主键专用btree并初始化内存map
+	//如果存在主键，则加载主键专用btree并初始化内存map
 	if tbl.PrimaryKey != "" {
-		primaryName := tbl.genPrimaryBtName()
+		primaryName := tbl.getPrimaryBtName()
 		tbl.priBtdb = btree.NewBtree("", primaryName)
 		tbl.priIvtMap = make(map[string]string)
 		tbl.priFwdMap = make(map[string]string)
@@ -196,7 +206,7 @@ func LoadTable(path, name string) (*Table, error) {
 
 //落地表的元信息
 func (tbl *Table) storeMetaAndBtdb() error {
-	metaFileName := tbl.genMetaName()
+	metaFileName := tbl.getMetaName()
 	data := helper.JsonEncodeIndent(tbl)
 	if data != "" {
 		if err := helper.OverWriteToFile([]byte(data), metaFileName); err != nil {
@@ -237,7 +247,7 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 	if basicField.IndexType == index.IDX_TYPE_PK {
 		//主键独立操作
 		tbl.PrimaryKey = basicField.FieldName
-		primaryName := tbl.genPrimaryBtName()
+		primaryName := tbl.getPrimaryBtName()
 		tbl.priBtdb = btree.NewBtree("", primaryName)
 		tbl.priBtdb.AddTree(PRI_IVT_BTREE_NAME)
 		tbl.priBtdb.AddTree(PRI_FWD_BTREE_NAME)
@@ -415,6 +425,9 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		return 0, "", errors.New("Duplicate Primary Key! " + key)
 	}
 
+	newDocId := tbl.NextDocId
+	tbl.NextDocId++
+
 	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
@@ -425,9 +438,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		}
 		tbl.mutex.Unlock()
 	}
-
-	newDocId := tbl.NextDocId
-	tbl.NextDocId++
+	fmt.Println("B--------------", tbl.memPartition.StartDocId)
 
 	//bitmap判断自动扩容
 	if newDocId == tbl.MaxDocNum {
@@ -445,6 +456,14 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	if err != nil {
 		log.Errf("tbl.memPartition AddDocument Error:%v", err)
 		return 0, "", err
+	}
+
+	//如果满足了落地归档的阈值, 那么先落地归档
+	if tbl.NextDocId % partition.PARTITION_MIN_DOC_CNT == 0 {
+		err := tbl.MergePartitions()
+		if err != nil {
+			log.Errf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
+		}
 	}
 
 	return newDocId, key, nil
@@ -721,9 +740,9 @@ func (tbl *Table) Destroy() error {
 	}
 
 	//删除残留的文件和目录
-	metaFile := tbl.genMetaName()
-	primaryFile := tbl.genPrimaryBtName()
-	bitmapFile := tbl.genBitMapName()
+	metaFile := tbl.getMetaName()
+	primaryFile := tbl.getPrimaryBtName()
+	bitmapFile := tbl.getBitMapName()
 
 	if err := helper.Remove(metaFile); err != nil {	return err }
 	if err := helper.Remove(primaryFile); err != nil { return err }
@@ -748,7 +767,7 @@ func (tbl *Table) MergePartitions() error {
 	defer tbl.mutex.Unlock()
 
 	//内存分区非空则先落地
-	if tbl.memPartition != nil {
+	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty(){
 		tbl.persistMemPartition()
 	}
 
@@ -760,6 +779,7 @@ func (tbl *Table) MergePartitions() error {
 		}
 	}
 	if startIdx == -1 {
+		log.Infof("No nessary to merge!")
 		return nil
 	}
 	if len(tbl.partitions[startIdx:]) == 1 {
@@ -795,8 +815,8 @@ func (tbl *Table) MergePartitions() error {
 	//开始合并
 	for _, todoParts := range todoPartitions {
 		//生成内存分区骨架，开始合并
-		prtPathName := tbl.genPrtPathName()
-		tbl.Prefix++
+		prtPathName := tbl.getPrtPathName()
+		tbl.PartSuffix++
 		tmpPartition := partition.NewEmptyPartitionWithBasicFields(prtPathName, todoParts[0].StartDocId, basicFields)
 
 		err := tmpPartition.MergePersistPartitions(todoParts)
@@ -842,7 +862,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 	}
 
 	//内存分区执行搜索
-	if tbl.memPartition != nil {
+	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty(){
 		ids, ok := tbl.memPartition.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)
 		if ok {
 			exist = true
@@ -886,30 +906,30 @@ func (tbl *Table) displayInner() string {
 		str += fmt.Sprintln("Disk--> Start:", idx.StartDocId, ". Next:", idx.NextDocId)
 	}
 
-	if tbl.memPartition != nil {
+	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty(){
 		str += fmt.Sprintln("Mem--> Start:", tbl.memPartition.StartDocId, ". Next:", tbl.memPartition.NextDocId)
 	}
 
 	return str
 }
 
-func (tbl *Table) genBitMapName() string {
+func (tbl *Table) getBitMapName() string {
 	btmpName := fmt.Sprintf("%v%v%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BITMAP)
 	return btmpName
 }
 
-func (tbl *Table) genMetaName() string {
+func (tbl *Table) getMetaName() string {
 	metaFileName := fmt.Sprintf("%v%v%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_META)
 	return metaFileName
 }
 
-func (tbl *Table) genPrimaryBtName() string {
+func (tbl *Table) getPrimaryBtName() string {
 	primaryName := fmt.Sprintf("%v%v_primary%v", tbl.Path, tbl.TableName, basic.IDX_FILENAME_SUFFIX_BTREE)
 	return primaryName
 }
 
-func (tbl *Table) genPrtPathName() string {
-	prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.Prefix) //10位补零
+func (tbl *Table) getPrtPathName() string {
+	prtPathName := fmt.Sprintf("%v%v_%010v", tbl.Path, tbl.TableName, tbl.PartSuffix) //10位补零
 	return prtPathName
 }
 
@@ -923,4 +943,16 @@ func (tbl *Table) GetFwdMap() map[string]string {
 
 func (tbl *Table) GetBtdb() btree.Btree {
 	return tbl.priBtdb
+}
+
+func (tbl *Table) GetStatus() *TableStatus {
+	return &TableStatus{
+		TableName      : tbl.TableName,
+		Path           : tbl.Path,
+		BasicFields    : tbl.BasicFields,
+		PrimaryKey     : tbl.PrimaryKey,
+		StartDocId     : tbl.StartDocId,
+		NextDocId      : tbl.NextDocId,
+		PrtPathNames   : tbl.PrtPathNames,
+	}
 }

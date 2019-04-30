@@ -26,11 +26,12 @@ func (se *SpiderEngine) RegisterRouter() {
 	http.HandleFunc("/_getDoc", se.GetDoc)
 	http.HandleFunc("/_deleteDoc", se.DeleteDoc)
 	http.HandleFunc("/_updateDoc", se.UpdateDoc)
+	http.HandleFunc("/_search", se.SearchDocs)
 }
 
 // hello world, the web server
 func (se *SpiderEngine)Status(w http.ResponseWriter, req *http.Request) {
-	io.WriteString(w, helper.JsonEncode(se))
+	io.WriteString(w, helper.JsonEncodeIndent(se.GetStatus()))
 }
 
 //建库
@@ -299,7 +300,6 @@ func (se *SpiderEngine) DeleteField(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
-
 //新增Doc
 func (se *SpiderEngine) AddDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
@@ -331,7 +331,7 @@ func (se *SpiderEngine) AddDoc(w http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
-	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
+	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(primaryKey)))
 	return
 }
 
@@ -344,7 +344,7 @@ func (se *SpiderEngine) GetDoc(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := GetDocParam{}
+	p := DocParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("GetDoc Error: %v", err)
@@ -402,7 +402,7 @@ func (se *SpiderEngine) UpdateDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Infof("UpdateDoc Doc: %v, %v, %v, %v", p.Database, p.Table, docId)
+	log.Infof("UpdateDoc Doc: %v, %v, %v", p.Database, p.Table, docId)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 }
 
@@ -415,7 +415,7 @@ func (se *SpiderEngine) DeleteDoc(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := GetDocParam{}
+	p := DocParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("DeleteDoc Error: %v", err)
@@ -442,11 +442,38 @@ func (se *SpiderEngine) DeleteDoc(w http.ResponseWriter, req *http.Request) {
 }
 
 //搜索
-//func (se *SpiderEngine) SearchDocs(w http.ResponseWriter, req *http.Request) {
-//	db, exist := se.DbMap[dbName]
-//	if !exist {
-//		return nil, false
-//	}
-//	return db.SearchDocs(tableName, fieldName, keyWord, filters)
-//}
+func (se *SpiderEngine) SearchDocs(w http.ResponseWriter, req *http.Request) {
+	result, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Errf("DeleteDoc Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+	p := SearchParam{}
+	err = json.Unmarshal(result, &p)
+	if err != nil {
+		log.Errf("DeleteDoc Error: %v", err)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+		return
+	}
+
+	db, exist := se.DbMap[p.Database]
+	if !exist {
+		log.Errf("The db not exist!")
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+		return
+	}
+
+	docs, ok := db.SearchDocs(p.Table, p.FieldName, p.Value, p.Filters)
+	if !ok {
+		log.Info("SearchDocs get null")
+		io.WriteString(w, helper.JsonEncode(basic.NewFailedResult("SearchDocs null")))
+		return
+	}
+
+	log.Infof("SearchDocs: %v, %v, %v, %v, %v", p.Database ,p.Table ,p.FieldName ,p.Value, len(docs))
+	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(docs)))
+
+	return
+}
 

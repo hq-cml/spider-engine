@@ -120,8 +120,13 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 	var value int64 = MaxInt64
 	var ok error
 	switch vtype.Name() {
-	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
+	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float64":
+		if vtype.Name() == "float64" {
+			//golang json mashal的小坑, 整型会被升级为float64, 此时要回转
+			content = int(content.(float64))
+		}
 		if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
+			log.Err(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
 			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
 		}
 		value, ok = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
@@ -131,6 +136,7 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
 	case "string":
 		if fwdIdx.indexType == IDX_TYPE_INTEGER {
+			log.Err(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
 			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
 		}
 		if fwdIdx.indexType == IDX_TYPE_DATE { //日期类型转成时间戳
@@ -146,6 +152,7 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 		//float，bool等变量，走入默认分支，直接按字符串存
 		if fwdIdx.indexType != IDX_TYPE_STR_WHOLE && fwdIdx.indexType != IDX_TYPE_STR_SPLITER &&
 			fwdIdx.indexType != IDX_TYPE_STR_LIST && fwdIdx.indexType != IDX_TYPE_STR_WORD {
+			log.Err(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
 			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
 		}
 		fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))

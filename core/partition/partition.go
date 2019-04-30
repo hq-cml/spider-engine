@@ -24,8 +24,8 @@ import (
 
 //TODO 配置化
 var (
-	PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值
-	//PARTITION_MIN_DOC_CNT uint32 = 3
+	//PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值
+	PARTITION_MIN_DOC_CNT uint32 = 3
 )
 
 const (
@@ -52,7 +52,7 @@ type Partition struct {
 //新建一个空分区, 包含字段
 //相当于建立了一个完整的空骨架，分区=>字段=>索引
 func NewEmptyPartitionWithBasicFields(PrtPathName string, start uint32, basicFields []field.BasicField) *Partition {
-
+	fmt.Println("A--------------", start)
 	part := &Partition{
 		StartDocId:  start,
 		NextDocId:   start,
@@ -81,7 +81,7 @@ func NewEmptyPartitionWithBasicFields(PrtPathName string, start uint32, basicFie
 	}
 	part.GodField = field.NewEmptyGodField(GOD_FIELD_NAME, start)
 
-	log.Infof("Make New Partition [%v] Success ", PrtPathName)
+	log.Infof("New Partition [%v] Success ", PrtPathName)
 	return part
 }
 

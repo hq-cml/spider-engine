@@ -24,6 +24,12 @@ type Database struct {
 	TableMap    map[string]*table.Table     `json:"-"`
 }
 
+type DatabaseStatus struct {
+	DbName      string                            `json:"dbName"`
+	Path        string                            `json:"path"`
+	TableMap    map[string]*table.TableStatus     `json:"tables"`
+}
+
 func NewDatabase(path, name string) (*Database, error) {
 	//修正
 	if string(path[len(path)-1]) != "/" {
@@ -269,4 +275,17 @@ func (db *Database) Destory() error {
 	if err := helper.Remove(db.Path); err != nil {	return err }
 
 	return nil
+}
+
+func (db *Database) GetStatus() *DatabaseStatus {
+	mp := map[string]*table.TableStatus{}
+	for k, v := range db.TableMap {
+		mp[k] = v.GetStatus()
+	}
+
+	return &DatabaseStatus {
+		DbName:   db.DbName,
+		Path:     db.Path,
+		TableMap: mp,
+	}
 }
