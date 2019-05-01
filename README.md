@@ -2,6 +2,8 @@ spider-engine
 
 
 //TODO
+NextId的一致性
+DocCnt很多地方有必要吗？
 自动分区、合并
 表级锁的合理化
 分区级锁的读写锁

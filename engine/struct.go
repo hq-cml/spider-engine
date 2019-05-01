@@ -1,27 +1,8 @@
 package engine
 
 import (
-	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/basic"
 )
-
-const (
-	IDX_TYPE_NAME_PRIME = "primary"
-	IDX_TYPE_NAME_WHOLE = "whole"
-	IDX_TYPE_NAME_WORDS = "words"
-	IDX_TYPE_NAME_PURE  = "pure"
-	IDX_TYPE_NAME_TIME  = "time"
-	IDX_TYPE_NAME_INT   = "number"
-)
-
-var IDX_MAP = map[string]uint16 {
-	IDX_TYPE_NAME_PRIME : index.IDX_TYPE_PK,
-	IDX_TYPE_NAME_WHOLE : index.IDX_TYPE_STR_WHOLE,
-	IDX_TYPE_NAME_WORDS : index.IDX_TYPE_STR_SPLITER,
-	IDX_TYPE_NAME_PURE  : index.IDX_TYPE_PURE_TEXT,
-	IDX_TYPE_NAME_TIME  : index.IDX_TYPE_DATE,
-	IDX_TYPE_NAME_INT   : index.IDX_TYPE_INTEGER,
-}
 
 //增/删库参数
 type DatabaseParam struct {

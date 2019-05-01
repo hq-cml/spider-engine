@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"github.com/hq-cml/spider-engine/core/field"
+	"github.com/hq-cml/spider-engine/core/index"
 )
 
 //注册路由
@@ -158,7 +159,7 @@ func (se *SpiderEngine) CreateTable(w http.ResponseWriter, req *http.Request) {
 	}
 	fields := []field.BasicField{}
 	for _, f := range p.Fileds {
-		t, ok := IDX_MAP[f.Type]
+		t, ok := index.IDX_MAP[f.Type]
 		if !ok {
 			log.Errf("Unsuport index type: %v", f.Type)
 			io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Unsuport index type: " + f.Type)))
@@ -241,7 +242,7 @@ func (se *SpiderEngine) AddField(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	t, ok := IDX_MAP[p.Filed.Type]
+	t, ok := index.IDX_MAP[p.Filed.Type]
 	if !ok {
 		log.Errf("Unsuport index type: %v", p.Filed.Type)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Unsuport index type: " + p.Filed.Type)))

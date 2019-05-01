@@ -49,6 +49,13 @@ type Partition struct {
 	extMmap         *mmap.Mmap                 `json:"-"`
 }
 
+type PartitionStatus struct {
+	StartDocId      uint32                     `json:"startDocId"`
+	NextDocId       uint32                     `json:"nextDocId"`
+	PrtPathName     string                     `json:"prtPathName"`
+	SubFields       []*field.FieldStatus       `json:"subFields"`      //字段的一部分数据
+}
+
 //新建一个空分区, 包含字段
 //相当于建立了一个完整的空骨架，分区=>字段=>索引
 func NewEmptyPartitionWithBasicFields(PrtPathName string, start uint32, basicFields []field.BasicField) *Partition {
@@ -638,4 +645,17 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		finalRetDocs = retDocs
 	}
 	return finalRetDocs, len(finalRetDocs)>0
+}
+
+func (part *Partition) GetStatus() *PartitionStatus {
+	sub := []*field.FieldStatus{}
+	for _, fld := range part.Fields {
+		sub = append(sub, fld.GetStatus())
+	}
+	return &PartitionStatus {
+		StartDocId  : part.StartDocId,
+		NextDocId   : part.NextDocId,
+		PrtPathName : part.PrtPathName,
+		SubFields   : sub,
+	}
 }

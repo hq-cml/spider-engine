@@ -36,15 +36,15 @@ import (
 // 为了性能的尽量提升和逻辑简单，priFwdMap可能存在一定量的脏数据（因为doc的编辑和删除操作导致）
 // 不过由于bitmap和priIvtMap为主查询，priFwdMapz只是辅助，所以不会影响正确性
 type Table struct {
-	TableName      string                      `json:"tableName"`
-	Path           string                      `json:"pathName"`
-	BasicFields    map[string]field.BasicField `json:"fields"`       //不包括主键！！
-	PrimaryKey     string                      `json:"primaryKey"`
-	StartDocId     uint32                      `json:"startDocId"`
-	NextDocId      uint32                      `json:"nextDocId"`
-	MaxDocNum      uint32                      `json:"maxDocNum"`
-	PartSuffix     uint64                      `json:"prefix"`
-	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
+	TableName      string                       `json:"tableName"`
+	Path           string                       `json:"pathName"`
+	BasicFields    map[string]field.BasicField  `json:"fields"`       //不包括主键！！
+	PrimaryKey     string                       `json:"primaryKey"`
+	StartDocId     uint32                       `json:"startDocId"`
+	NextDocId      uint32                       `json:"nextDocId"`
+	MaxDocNum      uint32                       `json:"maxDocNum"`
+	PartSuffix     uint64                       `json:"prefix"`
+	PrtPathNames   []string                     `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
 	status         uint8
 	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
@@ -57,13 +57,14 @@ type Table struct {
 }
 
 type TableStatus struct {
-	TableName      string                      `json:"tableName"`
-	Path           string                      `json:"pathName"`
-	BasicFields    map[string]field.BasicField `json:"fields"`       //不包括主键！！
-	PrimaryKey     string                      `json:"primaryKey"`
-	StartDocId     uint32                      `json:"startDocId"`
-	NextDocId      uint32                      `json:"nextDocId"`
-	PrtPathNames   []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
+	TableName     string                        `json:"tableName"`
+	Path          string                        `json:"pathName"`
+	Fields        []*field.BasicStatus          `json:"fields"`       //不包括主键！！
+	PrimaryKey    string                        `json:"primaryKey"`
+	StartDocId    uint32                        `json:"startDocId"`
+	NextDocId     uint32                        `json:"nextDocId"`
+	DiskParts     []*partition.PartitionStatus  `json:"partitions"`  //磁盘态的分区列表名--这些分区均不包括主键！！！
+	MemPart       *partition.PartitionStatus    `json:"memPartition"`
 }
 
 const (
@@ -952,13 +953,27 @@ func (tbl *Table) GetBtdb() btree.Btree {
 }
 
 func (tbl *Table) GetStatus() *TableStatus {
-	return &TableStatus{
+	m := []*field.BasicStatus{}
+	p := []*partition.PartitionStatus{}
+	var memPart *partition.PartitionStatus
+	for _, v := range tbl.BasicFields {
+		m = append(m, v.GetBasicStatus())
+	}
+	for _, v := range tbl.partitions {
+		p = append(p, v.GetStatus())
+	}
+	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty() {
+		memPart = tbl.memPartition.GetStatus()
+	}
+
+	return &TableStatus {
 		TableName      : tbl.TableName,
 		Path           : tbl.Path,
-		BasicFields    : tbl.BasicFields,
+		Fields         : m,
 		PrimaryKey     : tbl.PrimaryKey,
 		StartDocId     : tbl.StartDocId,
 		NextDocId      : tbl.NextDocId,
-		PrtPathNames   : tbl.PrtPathNames,
+		DiskParts      : p,
+		MemPart        : memPart,
 	}
 }

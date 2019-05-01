@@ -16,16 +16,16 @@ import (
 
 //字段的结构定义
 type Field struct {
-	FieldName  string `json:"fieldName"`
-	StartDocId uint32 `json:"startDocId"`                  //和它所拥有的正排索引一致
-	NextDocId  uint32 `json:"startDocId"`
-	IndexType  uint16 `json:"indexType"`
+	FieldName  string 				`json:"fieldName"`
+	StartDocId uint32 				`json:"startDocId"`  //和它所拥有的正排索引一致
+	NextDocId  uint32			    `json:"startDocId"`
+	IndexType  uint16			    `json:"indexType"`
 	inMemory   bool
-	IvtIdx     *index.InvertedIndex    `json:"-"`  //倒排索引
-	FwdIdx     *index.ForwardIndex      `json:"-"` //正排索引
-	FwdOffset  uint64 `json:"fwdOffset"` //此正排索引的数据，在文件中的起始偏移
-	DocCnt     uint32 `json:"docCnt"`    //正排索引文档个数
-	btdb       btree.Btree  `json:"-"`
+	IvtIdx     *index.InvertedIndex `json:"-"`           //倒排索引
+	FwdIdx     *index.ForwardIndex  `json:"-"`           //正排索引
+	FwdOffset  uint64               `json:"fwdOffset"`   //此正排索引的数据，在文件中的起始偏移
+	DocCnt     uint32               `json:"docCnt"`      //正排索引文档个数
+	btdb       btree.Btree          `json:"-"`
 }
 
 // 字段的核心描述信息，用于分区的落盘与加载
@@ -39,6 +39,16 @@ type CoreField struct {
 type BasicField struct {
 	FieldName string `json:"fieldName"`
 	IndexType uint16  `json:"indexType"`
+}
+
+type BasicStatus struct {
+	FieldName  string   `json:"name"`
+	IndexType  string   `json:"type"`
+}
+
+type FieldStatus struct {
+	StartDocId uint32 	`json:"startDocId"`
+	NextDocId  uint32	`json:"nextDocId"`
 }
 
 //假字段，高层合并落地时, 可能会出现部分新的分区拥有新字段
@@ -108,7 +118,7 @@ func NewEmptyGodField(fieldName string, start uint32) *Field {
 
 //加载字段索引
 //这里并未真的从磁盘加载，mmap都是从外部直接传入的，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
-func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset uint64,
+func LoadField(fieldname string, startDocId, nextDocId uint32, indexType uint16, fwdOffset uint64,
 	fwdDocCnt uint32, baseMmap, extMmap, ivtMmap *mmap.Mmap, btdb btree.Btree) *Field {
 
 	//加载倒排
@@ -118,19 +128,19 @@ func LoadField(fieldname string, start, next uint32, indexType uint16, fwdOffset
 		indexType == index.IDX_TYPE_STR_LIST ||
 		indexType == index.IDX_TYPE_STR_WORD ||
 		indexType == index.IDX_TYPE_GOD {
-		ivtIdx = index.LoadInvertedIndex(btdb, indexType, fieldname, ivtMmap, next)
+		ivtIdx = index.LoadInvertedIndex(btdb, indexType, fieldname, ivtMmap, nextDocId)
 	}
 
 	//加载正排
 	var fwdIdx *index.ForwardIndex
 	if indexType != index.IDX_TYPE_GOD { //上帝字段没有正排
-		fwdIdx = index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, start, next)
+		fwdIdx = index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, startDocId, nextDocId)
 	}
 
 	return &Field{
 		FieldName:  fieldname,
-		StartDocId: start,
-		NextDocId:  next,
+		StartDocId: startDocId,
+		NextDocId:  nextDocId,
 		IndexType:  indexType,
 		inMemory:   false,
 		DocCnt:     fwdDocCnt,
@@ -396,3 +406,16 @@ func (fld *Field) Filter(docId uint32, filter basic.SearchFilter) bool {
 	return false
 }
 
+func (fld *Field) GetStatus() *FieldStatus {
+	return &FieldStatus{
+		StartDocId: fld.StartDocId,
+		NextDocId : fld.NextDocId,
+	}
+}
+
+func (fld *BasicField) GetBasicStatus() *BasicStatus {
+	return &BasicStatus {
+		FieldName : fld.FieldName,
+		IndexType : index.RE_IDX_MAP[fld.IndexType],
+	}
+}
