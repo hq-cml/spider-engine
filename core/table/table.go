@@ -760,6 +760,12 @@ func (tbl *Table) MergePartitions() error {
 		return errors.New("Table status must be running!")
 	}
 
+	//表状态变更
+	tbl.status = TABLE_STATUS_MERGEING
+	defer func() {
+		tbl.status = TABLE_STATUS_RUNNING
+	}()
+
 	var startIdx int = -1
 
 	//锁表

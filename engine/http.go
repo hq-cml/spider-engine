@@ -338,35 +338,26 @@ func (se *SpiderEngine) AddDoc(w http.ResponseWriter, req *http.Request) {
 //获取Doc
 func (se *SpiderEngine) GetDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
-	result, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		log.Errf("GetDoc Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
-		return
-	}
-	p := DocParam{}
-	err = json.Unmarshal(result, &p)
-	if err != nil {
-		log.Errf("GetDoc Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
-		return
-	}
+	query := req.URL.Query()
+	dbName := query["db"][0]
+	table := query["table"][0]
+	primaryKey := query["primary_key"][0]
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := se.DbMap[dbName]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
 		return
 	}
 
-	doc, ok := db.GetDoc(p.Table, p.PrimaryKey)
+	doc, ok := db.GetDoc(table, primaryKey)
 	if !ok {
-		log.Errf("GetDoc get null: %v", p.PrimaryKey)
-		io.WriteString(w, helper.JsonEncode(basic.NewFailedResult("Can't find " + p.PrimaryKey)))
+		log.Errf("GetDoc get null: %v", primaryKey)
+		io.WriteString(w, helper.JsonEncode(basic.NewFailedResult("Can't find " + primaryKey)))
 		return
 	}
 
-	log.Infof("GetDoc: %v", p.Database + "." + p.Table + "." + p.PrimaryKey)
+	log.Infof("GetDoc: %v", dbName + "." + table + "." + primaryKey)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(doc)))
 	return
 }

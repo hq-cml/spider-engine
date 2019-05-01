@@ -215,8 +215,8 @@ func (part *Partition) DeleteField(fieldname string) error {
 func (part *Partition) AddDocument(docId uint32, content map[string]interface{}) error {
 
 	if docId != part.NextDocId {
-		log.Errf("Partition --> AddDocument :: Wrong DocId[%v]  NextDocId[%v]", docId, part.NextDocId)
-		return errors.New("Partition --> AddDocument :: Wrong DocId Number")
+		log.Errf("Partition=>AddDocument, WrongDocId:%v, NextDocId:%v", docId, part.NextDocId)
+		return errors.New("Partition=>AddDocument, Wrong DocId Number")
 	}
 
 	//各个字段分别新增文档的对应部分
