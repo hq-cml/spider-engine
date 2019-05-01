@@ -47,8 +47,12 @@ type BasicStatus struct {
 }
 
 type FieldStatus struct {
-	StartDocId uint32 	`json:"startDocId"`
-	NextDocId  uint32	`json:"nextDocId"`
+	FieldName     string `json:"name"`
+	StartDocId    uint32 `json:"startDocId"`
+	NextDocId     uint32 `json:"nextDocId"`
+	FwdStartDocId int64  `json:"fwdStartDocId"`
+	FwdNextDocId  int64  `json:"fwdNextDocId"`
+	IvtNextDocId  int64  `json:"ivtNextDocId"`
 }
 
 //假字段，高层合并落地时, 可能会出现部分新的分区拥有新字段
@@ -407,9 +411,26 @@ func (fld *Field) Filter(docId uint32, filter basic.SearchFilter) bool {
 }
 
 func (fld *Field) GetStatus() *FieldStatus {
+	var fwdStartId int64 = -1
+	var fwdNextId int64 = -1
+	var ivtStartId int64 = -1
+
+	if fld.FwdIdx != nil {
+		fwdStartId = int64(fld.FwdIdx.GetStartId())
+		fwdNextId = int64(fld.FwdIdx.GetNextId())
+	}
+
+	if fld.IvtIdx != nil {
+		ivtStartId = int64(fld.IvtIdx.GetNextId())
+	}
+
 	return &FieldStatus{
-		StartDocId: fld.StartDocId,
-		NextDocId : fld.NextDocId,
+		FieldName:     fld.FieldName,
+		StartDocId:    fld.StartDocId,
+		NextDocId :    fld.NextDocId,
+		FwdStartDocId: fwdStartId,
+		FwdNextDocId:  fwdNextId,
+		IvtNextDocId:  ivtStartId,
 	}
 }
 

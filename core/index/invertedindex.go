@@ -194,7 +194,6 @@ func (rIdx *InvertedIndex) SetInMemory(in bool) {
 	rIdx.inMemory = in
 }
 
-
 //设置btree
 func (rIdx *InvertedIndex) GetBtree() btree.Btree {
 	return rIdx.btdb
@@ -217,6 +216,11 @@ func (rIdx *InvertedIndex) GetNextKV(key string) (string, uint32, bool) {
 	}
 
 	return rIdx.btdb.GetNextKV(rIdx.fieldName, key)
+}
+
+//btree操作
+func (rIdx *InvertedIndex) GetNextId() uint32 {
+	return rIdx.nextDocId
 }
 
 //btree操作
