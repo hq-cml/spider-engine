@@ -732,6 +732,7 @@ func (tbl *Table) Destroy() error {
 
 	//因为刚刚Close，所以不应该存在内存分区
 	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty() {
+		log.Err("Should not exist mem partition!")
 		return errors.New("Should not exist mem partition!")
 	}
 	//逐个删除磁盘分区
@@ -744,17 +745,16 @@ func (tbl *Table) Destroy() error {
 	primaryFile := tbl.getPrimaryBtName()
 	bitmapFile := tbl.getBitMapName()
 
-	if err := helper.Remove(metaFile); err != nil {	return err }
-	if err := helper.Remove(primaryFile); err != nil { return err }
-	if err := helper.Remove(bitmapFile); err != nil { return err }
-	if err := helper.Remove(tbl.Path); err != nil {	return err }
+	if err := helper.Remove(metaFile); err != nil {	log.Err(err.Error()); return err }
+	if err := helper.Remove(primaryFile); err != nil { log.Err(err.Error()); return err }
+	if err := helper.Remove(bitmapFile); err != nil { log.Err(err.Error()); return err }
+	if err := helper.Remove(tbl.Path); err != nil {	log.Err(err.Error()); return err }
 
 	log.Infof("DoClose Table [%v] Finish", tbl.TableName)
 	return nil
 }
 
 //合并表内分区
-//TODO 合并时机需要自动化
 func (tbl *Table) MergePartitions() error {
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return errors.New("Table status must be running!")

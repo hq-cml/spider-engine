@@ -24,8 +24,8 @@ import (
 
 //TODO 配置化
 var (
-	//PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值
-	PARTITION_MIN_DOC_CNT uint32 = 3
+	PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值
+	//PARTITION_MIN_DOC_CNT uint32 = 3
 )
 
 const (
@@ -167,13 +167,13 @@ func (part *Partition) IsEmpty() bool {
 func (part *Partition) AddField(basicField field.BasicField) error {
 	//校验
 	if _, exist := part.CoreFields[basicField.FieldName]; exist {
-		log.Warnf("Partition --> AddField Already has field [%v]", basicField.FieldName)
+		log.Warnf("Partition~~> AddField Already has field [%v]", basicField.FieldName)
 		return errors.New("Already has field..")
 	}
 
 	//分区只能是内存态并且为空的时候，才能变更字段(因为已经有部分的doc,新字段没法处理)
 	if !part.inMemory || !part.IsEmpty() {
-		log.Warnf("Partition --> AddField field [%v] fail..", basicField.FieldName)
+		log.Warnf("Partition~~> AddField field [%v] fail..", basicField.FieldName)
 		return errors.New("Only memory and enmpty partition can add field..")
 	}
 
@@ -193,20 +193,20 @@ func (part *Partition) AddField(basicField field.BasicField) error {
 func (part *Partition) DeleteField(fieldname string) error {
 	//校验
 	if _, exist := part.CoreFields[fieldname]; !exist {
-		log.Warnf("Partition --> DeleteField not found field [%v]", fieldname)
+		log.Warnf("Partition~~> DeleteField not found field [%v]", fieldname)
 		return errors.New("not found field")
 	}
 
 	//分区只能是内存态并且为空的时候，才能变更字段
 	if !part.inMemory || !part.IsEmpty() {
-		log.Warnf("Partition --> deleteField field [%v] fail..", fieldname)
+		log.Warnf("Partition~~> deleteField field [%v] fail..", fieldname)
 		return errors.New("Only memory and enmpty partition can delete field..")
 	}
 
 	part.Fields[fieldname].DoClose()
 	delete(part.Fields, fieldname)
 	delete(part.CoreFields, fieldname)
-	log.Infof("Partition --> DeleteField[%v] :: Success ", fieldname)
+	log.Infof("Partition~~> DeleteField[%v] :: Success ", fieldname)
 	return nil
 }
 
@@ -215,8 +215,8 @@ func (part *Partition) DeleteField(fieldname string) error {
 func (part *Partition) AddDocument(docId uint32, content map[string]interface{}) error {
 
 	if docId != part.NextDocId {
-		log.Errf("Partition=>AddDocument, WrongDocId:%v, NextDocId:%v", docId, part.NextDocId)
-		return errors.New("Partition=>AddDocument, Wrong DocId Number")
+		log.Errf("Partition~~> AddDocument, WrongDocId:%v, NextDocId:%v", docId, part.NextDocId)
+		return errors.New("Partition~~> AddDocument, Wrong DocId Number")
 	}
 
 	//各个字段分别新增文档的对应部分
@@ -225,12 +225,12 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		if _, ok := content[fieldName]; !ok {
 			//如果某个字段没传, 则会是空值
 			if err := part.Fields[fieldName].AddDocument(docId, ""); err != nil {
-				log.Errf("Partition --> AddDocument [%v] :: %v", part.PrtPathName, err)
+				log.Errf("Partition~~> AddDocument [%v] :: %v", part.PrtPathName, err)
 				return err
 			}
 		} else {
 			if err := part.Fields[fieldName].AddDocument(docId, content[fieldName]); err != nil {
-				log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
+				log.Errf("Partition~~> AddDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
 				return err
 			}
 		}
@@ -252,7 +252,7 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		strVal = strings.Join(godStrs, "。") //汇总, 然后增加倒排
 	}
 	if err := part.GodField.AddDocument(docId, strVal); err != nil {
-		log.Errf("Partition --> AddDocument :: field[%v] value[%v] error[%v]", GOD_FIELD_NAME, strVal, err)
+		log.Errf("Partition~~> AddDocument :: field[%v] value[%v] error[%v]", GOD_FIELD_NAME, strVal, err)
 		return err
 	}
 
@@ -420,7 +420,7 @@ func (part *Partition) Persist() error {
 	for name, coreField := range part.CoreFields {
 		//Note: field.Persist不会自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
 		if err := part.Fields[name].Persist(part.PrtPathName, part.btdb); err != nil {
-			log.Errf("Partition --> Persist %v", err)
+			log.Errf("Partition~~> Persist %v", err)
 			return err
 		}
 		//设置coreField的fwdOffset和docCnt
@@ -516,7 +516,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	}
 	if len(tmp) > 1 {
 		log.Errf("Doc cnt not consistent!!. %v", tmp)
-		return errors.New("Doc cnt not same!!")
+		return errors.New("Doc cnt not consistent!!")
 	}
 
 	//上帝字段合并

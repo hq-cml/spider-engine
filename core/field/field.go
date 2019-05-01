@@ -154,7 +154,7 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 	//正排新增(上帝视角没有正排)
 	if fld.IndexType != index.IDX_TYPE_GOD {
 		if err := fld.FwdIdx.AddDocument(docId, content); err != nil {
-			log.Errf("Field --> AddDocument :: Add Document Error %v", err)
+			log.Errf("Field~~> AddDocument. Add Document Error %v", err.Error())
 			return err
 		}
 	}
@@ -172,7 +172,7 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 
 		if len(contentStr) > 0 { //空字段没必要倒排了
 			if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
-				log.Errf("Field --> AddDocument :: Add Invert Document Error %v", err)
+				log.Errf("Field~~> AddDocument: Add Invert Document Error %v", err)
 				return err
 			}
 		}
@@ -296,7 +296,7 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 		//落地, 并设置了field的信息
 		fld.FwdOffset, fld.DocCnt, err = fld.FwdIdx.Persist(partitionPathName)
 		if err != nil {
-			log.Errf("Field --> Persist :: Error %v", err)
+			log.Errf("Field~~> Persist. Error %v", err)
 			return err
 		}
 	}
@@ -306,12 +306,12 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) error {
 		fld.btdb = btdb
 		err = fld.IvtIdx.Persist(partitionPathName, fld.btdb)
 		if err != nil {
-			log.Errf("Field --> Persist :: Error %v", err)
+			log.Errf("Field~~> Persist. Error %v", err)
 			return err
 		}
 	}
 
-	log.Infof("Field[%v] --> Persist OK...", fld.FieldName)
+	log.Infof("Field[%v]~~> Persist OK...", fld.FieldName)
 	return nil
 }
 
@@ -339,7 +339,7 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 		err = fld.FwdIdx.MergePersistFwdIndex(fwds, partitionName)
 		//fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
 		if err != nil {
-			log.Errf("Field --> mergeField :: Serialization Error %v", err)
+			log.Errf("Field~~> mergeField. Serialization Error %v", err)
 			return err
 		}
 	}

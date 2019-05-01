@@ -8,6 +8,7 @@ import (
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/basic"
 	"encoding/json"
+	"github.com/hq-cml/spider-engine/utils/log"
 )
 
 /**
@@ -163,6 +164,7 @@ func (db *Database) DropTable(tableName string) (error) {
 	//删除表
 	err := db.TableMap[tableName].Destroy()
 	if err != nil {
+		log.Errf("Table Destroy Failed. Err:%v, Table:%v", err.Error(), tableName)
 		return err
 	}
 
@@ -265,6 +267,7 @@ func (db *Database) Destory() error {
 	//表逐个销毁
 	for _, tab := range db.TableMap {
 		if err := tab.Destroy(); err != nil {
+			log.Errf("Destroy Table Failed. Err:%v, Table:%v", err.Error(), tab.TableName)
 			return err
 		}
 	}
