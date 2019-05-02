@@ -95,13 +95,13 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	var nodes map[string]basic.DocNode
 	//校验必须是内存态
 	if !rIdx.inMemory {
-		log.Errf("InvertedIndex~~> AddDocument:Must memory status")
+		log.Errf("InvertedIndex--> AddDocument:Must memory status")
 		return errors.New("Must memory status")
 	}
 
 	//docId校验
 	if docId != rIdx.nextDocId {
-		log.Errf("InvertedIndex~~> AddDocument:Wrong DocId Number. DocId:%v, NextId:%v", docId, rIdx.nextDocId)
+		log.Errf("InvertedIndex--> AddDocument:Wrong DocId Number. DocId:%v, NextId:%v", docId, rIdx.nextDocId)
 		return errors.New("Wrong DocId Number")
 	}
 
@@ -123,7 +123,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	case IDX_TYPE_GOD:     						//上帝模式--按分词处理
 		nodes = SplitTrueWords(docId, content)
 	default:
-		log.Errf("InvertedIndex~~> AddDocument: Type %v can't add invertIndex", rIdx.indexType)
+		log.Errf("InvertedIndex--> AddDocument: Type %v can't add invertIndex", rIdx.indexType)
 		return errors.New("Unsupport indexType")
 	}
 
@@ -138,7 +138,7 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 SUCC:
 	//docId自增
 	rIdx.nextDocId++
-	log.Debugf("InvertAddDoc~~> Field: %v, DocId: %v ,Content: %v", rIdx.fieldName, docId, content)
+	log.Debugf("InvertAddDoc--> Field: %v, DocId: %v ,Content: %v", rIdx.fieldName, docId, content)
 	return nil
 }
 
@@ -437,7 +437,7 @@ func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partit
 		buffer := new(bytes.Buffer)
 		err = binary.Write(buffer, binary.LittleEndian, value)
 		if err != nil {
-			log.Err("Invert~~> Merge :: Error %v", err)
+			log.Err("Invert--> Merge :: Error %v", err)
 			return err
 		}
 		writeLength, err := fd.Write(buffer.Bytes())
@@ -448,7 +448,7 @@ func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partit
 
 		err = btdb.Set(fieldName, minTerm, fmt.Sprintf("%v", offset))
 		if err != nil {
-			log.Errf("Invert~~> Merge :: Error:%v, fieldName: %v, term: %v, len(term): %v", err, fieldName, minTerm, len(minTerm))
+			log.Errf("Invert--> Merge :: Error:%v, fieldName: %v, term: %v, len(term): %v", err, fieldName, minTerm, len(minTerm))
 			return err
 		}
 		offset = offset + DOCNODE_BYTE_CNT + writeLength

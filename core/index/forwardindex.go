@@ -108,7 +108,7 @@ func (fwdIdx *ForwardIndex)String() string {
 // 也就是，一个索引一旦落盘之后，就不在支持增加Doc了（会有其他分区的内存态索引去负责新增）
 func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error {
 	if docId != fwdIdx.nextDocId || fwdIdx.inMemory == false {
-		log.Errf("ForwardIndex~~> AddDocument.Wrong DocId Number. DocId:%v, NextId:%v", docId, fwdIdx.nextDocId)
+		log.Errf("ForwardIndex--> AddDocument.Wrong DocId Number. DocId:%v, NextId:%v", docId, fwdIdx.nextDocId)
 		return errors.New("Wrong DocId Number")
 	}
 
@@ -155,7 +155,7 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 	}
 	fwdIdx.nextDocId++
 	fwdIdx.docCnt ++
-	log.Debugf("ForwardIndex AddDocument~~> DocId: %v ,Content: %v", docId, content)
+	log.Debugf("ForwardIndex AddDocument--> DocId: %v ,Content: %v", docId, content)
 	return nil
 }
 
@@ -399,7 +399,7 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 			}
 			n, err = extFd.WriteString(str)
 			if err != nil || n != strLen {
-				log.Errf("StringForward~~> Persist :: Write Error %v", err)
+				log.Errf("StringForward--> Persist :: Write Error %v", err)
 				return 0, 0, err
 			}
 			//fwd写入offset
