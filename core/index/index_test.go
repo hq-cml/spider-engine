@@ -307,7 +307,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	idx1 := LoadForwardIndex(IDX_TYPE_INTEGER, mmp, nil, 0, 0, 0, 3)
+	idx1 := LoadForwardIndex(IDX_TYPE_INTEGER, mmp, nil, 0, 0, 3)
 	iv, b := idx1.GetInt(0)
 	if !b || iv != 100 {
 		panic("Sth wrong")
@@ -333,7 +333,7 @@ func TestLoadFwdIndex(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	idx2 := LoadForwardIndex(IDX_TYPE_STR_WHOLE, mmp1, mmp2, 0, 0, 0, 2)
+	idx2 := LoadForwardIndex(IDX_TYPE_STR_WHOLE, mmp1, mmp2, 0, 0, 2)
 
 	sv, b := idx2.GetString(0)
 	if !b || sv != "abc" {
@@ -390,7 +390,7 @@ func TestMergeFwdIndex(t *testing.T) {
 
 	//Load回来验证
 	idx := NewEmptyForwardIndex(IDX_TYPE_INTEGER, 0)
-	idx = LoadForwardIndex(IDX_TYPE_INTEGER, mmp, nil, 0, 5, 0, 5)
+	idx = LoadForwardIndex(IDX_TYPE_INTEGER, mmp, nil, 0, 5, 5)
 	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge. Offset:", idx.fwdOffset, ". Cnt:", idx.docCnt, ". NextId:", idx.nextDocId)
 	iv, b = idx.GetInt(0)
 	if !b || iv != 100 {
@@ -452,7 +452,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 	t.Log("3: ", iv)
 
 	//Load回来验证
-	idx := LoadForwardIndex(IDX_TYPE_STR_WHOLE, mmp1, mmp2, 0, 4, 0, 4)
+	idx := LoadForwardIndex(IDX_TYPE_STR_WHOLE, mmp1, mmp2, 0, 4, 4)
 	iv, b = idx.GetString(0)
 	if !b || iv != "abc" {
 		panic(iv)

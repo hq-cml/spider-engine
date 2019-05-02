@@ -51,6 +51,7 @@ type Partition struct {
 type PartitionStatus struct {
 	StartDocId      uint32                     `json:"startDocId"`
 	NextDocId       uint32                     `json:"nextDocId"`
+	DocCnt          uint32                     `json:"docCnt"`         //TODO 这个字段!= next-start, 验一下！！
 	PrtPathName     string                     `json:"prtPathName"`
 	SubFields       []*field.FieldStatus       `json:"subFields"`      //字段的一部分数据
 	GodField        *field.FieldStatus         `json:"godFields"`      //字段的一部分数据
@@ -145,7 +146,6 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 	//加载各个Field
 	for _, coreField := range part.CoreFields {
 		if part.DocCnt == 0 {
-			//TODO ?? 这里会进入吗, 做一个测试，刚刚load的table，直接关闭，看看内存分区是否回落地一个0 的分区
 			panic("Unknow error")
 			newField := field.NewEmptyField(coreField.FieldName, part.StartDocId, coreField.IndexType)
 			part.Fields[coreField.FieldName] = newField
@@ -502,6 +502,9 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 
 	//逐个字段进行merge
 	tmp := map[uint32]bool{}
+	var fwdOffset uint64
+	var docCnt uint32
+	var err error
 	for fieldName, coreField := range part.CoreFields {
 		fs := make([]*field.Field, 0)
 		for _, pt := range parts {
@@ -515,7 +518,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 				fs = append(fs, fakefield)
 			}
 		}
-		fwdOffset, docCnt, err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
+		fwdOffset, docCnt, err = part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
 		if err != nil {
 			log.Errln("MergePartitions Error1:", err)
 			return err
@@ -535,7 +538,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	for _, pt := range parts {
 		fs = append(fs, pt.GodField)
 	}
-	_, _, err := part.GodField.MergePersistField(fs, part.PrtPathName, part.btdb)
+	_, _, err = part.GodField.MergePersistField(fs, part.PrtPathName, part.btdb)
 	if err != nil {
 		log.Errln("Merge God Partitions failed:", err)
 		return err
@@ -568,7 +571,7 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	//最后设置startId和nextDocId
 	part.StartDocId = parts[0].StartDocId
 	part.NextDocId = parts[l-1].NextDocId
-	part.DocCnt = parts[l-1].NextDocId - parts[0].StartDocId
+	part.DocCnt = docCnt
 
 	log.Infof("MergePartitions [%v] Finish", part.PrtPathName)
 	return part.storeMeta()
@@ -660,6 +663,7 @@ func (part *Partition) GetStatus() *PartitionStatus {
 		StartDocId  : part.StartDocId,
 		NextDocId   : part.NextDocId,
 		PrtPathName : part.PrtPathName,
+		DocCnt      : part.DocCnt,
 		SubFields   : sub,
 		GodField    : part.GodField.GetStatus(),
 	}

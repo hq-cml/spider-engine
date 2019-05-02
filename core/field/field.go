@@ -133,7 +133,7 @@ func LoadField(fieldname string, startDocId, nextDocId uint32, indexType uint16,
 	//加载正排
 	var fwdIdx *index.ForwardIndex
 	if indexType != index.IDX_TYPE_GOD { //上帝字段没有正排
-		fwdIdx = index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, startDocId, nextDocId)
+		fwdIdx = index.LoadForwardIndex(indexType, baseMmap, extMmap, fwdOffset, fwdDocCnt, nextDocId)
 	}
 
 	return &Field{
