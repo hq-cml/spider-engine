@@ -146,7 +146,8 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 
 
 	//再次新增一个文档
-	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004",TEST_FIELD1: "爱新觉罗", TEST_FIELD2: 30,TEST_FIELD3: "喜欢打仗", TEST_FIELD4: 99})
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004", TEST_FIELD1: "爱新觉罗",
+		TEST_FIELD2: 30,TEST_FIELD3: "喜欢打仗", TEST_FIELD4: 99})
 	if err != nil {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
 	}

@@ -426,9 +426,6 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		return 0, "", errors.New("Duplicate Primary Key! " + key)
 	}
 
-	newDocId := tbl.NextDocId
-	tbl.NextDocId++
-
 	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
@@ -439,6 +436,10 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		}
 		tbl.mutex.Unlock()
 	}
+
+	newDocId := tbl.NextDocId
+	tbl.NextDocId++
+	
 	fmt.Println("B--------------", tbl.memPartition.StartDocId)
 
 	//bitmap判断自动扩容

@@ -22,7 +22,6 @@ import (
 	"strings"
 )
 
-//TODO 配置化
 var (
 	PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值
 	//PARTITION_MIN_DOC_CNT uint32 = 3
