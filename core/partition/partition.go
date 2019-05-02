@@ -53,6 +53,7 @@ type PartitionStatus struct {
 	NextDocId       uint32                     `json:"nextDocId"`
 	PrtPathName     string                     `json:"prtPathName"`
 	SubFields       []*field.FieldStatus       `json:"subFields"`      //字段的一部分数据
+	GodField        *field.FieldStatus         `json:"godFields"`      //字段的一部分数据
 }
 
 //新建一个空分区, 包含字段
@@ -656,5 +657,6 @@ func (part *Partition) GetStatus() *PartitionStatus {
 		NextDocId   : part.NextDocId,
 		PrtPathName : part.PrtPathName,
 		SubFields   : sub,
+		GodField    : part.GodField.GetStatus(),
 	}
 }

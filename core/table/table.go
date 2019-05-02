@@ -439,7 +439,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 
 	newDocId := tbl.NextDocId
 	tbl.NextDocId++
-	
+
 	fmt.Println("B--------------", tbl.memPartition.StartDocId)
 
 	//bitmap判断自动扩容

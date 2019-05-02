@@ -184,11 +184,9 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 			return errors.New("Invert index must string")
 		}
 
-		if len(contentStr) > 0 { //空字段没必要倒排了
-			if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
-				log.Errf("Field~~> AddDocument: Add Invert Document Error %v", err)
-				return err
-			}
+		if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
+			log.Errf("Field~~> AddDocument: Add Invert Document Error %v", err)
+			return err
 		}
 	}
 	fld.DocCnt++

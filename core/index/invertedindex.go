@@ -92,7 +92,7 @@ func LoadInvertedIndex(btdb btree.Btree, indexType uint16, fieldname string, ivt
 // 也就是，一个索引一旦落盘之后，就不在支持增加Doc了（会有其他分区的内存态索引去负责新增）
 //TODO 改、删怎么处理的？？
 func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
-
+	var nodes map[string]basic.DocNode
 	//校验必须是内存态
 	if !rIdx.inMemory {
 		log.Errf("InvertedIndex~~> AddDocument:Must memory status")
@@ -105,8 +105,12 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 		return errors.New("Wrong DocId Number")
 	}
 
+	//为空的内容，则直接成功返回
+	if len(content) <= 0 {
+		goto SUCC
+	}
+
 	//根据type进行分词
-	var nodes map[string]basic.DocNode
 	switch rIdx.indexType {
 	case IDX_TYPE_STR_WHOLE: 			            //全词匹配模式
 		nodes = SplitWholeWords(docId, content)
@@ -131,10 +135,10 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 		rIdx.termMap[term] = append(rIdx.termMap[term], node)
 	}
 
+SUCC:
 	//docId自增
 	rIdx.nextDocId++
-
-	log.Debugf("InvertAddDoc~~> Field: %v, DocId: %v ,Content: %v\n",rIdx.fieldName, docId, content)
+	log.Debugf("InvertAddDoc~~> Field: %v, DocId: %v ,Content: %v", rIdx.fieldName, docId, content)
 	return nil
 }
 
