@@ -502,15 +502,13 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 			if _, exist := pt.Fields[fieldName]; exist {
 				fs = append(fs, pt.Fields[fieldName])
 			} else {
-				//fmt.Println("A---------", fieldName)
 				//特殊情况
 				//如果新的分区拥有一些新字段,但是老分区没有这个字段,此时,需要生成一个假的字段来占位
 				fakefield := field.NewFakeField(part.Fields[fieldName].FieldName, pt.StartDocId,
-					pt.NextDocId, part.Fields[fieldName].IndexType)
+					pt.NextDocId, part.Fields[fieldName].IndexType, pt.DocCnt)
 				fs = append(fs, fakefield)
 			}
 		}
-		//fmt.Println("A---------", len(fs))
 		err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
 		if err != nil {
 			log.Errln("MergePartitions Error1:", err)

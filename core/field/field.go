@@ -56,8 +56,8 @@ type FieldStatus struct {
 
 //假字段，高层合并落地时, 可能会出现部分新的分区拥有新字段
 //此时, 老分区用FakeField占位用
-func NewFakeField(fieldname string, start uint32, next uint32, indexType uint16) *Field {
-	fwdIdx := index.NewFakeForwardIndex(indexType, start, next)
+func NewFakeField(fieldname string, start uint32, next uint32, indexType uint16, docCnt uint32) *Field {
+	fwdIdx := index.NewFakeForwardIndex(indexType, docCnt, next)
 	var ivtIdx *index.InvertedIndex
 	if indexType == index.IDX_TYPE_STR_WHOLE ||
 		indexType == index.IDX_TYPE_STR_SPLITER ||
