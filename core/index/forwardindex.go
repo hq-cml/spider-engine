@@ -38,7 +38,6 @@ const (
 )
 //profile 正排索引，detail也是保存在这里
 type ForwardIndex struct {
-	startDocId uint32 					//初始分区：从0开始；非初始分区：从本分区的第一篇DocId开始
 	nextDocId  uint32 					//下一个加入本索引的docId（所以本索引最大docId是nextDocId-1）
 	inMemory   bool   					//本索引是内存态还是磁盘态（不会同时并存）
 	indexType  uint16  					//本索引的类型
@@ -58,7 +57,6 @@ func NewFakeForwardIndex(indexType uint16, start uint32, next uint32) *ForwardIn
 	return &ForwardIndex{
 		docCnt:     (next - start),
 		indexType:  indexType,
-		startDocId: start,
 		nextDocId:  next,
 		fake:       true,   //here is the point!
 	}
@@ -71,7 +69,6 @@ func NewEmptyForwardIndex(indexType uint16, start uint32) *ForwardIndex {
 		fwdOffset:  0,
 		inMemory:   true,
 		indexType:  indexType,
-		startDocId: start,
 		nextDocId:  start,
 		memoryNum:  make([]int64, 0),
 		memoryStr:  make([]string, 0),
@@ -91,14 +88,12 @@ func LoadForwardIndex(indexType uint16, baseMmap, extMmap *mmap.Mmap,
 		indexType: indexType,
 		baseMmap:  baseMmap,
 		extMmap:   extMmap,
-		startDocId: start,
 		nextDocId:  next,
 	}
 }
 
 func (fwdIdx *ForwardIndex)String() string {
-	return fmt.Sprintf("FwdIndex-- Start:%v, Next:%v, InMem:%v, IndexType:%v, Offset:%v, Cnt:%v, Fake:%v",
-		fwdIdx.startDocId,
+	return fmt.Sprintf("FwdIndex-- Next:%v, InMem:%v, IndexType:%v, Offset:%v, Cnt:%v, Fake:%v",
 		fwdIdx.nextDocId,
 		fwdIdx.inMemory,
 		fwdIdx.indexType,
@@ -335,10 +330,6 @@ func (fwdIdx *ForwardIndex) SetInMemory(in bool) {
 	fwdIdx.inMemory = in
 }
 
-func (fwdIdx *ForwardIndex) GetStartId() uint32{
-	return fwdIdx.startDocId
-}
-
 func (fwdIdx *ForwardIndex) GetNextId() uint32{
 	return fwdIdx.nextDocId
 }
@@ -453,7 +444,7 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 			return errors.New("Indexes not consistent")
 		}
 
-		if idxList[i].nextDocId != idxList[i+1].startDocId {
+		if idxList[i].nextDocId > idxList[i+1].nextDocId {
 			return errors.New("Indexes order wrong")
 		}
 	}
@@ -532,7 +523,6 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 	//当前偏移量, 即文件最后位置
 	fwdIdx.fwdOffset = uint64(offset)
 	fwdIdx.docCnt = uint32(cnt)
-	fwdIdx.startDocId = idxList[0].startDocId
 	fwdIdx.nextDocId = idxList[l-1].nextDocId
 
 	//内存态 => 磁盘态

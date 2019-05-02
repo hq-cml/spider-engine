@@ -50,7 +50,6 @@ type FieldStatus struct {
 	FieldName     string `json:"name"`
 	StartDocId    uint32 `json:"startDocId"`
 	NextDocId     uint32 `json:"nextDocId"`
-	FwdStartDocId int64  `json:"fwdStartDocId"`
 	FwdNextDocId  int64  `json:"fwdNextDocId"`
 	IvtNextDocId  int64  `json:"ivtNextDocId"`
 }
@@ -385,7 +384,7 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 	if fld.FwdIdx != nil {
 		fld.FwdOffset = fld.FwdIdx.GetFwdOffset()
 		fld.DocCnt = fld.FwdIdx.GetDocCnt()
-		fld.StartDocId = fld.FwdIdx.GetStartId()
+		fld.StartDocId = fields[0].StartDocId
 		fld.NextDocId = fld.FwdIdx.GetNextId()
 	} else {
 		//这里只会是上帝字段
@@ -409,12 +408,10 @@ func (fld *Field) Filter(docId uint32, filter basic.SearchFilter) bool {
 }
 
 func (fld *Field) GetStatus() *FieldStatus {
-	var fwdStartId int64 = -1
 	var fwdNextId int64 = -1
 	var ivtStartId int64 = -1
 
 	if fld.FwdIdx != nil {
-		fwdStartId = int64(fld.FwdIdx.GetStartId())
 		fwdNextId = int64(fld.FwdIdx.GetNextId())
 	}
 
@@ -426,7 +423,6 @@ func (fld *Field) GetStatus() *FieldStatus {
 		FieldName:     fld.FieldName,
 		StartDocId:    fld.StartDocId,
 		NextDocId :    fld.NextDocId,
-		FwdStartDocId: fwdStartId,
 		FwdNextDocId:  fwdNextId,
 		IvtNextDocId:  ivtStartId,
 	}

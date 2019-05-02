@@ -365,7 +365,7 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	if idx0.startDocId !=0 || idx0.fwdOffset != 0 || idx0.docCnt != 5 || idx0.nextDocId != 5 {
+	if idx0.fwdOffset != 0 || idx0.docCnt != 5 || idx0.nextDocId != 5 {
 		panic("Merge Error: wrong number")
 	}
 	mmp, err := mmap.NewMmap("/tmp/spider/Partition.int.fwd.merge"+basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
@@ -373,8 +373,7 @@ func TestMergeFwdIndex(t *testing.T) {
 		panic(err)
 	}
 	idx0.SetBaseMmap(mmp)
-	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge. start:" ,
-		idx0.startDocId ,"Offset:", idx0.fwdOffset, ". Cnt:", idx0.docCnt, ". NextId:", idx0.nextDocId)
+	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge. Offset:", idx0.fwdOffset, ". Cnt:", idx0.docCnt, ". NextId:", idx0.nextDocId)
 	//合并完毕立刻验证
 	iv, b := idx0.GetInt(0)
 	if !b || iv != 100 {
@@ -392,8 +391,7 @@ func TestMergeFwdIndex(t *testing.T) {
 	//Load回来验证
 	idx := NewEmptyForwardIndex(IDX_TYPE_INTEGER, 0)
 	idx = LoadForwardIndex(IDX_TYPE_INTEGER, mmp, nil, 0, 5, 0, 5)
-	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge. start:" ,
-		idx.startDocId ,"Offset:", idx.fwdOffset, ". Cnt:", idx.docCnt, ". NextId:", idx.nextDocId)
+	t.Log("Merge ", "/tmp/spider/Partition.int.fwd.merge. Offset:", idx.fwdOffset, ". Cnt:", idx.docCnt, ". NextId:", idx.nextDocId)
 	iv, b = idx.GetInt(0)
 	if !b || iv != 100 {
 		panic(iv)
@@ -425,9 +423,8 @@ func TestMergeFwdIndexString(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	t.Log("Merge ", "/tmp/spider/Partition.string.fwd.merge. start:" ,
-		idx0.startDocId ,"Offset:", idx0.fwdOffset, ". Cnt:", idx0.docCnt, ". NextId:", idx0.nextDocId)
-	if idx0.startDocId !=0 || idx0.fwdOffset != 0 || idx0.docCnt != 4 || idx0.nextDocId != 4 {
+	t.Log("Merge ", "/tmp/spider/Partition.string.fwd.merge. Offset:", idx0.fwdOffset, ". Cnt:", idx0.docCnt, ". NextId:", idx0.nextDocId)
+	if idx0.fwdOffset != 0 || idx0.docCnt != 4 || idx0.nextDocId != 4 {
 		panic("Merge Error: wrong number")
 	}
 	mmp1, err := mmap.NewMmap("/tmp/spider/Partition.string.fwd.merge" + basic.IDX_FILENAME_SUFFIX_FWD, true, 0)
