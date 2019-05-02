@@ -30,9 +30,6 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	field.AddDocument(2, "火红的太阳")
 	field.AddDocument(3, "火红的萨日朗")
 
-	if field.DocCnt != 4 {
-		panic("Wrong number")
-	}
 
 	//测试query
 	tmp, b := field.Query("天安门")
@@ -67,16 +64,16 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	}
 
 	//准备落地
-	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.DocCnt)
+	t.Logf("FiledOffset: %v", field.FwdOffset)
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
 	t.Log("Before Persist. NextId:", field.NextDocId)
-	if err := field.Persist("/tmp/spider/Partition0", treedb); err != nil {
+	if _, err := field.Persist("/tmp/spider/Partition0", treedb); err != nil {
 		panic(err)
 	}
 	t.Log("After Persist. NextId:", field.NextDocId)
 
-	t.Logf("FiledOffset: %v, DocCnt: %v", field.FwdOffset, field.DocCnt)
+	t.Logf("FiledOffset: %v", field.FwdOffset)
 	t.Log("\n\n")
 }
 
@@ -153,12 +150,12 @@ func TestPrepareMerge(t *testing.T) {
 	//准备落地
 	treedb1 := btree.NewBtree("xx", "/tmp/spider/spider1" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb1.Close()
-	if err := field1.Persist("/tmp/spider/Partition1", treedb1); err != nil {
+	if _, err := field1.Persist("/tmp/spider/Partition1", treedb1); err != nil {
 		panic(err)
 	}
 	treedb2 := btree.NewBtree("xx", "/tmp/spider/spider2" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb2.Close()
-	if err := field2.Persist("/tmp/spider/Partition2", treedb2); err != nil {
+	if _, err := field2.Persist("/tmp/spider/Partition2", treedb2); err != nil {
 		panic(err)
 	}
 	t.Log("\n\n")
@@ -205,11 +202,11 @@ func TestMerge(t *testing.T) {
 	treedb := btree.NewBtree("xx", "/tmp/spider/spider" + basic.IDX_FILENAME_SUFFIX_BTREE)
 	defer treedb.Close()
 	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STR_SPLITER)
-	err = field.MergePersistField([]*Field{field1, field2}, "/tmp/spider/Partition", treedb)
+	_, err = field.MergePersistField([]*Field{field1, field2}, "/tmp/spider/Partition", treedb)
 	if err != nil {
 		panic(err)
 	}
-	t.Log("Offset:", field.FwdOffset, "Cnt:", field.DocCnt, ". StartId:", field.StartDocId, ". NextId:", field.NextDocId)
+	t.Log("Offset:", field.FwdOffset, ". StartId:", field.StartDocId, ". NextId:", field.NextDocId)
 
 	//合并完毕后进行测试
 	//从磁盘加载mmap

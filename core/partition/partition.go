@@ -423,15 +423,16 @@ func (part *Partition) Persist() error {
 	}
 	log.Debugf("Persist Partition File : [%v] Start", part.PrtPathName)
 	var docCnt uint32
+	var err error
 	//当前分区的各个字段分别落地
 	for name, coreField := range part.CoreFields {
 		//Note: field.Persist不会自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
-		if err := part.Fields[name].Persist(part.PrtPathName, part.btdb); err != nil {
+		if docCnt, err = part.Fields[name].Persist(part.PrtPathName, part.btdb); err != nil {
 			log.Errf("Partition~~> Persist %v", err)
 			return err
 		}
 		//设置coreField的fwdOffset和docCnt
-		coreField.FwdOffset, docCnt = part.Fields[name].FwdOffset, part.Fields[name].DocCnt
+		coreField.FwdOffset = part.Fields[name].FwdOffset
 		part.CoreFields[coreField.FieldName] = coreField
 		log.Debugf("%v %v %v", name, coreField.FwdOffset, docCnt)
 		if part.DocCnt != docCnt {
@@ -439,11 +440,16 @@ func (part *Partition) Persist() error {
 			return errors.New("Doc cnt not same!!")
 		}
 	}
+
 	//上帝视角字段落地
-	part.GodField.Persist(part.PrtPathName, part.btdb)
+	_, err = part.GodField.Persist(part.PrtPathName, part.btdb)
+	if err != nil {
+		log.Errf("GodField.Persist Error:%v", err.Error())
+		return err
+	}
 
 	//存储源信息
-	if err := part.storeMeta(); err != nil {
+	if err = part.storeMeta(); err != nil {
 		return err
 	}
 
@@ -451,7 +457,6 @@ func (part *Partition) Persist() error {
 	part.inMemory = false
 
 	//加载回mmap
-	var err error
 	part.ivtMmap, err = mmap.NewMmap(part.PrtPathName+ basic.IDX_FILENAME_SUFFIX_INVERT, true, 0)
 	if err != nil {
 		log.Errf("mmap error : %v \n", err)
@@ -509,14 +514,14 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 				fs = append(fs, fakefield)
 			}
 		}
-		err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
+		docCnt, err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
 		if err != nil {
 			log.Errln("MergePartitions Error1:", err)
 			return err
 		}
 
 		coreField.FwdOffset = part.Fields[fieldName].FwdOffset
-		tmp[part.Fields[fieldName].DocCnt] = true
+		tmp[docCnt] = true
 		part.CoreFields[fieldName] = coreField
 	}
 	if len(tmp) > 1 {
@@ -524,12 +529,12 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		return errors.New("Doc cnt not consistent!!")
 	}
 
-	//上帝字段合并
+	//上帝字段合并， 上帝字段只有倒排，所以返回的合并文档数直接忽略
 	fs := make([]*field.Field, 0)
 	for _, pt := range parts {
 		fs = append(fs, pt.GodField)
 	}
-	err := part.GodField.MergePersistField(fs, part.PrtPathName, part.btdb)
+	_, err := part.GodField.MergePersistField(fs, part.PrtPathName, part.btdb)
 	if err != nil {
 		log.Errln("Merge God Partitions failed:", err)
 		return err

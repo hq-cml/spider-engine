@@ -52,10 +52,6 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	err = memPartition.AddDocument(1, user1); if err != nil { panic(err) }
 	err = memPartition.AddDocument(2, user2); if err != nil { panic(err) }
 
-	if memPartition.Fields[TEST_FIELD1].DocCnt != 3 {
-		panic("wrong number")
-	}
-
 	list, exist := memPartition.query(TEST_FIELD3, "美食")
 	if !exist {
 		panic("Should exist!!")

@@ -432,20 +432,20 @@ func (fwdIdx *ForwardIndex) Persist(partitionPathName string) (uint64, uint32, e
 //Note:
 // 一个设计的问题，因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
 // 所以mmap并不会加载回来，但是其他几个控制字段nextId， docCnt，offset被加载回来了
-func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) error {
+func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partitionPathName string) (uint32, error) {
 	//一些校验, index的类型，顺序必须完整正确
 	if idxList == nil || len(idxList) == 0 {
-		return errors.New("Nil []*ForwardIndex")
+		return 0, errors.New("Nil []*ForwardIndex")
 	}
 	indexType := fwdIdx.indexType
 	l := len(idxList)
 	for i:=0; i<(l-1); i++ {
 		if idxList[i].indexType != idxList[i+1].indexType {
-			return errors.New("Indexes not consistent")
+			return 0, errors.New("Indexes not consistent")
 		}
 
 		if idxList[i].nextDocId > idxList[i+1].nextDocId {
-			return errors.New("Indexes order wrong")
+			return 0, errors.New("Indexes order wrong")
 		}
 	}
 
@@ -455,7 +455,7 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 	var err error
 	fwdFd, err = os.OpenFile(fwdFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer fwdFd.Close()
 	fi, _ := fwdFd.Stat()
@@ -471,11 +471,11 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 				n, err := fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
-					return errors.New("Write Error")
+					return 0, errors.New("Write Error")
 				}
 				if err != nil {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
-					return err
+					return 0, err
 				}
 				cnt ++
 			}
@@ -485,7 +485,7 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 		extFileName := fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, partitionPathName)
 		extFd, err := os.OpenFile(extFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer extFd.Close()
 		fi, _ = extFd.Stat()
@@ -500,19 +500,19 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 				n, err := extFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
-					return errors.New("Write Error")
+					return 0, errors.New("Write Error")
 				}
 				n, err = extFd.WriteString(strContent)
 				if err != nil || n != strLen {
 					log.Errf("MergePersistFwdIndex :: Write Error %v", err)
-					return err
+					return 0, err
 				}
 				//存储offset
 				binary.LittleEndian.PutUint64(buffer, uint64(extOffset))
 				n, err = fwdFd.Write(buffer)
 				if err != nil || n != DATA_BYTE_CNT {
 					log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DATA_BYTE_CNT))
-					return errors.New("Write Error")
+					return 0, errors.New("Write Error")
 				}
 				extOffset = extOffset + DATA_BYTE_CNT + int64(strLen)
 				cnt++
@@ -529,7 +529,7 @@ func (fwdIdx *ForwardIndex) MergePersistFwdIndex(idxList []*ForwardIndex, partit
 	fwdIdx.inMemory = false
 	fwdIdx.memoryStr = nil
 	fwdIdx.memoryNum = nil
-	return nil
+	return fwdIdx.docCnt, nil
 }
 
 //过滤操作
