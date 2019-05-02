@@ -361,7 +361,7 @@ func TestMergeFwdIndex(t *testing.T) {
 	if err := idx2.AddDocument(4, 456); err != nil {panic(err) }
 
 	idx0 := NewEmptyForwardIndex(IDX_TYPE_INTEGER, 9999) //9999没用，会被覆盖
-	_, err := idx0.MergePersistFwdIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
+	_, _, err := idx0.MergePersistFwdIndex([]*ForwardIndex{idx1, idx2},"/tmp/spider/Partition.int.fwd.merge")
 	if err != nil {
 		panic(err)
 	}
@@ -419,7 +419,7 @@ func TestMergeFwdIndexString(t *testing.T) {
 
 	idx0 := NewEmptyForwardIndex(IDX_TYPE_STR_WHOLE, 9999) //9999没用，会被覆盖
 
-	_, err := idx0.MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.string.fwd.merge")
+	_, _, err := idx0.MergePersistFwdIndex([]*ForwardIndex{idx1, idx2}, "/tmp/spider/Partition.string.fwd.merge")
 	if err != nil {
 		panic(err)
 	}

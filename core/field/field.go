@@ -23,7 +23,6 @@ type Field struct {
 	inMemory   bool
 	IvtIdx     *index.InvertedIndex `json:"-"`           //倒排索引
 	FwdIdx     *index.ForwardIndex  `json:"-"`           //正排索引
-	FwdOffset  uint64               `json:"fwdOffset"`   //此正排索引的数据，在文件中的起始偏移
 	btdb       btree.Btree          `json:"-"`
 }
 
@@ -97,7 +96,6 @@ func NewEmptyField(fieldName string, start uint32, indexType uint16) *Field {
 		inMemory:   true,
 		IvtIdx:     ivtIdx,
 		FwdIdx:     fwdIdx,
-		FwdOffset:  0,
 		btdb:       nil,
 	}
 }
@@ -144,7 +142,6 @@ func LoadField(fieldname string, startDocId, nextDocId uint32, indexType uint16,
 		NextDocId:  nextDocId,
 		IndexType:  indexType,
 		inMemory:   false,
-		FwdOffset:  fwdOffset,
 		IvtIdx:     ivtIdx,
 		FwdIdx:     fwdIdx,
 		btdb:       btdb,
@@ -296,15 +293,16 @@ func (fld *Field) SetMmap(base, ext, ivt *mmap.Mmap) {
 //Note:
 // 因为同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)，所以这里直接用分区的路径文件名做前缀
 // 这里一个设计的问题，函数并未自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
-func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) (uint32, error) {
+func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) (uint64, uint32, error) {
 	var err error
 	var docCnt uint32
+	var fwdOffset uint64
 	if fld.FwdIdx != nil {
 		//落地, 并设置了field的信息
-		fld.FwdOffset, docCnt, err = fld.FwdIdx.Persist(partitionPathName)
+		fwdOffset, docCnt, err = fld.FwdIdx.Persist(partitionPathName)
 		if err != nil {
 			log.Errf("Field~~> Persist. Error %v", err)
-			return 0, err
+			return 0, 0, err
 		}
 	}
 
@@ -314,40 +312,41 @@ func (fld *Field) Persist(partitionPathName string, btdb btree.Btree) (uint32, e
 		err = fld.IvtIdx.Persist(partitionPathName, fld.btdb)
 		if err != nil {
 			log.Errf("Field~~> Persist. Error %v", err)
-			return 0, err
+			return 0, 0, err
 		}
 	}
 
 	log.Infof("Field[%v]~~> Persist OK...", fld.FieldName)
-	return docCnt, nil
+	return fwdOffset, docCnt, nil
 }
 
 //字段归并
 //和底层逻辑一致，同样mmap不会加载，其他控制数据包括btdb会加载
-func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) (uint32, error) {
+func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb btree.Btree) (uint64, uint32, error) {
 	//一些校验, index的类型，顺序必须完整正确
 	if fields == nil || len(fields) == 0 {
-		return 0, errors.New("Nil []*Field")
+		return 0, 0, errors.New("Nil []*Field")
 	}
 	l := len(fields)
 	for i:=0; i<(l-1); i++ {
 		if fields[i].NextDocId != fields[i+1].StartDocId {
-			return 0, errors.New("Indexes order wrong")
+			return 0, 0, errors.New("Indexes order wrong")
 		}
 	}
 	var err error
 	var docCnt uint32
+	var fwdOffset uint64
 	//合并正排索引(上帝字段没有正排索引)
 	if fld.IndexType != index.IDX_TYPE_GOD {
 		fwds := make([]*index.ForwardIndex, 0)
 		for _, fd := range fields {
 			fwds = append(fwds, fd.FwdIdx)
 		}
-		docCnt, err = fld.FwdIdx.MergePersistFwdIndex(fwds, partitionName)
+		fwdOffset, docCnt, err = fld.FwdIdx.MergePersistFwdIndex(fwds, partitionName)
 		//fmt.Println("B--------", partitionName, fields[0].FieldName, offset, docCnt, nextId)
 		if err != nil {
 			log.Errf("Field~~> mergeField. Serialization Error %v", err)
-			return 0, err
+			return 0, 0, err
 		}
 	}
 
@@ -371,23 +370,16 @@ func (fld *Field) MergePersistField(fields []*Field, partitionName string, btdb 
 		if  err != nil {
 			//如果此处出错，则会不一致...
 			log.Errf("MergePersistIvtIndex Error: ", err, ". Danger!!!!")
-			return 0, err
+			return 0, 0, err
 		}
 	}
 
 	//加载回控制数据
 	fld.btdb = btdb
-	if fld.FwdIdx != nil {
-		fld.FwdOffset = fld.FwdIdx.GetFwdOffset()
-		fld.StartDocId = fields[0].StartDocId
-		fld.NextDocId = fld.FwdIdx.GetNextId()
-	} else {
-		//这里只会是上帝字段
-		fld.StartDocId = fields[0].StartDocId
-		fld.NextDocId = fields[l-1].NextDocId
-	}
+	fld.StartDocId = fields[0].StartDocId
+	fld.NextDocId = fields[l-1].NextDocId
 
-	return docCnt, nil
+	return fwdOffset, docCnt, nil
 }
 
 

@@ -423,16 +423,17 @@ func (part *Partition) Persist() error {
 	}
 	log.Debugf("Persist Partition File : [%v] Start", part.PrtPathName)
 	var docCnt uint32
+	var fwdOffset uint64
 	var err error
 	//当前分区的各个字段分别落地
 	for name, coreField := range part.CoreFields {
 		//Note: field.Persist不会自动加载回mmap，但是设置了倒排的btdb和正排的fwdOffset和docCnt
-		if docCnt, err = part.Fields[name].Persist(part.PrtPathName, part.btdb); err != nil {
+		if fwdOffset, docCnt, err = part.Fields[name].Persist(part.PrtPathName, part.btdb); err != nil {
 			log.Errf("Partition~~> Persist %v", err)
 			return err
 		}
 		//设置coreField的fwdOffset和docCnt
-		coreField.FwdOffset = part.Fields[name].FwdOffset
+		coreField.FwdOffset = fwdOffset
 		part.CoreFields[coreField.FieldName] = coreField
 		log.Debugf("%v %v %v", name, coreField.FwdOffset, docCnt)
 		if part.DocCnt != docCnt {
@@ -441,8 +442,8 @@ func (part *Partition) Persist() error {
 		}
 	}
 
-	//上帝视角字段落地
-	_, err = part.GodField.Persist(part.PrtPathName, part.btdb)
+	//上帝视角字段落地(上帝视角只有倒排，所以忽略返回的fwdOffset和docCnt)
+	_, _, err = part.GodField.Persist(part.PrtPathName, part.btdb)
 	if err != nil {
 		log.Errf("GodField.Persist Error:%v", err.Error())
 		return err
@@ -514,13 +515,13 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 				fs = append(fs, fakefield)
 			}
 		}
-		docCnt, err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
+		fwdOffset, docCnt, err := part.Fields[fieldName].MergePersistField(fs, part.PrtPathName, part.btdb)
 		if err != nil {
 			log.Errln("MergePartitions Error1:", err)
 			return err
 		}
 
-		coreField.FwdOffset = part.Fields[fieldName].FwdOffset
+		coreField.FwdOffset = fwdOffset
 		tmp[docCnt] = true
 		part.CoreFields[fieldName] = coreField
 	}
@@ -529,12 +530,12 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 		return errors.New("Doc cnt not consistent!!")
 	}
 
-	//上帝字段合并， 上帝字段只有倒排，所以返回的合并文档数直接忽略
+	//上帝字段合并， 上帝字段只有倒排，所以返回的合并文档数和fwdOffset直接忽略
 	fs := make([]*field.Field, 0)
 	for _, pt := range parts {
 		fs = append(fs, pt.GodField)
 	}
-	_, err := part.GodField.MergePersistField(fs, part.PrtPathName, part.btdb)
+	_, _, err := part.GodField.MergePersistField(fs, part.PrtPathName, part.btdb)
 	if err != nil {
 		log.Errln("Merge God Partitions failed:", err)
 		return err
