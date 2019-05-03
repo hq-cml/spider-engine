@@ -221,9 +221,11 @@ func (part *Partition) DeleteField(fieldname string) error {
 //content, 一篇文档的各个字段的值
 func (part *Partition) AddDocument(docId uint32, content map[string]interface{}) error {
 	//校验
+	var checkErr error
 	if docId != part.NextDocId {
-		log.Errf("Partition--> AddDocument, WrongDocId:%v, NextDocId:%v", docId, part.NextDocId)
-		return errors.New("Partition--> AddDocument, Wrong DocId Number")
+		log.Warnf("Partition--> AddDoc, Wrong DocId:%v, NextDocId:%v", docId, part.NextDocId)
+		//return errors.New("Wrong DocId Number")
+		checkErr = errors.New("Wrong DocId Number")
 	}
 
 	//各个字段分别新增文档的对应部分
@@ -241,7 +243,8 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 
 		err := part.Fields[fieldName].AddDocument(docId, value)
 		if err != nil {
-			log.Warnf("Partition-->AddDocument Error. field[%v],value[%v],error[%v]", fieldName, content[fieldName], err)
+			log.Warnf("Partition-->AddDoc Error. field[%v], value[%v], error[%v]",
+				fieldName, content[fieldName], err)
 			//return err, 不退出，继续
 			failedFields = append(failedFields, fieldName)
 		} else {
@@ -267,7 +270,8 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 	}
 	err := part.GodField.AddDocument(docId, strVal)
 	if err != nil {
-		log.Warnf("Partition-->AddDocument Error,field[%v],value[%v],error[%v]", GOD_FIELD_NAME, strVal, err)
+		log.Warnf("Partition-->AddDoc Error,field[%v], value[%v], error[%v]",
+			GOD_FIELD_NAME, strVal, err)
 		//return err
 		failedFields = append(failedFields, GOD_FIELD_NAME)
 	} else {
@@ -275,7 +279,7 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 	}
 
 	//如果，很不幸，某个字段存在了错误，那么，所有正确新增的字段，均需要回滚，以保证nextDocId和docCnt的一致性
-	if len(failedFields) > 0 {
+	if checkErr != nil || len(failedFields) > 0 {
 		for _, fieldName := range successFields {
 			part.Fields[fieldName].AddDocRollback(docId)
 		}
@@ -283,13 +287,15 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		//DocId自增，在高层会通过bitmap废掉这个docId
 		part.NextDocId++
 		part.DocCnt++
-		return errors.New("Add doc Failed!")
+		log.Warnf(fmt.Sprintf("Partition Add doc Failed! Failed fields: %v", failedFields))
+		return errors.New("Partition Add doc Failed!")
+	} else {
+		//成功，则DocId和docCnt自增
+		part.NextDocId++
+		part.DocCnt++
+		log.Infof("Partition Success Add Doc: %v", docId)
+		return nil
 	}
-
-	//成功，则DocId和docCnt自增
-	part.NextDocId++
-	part.DocCnt++
-	return nil
 }
 
 //更高层采用先删后增的方式，变相得实现了update

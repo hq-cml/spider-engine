@@ -17,7 +17,7 @@ import (
 //字段的结构定义
 type Field struct {
 	FieldName  string 				`json:"fieldName"`
-	StartDocId uint32 				`json:"startDocId"`  //和它所拥有的正排索引一致
+	StartDocId uint32 				`json:"startDocId"`  //字段归属的分区的起始DocId（和它所拥有的底层正排索引起始DocId一致）
 	NextDocId  uint32			    `json:"nextDocId"`
 	IndexType  uint16			    `json:"indexType"`
 	inMemory   bool
@@ -48,6 +48,7 @@ type FieldStatus struct {
 	StartDocId    uint32 `json:"startDocId"`
 	NextDocId     uint32 `json:"nextDocId"`
 	FwdNextDocId  int64  `json:"fwdNextDocId"`
+	FwdDocCnt     int64  `json:"fwdDocCnt"`
 	IvtNextDocId  int64  `json:"ivtNextDocId"`
 }
 
@@ -153,10 +154,18 @@ func LoadField(fieldname string, startDocId, nextDocId uint32, indexType uint16,
 //Note:
 //  为了保证一致性，错误不中断，继续进行，交给高层去废除
 func (fld *Field) AddDocument(docId uint32, content interface{}) error {
+	var checkErr error
 	var fwdErr error
 	var ivtErr error
 	var ok bool
 	var contentStr string
+
+	//校验
+	if docId != fld.NextDocId || fld.inMemory == false {
+		log.Warnf("Field AddDoc. Wrong docId %v, NextDocId: %v, FwdIdx: %v", docId, fld.NextDocId, fld.FwdIdx)
+		//return errors.New("[ERROR] Wrong docId")
+		checkErr = errors.New("Field AddDoc. Wrong docId.")
+	}
 
 	//正排新增(上帝视角没有正排)
 	if fld.IndexType != index.IDX_TYPE_GOD {
@@ -187,17 +196,18 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 		}
 	}
 
-	if fwdErr == nil && ivtErr == nil {
+	if checkErr == nil && fwdErr == nil && ivtErr == nil {
 		fld.NextDocId++
 		return nil
 	} else {
 		//为了保证一致性，将错就错
 		fld.NextDocId++
-		fwdInfo, ivtInfo := "", ""
+		checkInfo, fwdInfo, ivtInfo := "", "", ""
+		if checkErr != nil { checkInfo = checkErr.Error() }
 		if fwdErr != nil { fwdInfo = fwdErr.Error() }
 		if ivtErr != nil { ivtInfo = ivtErr.Error() }
-		return errors.New(
-			fmt.Sprintf("Field-->AddDoc FwdErr: %v, IvtErr: %v", fwdInfo, ivtInfo))
+		return errors.New(fmt.Sprintf(
+			"Field-->AddDoc. CheckErr:%v, FwdErr: %v, IvtErr: %v", checkInfo, fwdInfo, ivtInfo))
 	}
 }
 
@@ -416,9 +426,11 @@ func (fld *Field) Filter(docId uint32, filter basic.SearchFilter) bool {
 func (fld *Field) GetStatus() *FieldStatus {
 	var fwdNextId int64 = -1
 	var ivtStartId int64 = -1
+	var fwdDocCnt int64 = -1
 
 	if fld.FwdIdx != nil {
 		fwdNextId = int64(fld.FwdIdx.GetNextId())
+		fwdDocCnt = int64(fld.FwdIdx.GetDocCnt())
 	}
 
 	if fld.IvtIdx != nil {
@@ -430,6 +442,7 @@ func (fld *Field) GetStatus() *FieldStatus {
 		StartDocId:    fld.StartDocId,
 		NextDocId :    fld.NextDocId,
 		FwdNextDocId:  fwdNextId,
+		FwdDocCnt:     fwdDocCnt,
 		IvtNextDocId:  ivtStartId,
 	}
 }
