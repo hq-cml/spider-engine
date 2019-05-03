@@ -18,7 +18,7 @@ import (
 type Field struct {
 	FieldName  string 				`json:"fieldName"`
 	StartDocId uint32 				`json:"startDocId"`  //和它所拥有的正排索引一致
-	NextDocId  uint32			    `json:"startDocId"`
+	NextDocId  uint32			    `json:"nextDocId"`
 	IndexType  uint16			    `json:"indexType"`
 	inMemory   bool
 	IvtIdx     *index.InvertedIndex `json:"-"`           //倒排索引
@@ -26,17 +26,16 @@ type Field struct {
 	btdb       btree.Btree          `json:"-"`
 }
 
-// 字段的核心描述信息，用于分区的落盘与加载
-type CoreField struct {
-	BasicField
-	FwdOffset uint64 `json:"fwdOffset"` //正排索引的偏移量
-	//DocCnt    uint32 `json:"docCnt"` 	//没必要：正排索引文档个数
-}
-
 // 字段的基本描述信息，用于除了CoreFiled场景之外的场景
 type BasicField struct {
 	FieldName string `json:"fieldName"`
 	IndexType uint16  `json:"indexType"`
+}
+
+// 字段的核心描述信息，用于分区的落盘与加载
+type CoreField struct {
+	BasicField
+	FwdOffset uint64 `json:"fwdOffset"` //正排索引的偏移量
 }
 
 type BasicStatus struct {
@@ -150,19 +149,21 @@ func LoadField(fieldname string, startDocId, nextDocId uint32, indexType uint16,
 
 //增加一个doc
 //Note:
-//只有内存态的字段才能增加Doc
+//	只有内存态的字段才能增加Doc
+//Note:
+//  为了保证一致性，错误不中断，继续进行，交给高层去废除
 func (fld *Field) AddDocument(docId uint32, content interface{}) error {
-
-	if docId != fld.NextDocId || fld.inMemory == false {
-		log.Errf("AddDocument :: Wrong docId %v fld.NextDocId %v fld.FwdIdx %v", docId, fld.NextDocId, fld.FwdIdx)
-		return errors.New("[ERROR] Wrong docId")
-	}
+	var fwdErr error
+	var ivtErr error
+	var ok bool
+	var contentStr string
 
 	//正排新增(上帝视角没有正排)
 	if fld.IndexType != index.IDX_TYPE_GOD {
-		if err := fld.FwdIdx.AddDocument(docId, content); err != nil {
-			log.Errf("Field--> AddDocument. Add Document Error %v", err.Error())
-			return err
+		fwdErr = fld.FwdIdx.AddDocument(docId, content)
+		if fwdErr != nil {
+			fwdErr = errors.New(fmt.Sprintf("Add Fwd Error %v", fwdErr.Error()))
+			log.Warnf("Add Fwd Error: %v", fwdErr.Error())
 		}
 	}
 
@@ -172,18 +173,32 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 		fld.IndexType != index.IDX_TYPE_PURE_TEXT &&
 		fld.IndexType != index.IDX_TYPE_PK &&      //主键只在高层Table起作用
 		fld.IvtIdx != nil {
-		contentStr, ok := content.(string)
+		contentStr, ok = content.(string)
 		if !ok {
-			return errors.New("Invert index must string")
+			ivtErr = errors.New("Invert index must string.")
+			log.Warn("Invert index must string.")
+			contentStr = ""
 		}
 
-		if err := fld.IvtIdx.AddDocument(docId, contentStr); err != nil {
-			log.Errf("Field--> AddDocument: Add Invert Document Error %v", err)
-			return err
+		err := fld.IvtIdx.AddDocument(docId, contentStr)
+		if err != nil {
+			ivtErr = errors.New(fmt.Sprintf("Add Invert Doc Error %v", err.Error()))
+			log.Warnf(fmt.Sprintf("Add Invert Doc Error %v", err.Error()))
 		}
 	}
-	fld.NextDocId++
-	return nil
+
+	if fwdErr == nil && ivtErr == nil {
+		fld.NextDocId++
+		return nil
+	} else {
+		//为了保证一致性，将错就错
+		fld.NextDocId++
+		fwdInfo, ivtInfo := "", ""
+		if fwdErr != nil { fwdInfo = fwdErr.Error() }
+		if ivtErr != nil { ivtInfo = ivtErr.Error() }
+		return errors.New(
+			fmt.Sprintf("Field-->AddDoc FwdErr: %v, IvtErr: %v", fwdInfo, ivtInfo))
+	}
 }
 
 //其他字段增加文档出现失败的时候，用来将当前字段回滚

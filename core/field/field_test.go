@@ -25,10 +25,10 @@ func TestAddDocAndQueryAndGetAndPersist(t *testing.T) {
 	field := NewEmptyField(TEST_FIELD, 0, index.IDX_TYPE_STR_SPLITER)
 
 	//add doc
-	field.AddDocument(0, "我爱北京天安门")
-	field.AddDocument(1, "天安门上太阳升")
-	field.AddDocument(2, "火红的太阳")
-	field.AddDocument(3, "火红的萨日朗")
+	err := field.AddDocument(0, "我爱北京天安门"); if err != nil {panic(err.Error())}
+	err = field.AddDocument(1, "天安门上太阳升"); if err != nil {panic(err.Error())}
+	err = field.AddDocument(2, "火红的太阳"); if err != nil {panic(err.Error())}
+	err = field.AddDocument(3, "火红的萨日朗"); if err != nil {panic(err.Error())}
 
 
 	//测试query

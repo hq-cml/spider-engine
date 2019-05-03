@@ -382,6 +382,7 @@ func (part *Partition) GetFieldValue(docId uint32, fieldName string) (interface{
 }
 
 //获取整篇文档详情，全部字段
+
 func (part *Partition) GetDocument(docId uint32) (map[string]interface{}, bool) {
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
