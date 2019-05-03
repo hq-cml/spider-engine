@@ -9,6 +9,8 @@ import (
 	"github.com/hq-cml/spider-engine/core/index"
 	"fmt"
 	"github.com/hq-cml/spider-engine/utils/helper"
+	"github.com/hq-cml/spider-engine/basic"
+	"github.com/hq-cml/spider-engine/core/partition"
 )
 
 const TEST_TABLE = "user"         //用户
@@ -25,7 +27,7 @@ func init() {
 		os.Exit(1)
 	}
 }
-/*
+
 func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	table := newEmptyTable("/tmp/spider", TEST_TABLE)
 
@@ -428,10 +430,15 @@ func TestMergeThenLoad(t *testing.T) {
 	table.DoClose()
 	t.Log("\n\n")
 }
-*/
 
 //测试部分出错之后的整体一致性
 func TestConsistentAfterError(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
+	_, err := cmd.Output()
+	if err != nil {
+		os.Exit(1)
+	}
+
 	table := newEmptyTable("/tmp/spider", TEST_TABLE)
 
 	if err := table.AddField(field.BasicField{
@@ -552,13 +559,68 @@ func TestConsistentAfterError(t *testing.T) {
 	}
 	t.Log("10004：", helper.JsonEncode(content))
 
+
+	//开始测试一下编辑的情况
+	docId, err = table.UpdateDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "孙悟空",
+		TEST_FIELD2: 28, TEST_FIELD3: "喜欢打怪"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Update Key: 10002, DocId:", docId)
+	t.Log("After Update:")
+	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", nil)
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log("美食", helper.JsonEncode(ids))
+	ids, ok = table.SearchDocs(TEST_FIELD3, "打怪", nil)
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log("打怪", helper.JsonEncode(ids))
+
+	content, exist = table.GetDoc("10002")
+	if !exist {
+		panic("Should exist")
+	}
+	t.Log("10002：", helper.JsonEncode(content))
+
+
+	//测试一个编辑错误的情况，造成的影响
+	docId, err = table.UpdateDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "猪八戒",
+		/*TEST_FIELD2: 28, */ TEST_FIELD3: "喜欢美女"})
+	if err == nil {
+		panic("Should Error")
+	}
+	t.Log("Update Key: 10002, DocId:", docId, ". Error:", err.Error())
+	t.Log("After Update:")
+	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "美食", nil)
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log("美食", helper.JsonEncode(ids))
+	ids, ok = table.SearchDocs(TEST_FIELD3, "打怪", nil)
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log("打怪", helper.JsonEncode(ids))
+
+	content, exist = table.GetDoc("10002")
+	if !exist {
+		panic("Should exist")
+	}
+	t.Log("10002：", helper.JsonEncode(content))
+
 	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
 	table.DoClose()
 
 	t.Log("\n\n")
 }
 
-/*
 //测试bitmap自动增长
 //这个用例需要将BitmapOrgNum改成8，方可测试
 func TestExpandBitmap(t *testing.T) {
@@ -1019,4 +1081,3 @@ func TestLoadAgainAgain(t *testing.T) {
 
 	t.Log("\n\n")
 }
-*/

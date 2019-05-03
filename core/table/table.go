@@ -452,7 +452,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 
 	newDocId := tbl.NextDocId
 
-	//实质新增流程开始：一致性考虑，必须执行到底
+	//实质新增流程开始：一致性考虑，此刻开始必须执行到底
 	// 处理主键新增
 	if tbl.PrimaryKey != "" {
 		tbl.priIvtMap[key] = fmt.Sprintf("%v", newDocId)
@@ -483,7 +483,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	if tbl.NextDocId % partition.PARTITION_MIN_DOC_CNT == 0 {
 		err := tbl.MergePartitions()
 		if err != nil {
-			log.Errf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
+			log.Fatalf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
 		}
 	}
 
@@ -513,9 +513,11 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 }
 
 //变更文档
-// Note:
+//Note:
 // 如果表没有主键，则不支持变更
 // 本质上还是新增，主键不变，但是docId变了
+//Note:
+// 底层为了保证一致性（各个字段之间、正排和倒排之间），所以出错也会继续执行，此处捕获错误，将docId废弃掉
 func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//校验
 	if tbl.status != TABLE_STATUS_RUNNING {
@@ -532,6 +534,10 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 		log.Errf("Primary Key Not Found %v", tbl.PrimaryKey)
 		return 0, errors.New(fmt.Sprintf("Primary Key Not Found %v", tbl.PrimaryKey))
 	}
+	key, ok := content[tbl.PrimaryKey].(string)
+	if !ok {
+		return 0, errors.New("Primary must be string!")
+	}
 
 	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
@@ -544,53 +550,68 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 		tbl.mutex.Unlock()
 	}
 
+	//bitmap自动扩容
+	if tbl.NextDocId == tbl.MaxDocNum {
+		err := tbl.doExpandBitMap()
+		if err != nil {
+			log.Errf("doExpandBitMap Error: %v", err.Error())
+			return 0, err
+		}
+	}
+
+	//找到原来的docId
+	oldDocid, found := tbl.findDocIdByPrimaryKey(key)
+	if !found {
+		return 0, errors.New(fmt.Sprintf("Can not find the doc %v. Update faield!", key))
+	}
+
 	//本质上仍然是新增文档
+	//实质流程开始：一致性考虑，此刻开始必须执行到底
 	newDocId := tbl.NextDocId
+
+	//实质内容本质上还是新增，主键不变，但是docId变了
+	var err error
+	err = tbl.memPartition.AddDocument(newDocId, content)
+	if err != nil {
+		log.Errf("MemPartition.UpdateDocument Error:%v. PrimaryKey:%v", err, key)
+	} else {
+		//成功增加了主体文档，则开始底层篡改
+		//先标记删除oldDocId
+		tbl.delFlagBitMap.Set(uint64(oldDocid.DocId))
+
+		//变更指向 key=>docId
+		if _, exist := tbl.priIvtMap[key]; exist {
+			tbl.priIvtMap[key] = strconv.Itoa(int(newDocId))           //直接覆盖
+			delete(tbl.priFwdMap, strconv.Itoa(int(oldDocid.DocId)))   //捎带手删一下，不会留下脏数据
+			tbl.priFwdMap[strconv.Itoa(int(newDocId))] = key           //设置辅助映射
+		} else {
+			//对于已经落盘的主键，则修改btdb，（会在PRI_FWD_BTREE_NAME留下一点脏数据，不影响是正确性）
+			tmpErr := tbl.priBtdb.Set(PRI_IVT_BTREE_NAME, key, fmt.Sprintf("%v", newDocId))
+			if tmpErr != nil { //这里出错的概率基本没有
+				log.Errf("Set key error  %v", tmpErr)
+				//return 0, tmpErr
+				err = tmpErr
+			}
+			tmpErr = tbl.priBtdb.Set(PRI_FWD_BTREE_NAME, fmt.Sprintf("%v", newDocId), key)
+			if tmpErr != nil {
+				log.Errf("Set key error  %v", tmpErr)
+				//return 0, tmpErr
+				err = tmpErr
+			}
+		}
+	}
+	//无论成功与否，兼容一致性，均nextDocId均自增
 	tbl.NextDocId++
 
-	//bitmap自动扩容
-	if newDocId == tbl.MaxDocNum {
-		tbl.doExpandBitMap()
-	}
-
-	//先标记删除oldDocId
-	key, ok := content[tbl.PrimaryKey].(string)
-	if !ok {
-		return 0, errors.New("Primary key has exist!")
-	}
-	oldDocid, found := tbl.findDocIdByPrimaryKey(key)
-	if found {
-		tbl.delFlagBitMap.Set(uint64(oldDocid.DocId))
-	} else {
-		return 0, errors.New(fmt.Sprintf("Can not find the doc %v. Del faield!", key))
-	}
-
-	//变更指向 key=>docId
-	if _, exist := tbl.priIvtMap[key]; exist {
-		tbl.priIvtMap[key] = strconv.Itoa(int(newDocId))           //直接覆盖
-		delete(tbl.priFwdMap, strconv.Itoa(int(oldDocid.DocId)))   //捎带手删一下，不会留下脏数据
-		tbl.priFwdMap[strconv.Itoa(int(newDocId))] = key           //设置辅助映射
-	} else {
-		//对于已经落盘的主键，就会在PRI_FWD_BTREE_NAME存下一点脏数据
-		err := tbl.priBtdb.Set(PRI_IVT_BTREE_NAME, key, fmt.Sprintf("%v", newDocId))
+	//最后，如果满足了落地归档的阈值, 需要先落地归档
+	if tbl.NextDocId % partition.PARTITION_MIN_DOC_CNT == 0 {
+		err := tbl.MergePartitions()
 		if err != nil {
-			log.Errf("Update Put key error  %v", err)
-			return 0, err
-		}
-		err = tbl.priBtdb.Set(PRI_FWD_BTREE_NAME, fmt.Sprintf("%v", newDocId), key)
-		if err != nil {
-			log.Errf("Update Put key error  %v", err)
-			return 0, err
+			log.Fatalf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
 		}
 	}
-
-	//实质内容本质上还是新增，主键不变，但是doc变了
-	err := tbl.memPartition.AddDocument(newDocId, content)
-	if err != nil {
-		log.Errf("tbl.memPartition.UpdateDocument Error:%v", err)
-		return 0, err
-	}
-	return newDocId, nil
+	
+	return newDocId, err
 }
 
 //内部获取

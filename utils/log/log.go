@@ -166,6 +166,7 @@ func Fatalf(format string, v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_FATAL {return}
 	prefix := fmt.Sprintf("[FATAL]%v", getFileLenPrefix())
 	spiderLog.Fatalf(prefix + format, v...)
+
 }
 
 func Fatalln(v ...interface{}) {

@@ -212,6 +212,8 @@ func (fld *Field) AddDocument(docId uint32, content interface{}) error {
 }
 
 //其他字段增加文档出现失败的时候，用来将当前字段回滚
+//Note:
+// 目前来讲回滚啥卵事没干，先预留
 func (fld *Field) AddDocRollback(docId uint32) error {
 	return nil
 }
