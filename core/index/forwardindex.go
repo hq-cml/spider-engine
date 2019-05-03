@@ -42,7 +42,7 @@ type ForwardIndex struct {
 	inMemory   bool   					//本索引是内存态还是磁盘态（不会同时并存）
 	indexType  uint16  					//本索引的类型
 	fwdOffset  uint64 					//本索引的数据，在base文件中的起始偏移
-	docCnt     uint32 					//本索引文档数量
+	docCnt     uint32 					//本索引文档数量----这个是实际物理上占用多少个文档位置，和高层是否删除废弃无关！！
 	fake       bool                     //标记位, 用于占位，高层的分区缺少某个字段时候，用此占位
 	memoryNum  []int64    `json:"-"`    //内存态本正排索引(数字)
 	memoryStr  []string   `json:"-"`    //内存态本正排索引(字符串)
@@ -106,41 +106,51 @@ func (fwdIdx *ForwardIndex)String() string {
 //Note：
 // 增加文档，只会出现在最新的一个分区（即都是内存态的），所以只会操作内存态的
 // 也就是，一个索引一旦落盘之后，就不在支持增加Doc了（会有其他分区的内存态索引去负责新增）
+//Note:
+// 为了保证和倒排以及其他字段的一致性，所以无论成功与否，nextDocId和DocCnt都会自增！！
+// 如果万一出现了失败，那么就直接塞一个空的数据占位，在高层会废弃掉这个docId
 func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error {
+	var err error
+	var valueInt int64 = MaxInt64
+	vtype := reflect.TypeOf(content)
+
+	//校验
 	if docId != fwdIdx.nextDocId || fwdIdx.inMemory == false {
-		log.Errf("ForwardIndex--> AddDocument.Wrong DocId Number. DocId:%v, NextId:%v", docId, fwdIdx.nextDocId)
-		return errors.New("Wrong DocId Number")
+		err = errors.New(fmt.Sprintf("Forward-->AddDocument.Wrong DocId or MemStatus. DocId:%v, NextId:%v, Mem:%v",
+			docId, fwdIdx.nextDocId, fwdIdx.inMemory))
+		//return errors.New("Wrong DocId or MemStatus ")
+		goto FAIL
 	}
 
-	vtype := reflect.TypeOf(content)
-	var value int64 = MaxInt64
-	var ok error
 	switch vtype.Name() {
 	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float64":
+		//golang json mashal的小坑, 整型会被升级为float64, 此时要回转
 		if vtype.Name() == "float64" {
-			//golang json mashal的小坑, 整型会被升级为float64, 此时要回转
 			content = int(content.(float64))
 		}
 		if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
-			log.Err(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
-			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
+			err = errors.New(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
+			//return errors.New(fmt.Sprintf("Wrong Type: %v", content))
+			goto FAIL
 		}
-		value, ok = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
-		if ok != nil {
-			value = MaxInt64
+		valueInt, err = strconv.ParseInt(fmt.Sprintf("%v", content), 0, 0)
+		if err != nil {
+			err = errors.New(fmt.Sprintf("strconv.ParseInt Error: %v, %v", content, err.Error()))
+			goto FAIL
 		}
-		fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
+		fwdIdx.memoryNum = append(fwdIdx.memoryNum, valueInt)
 	case "string":
 		if fwdIdx.indexType == IDX_TYPE_INTEGER {
-			log.Err(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
-			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
-		}
-		if fwdIdx.indexType == IDX_TYPE_DATE { //日期类型转成时间戳
-			value, err := helper.String2Timestamp(fmt.Sprintf("%v", content))
+			err = errors.New(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
+			//return errors.New(fmt.Sprintf("Wrong Type: %v", content))
+			goto FAIL
+		}else if fwdIdx.indexType == IDX_TYPE_DATE { //日期类型转成时间戳
+			valueInt, err = helper.String2Timestamp(fmt.Sprintf("%v", content))
 			if err != nil {
-				value = MaxInt64
+				err = errors.New(fmt.Sprintf("String2Timestamp Error: %v, %v", content, err.Error()))
+				goto FAIL
 			}
-			fwdIdx.memoryNum = append(fwdIdx.memoryNum, value)
+			fwdIdx.memoryNum = append(fwdIdx.memoryNum, valueInt)
 		} else {
 			fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
 		}
@@ -148,15 +158,29 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 		//float，bool等变量，走入默认分支，直接按字符串存
 		if fwdIdx.indexType != IDX_TYPE_STR_WHOLE && fwdIdx.indexType != IDX_TYPE_STR_SPLITER &&
 			fwdIdx.indexType != IDX_TYPE_STR_LIST && fwdIdx.indexType != IDX_TYPE_STR_WORD {
-			log.Err(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
-			return errors.New(fmt.Sprintf("Wrong Type: %v", content))
+			err = errors.New(fmt.Sprintf("Wrong Type: %v, %v, %v", content, fwdIdx.indexType, vtype.Name()))
+			//return errors.New(fmt.Sprintf("Wrong Type: %v", content))
+			goto FAIL
 		}
 		fwdIdx.memoryStr = append(fwdIdx.memoryStr, fmt.Sprintf("%v", content))
 	}
+
 	fwdIdx.nextDocId++
 	fwdIdx.docCnt ++
-	log.Debugf("ForwardIndex AddDocument--> DocId: %v ,Content: %v", docId, content)
+	log.Debugf("Forward AddDoc--> DocId: %v ,Content: %v", docId, content)
 	return nil
+
+FAIL:
+	//即便出错，底层也将错就错，高层会做废弃
+	if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
+		fwdIdx.memoryNum = append(fwdIdx.memoryNum, MaxInt64)
+	} else {
+		fwdIdx.memoryStr = append(fwdIdx.memoryStr, "") //插一个“”占位
+	}
+	fwdIdx.nextDocId++
+	fwdIdx.docCnt ++
+	log.Warnf("Forward AddDocument Error. DocId: %v ,Content: %v, Error:%v", docId, content, err.Error())
+	return err
 }
 
 //更高层采用先删后增的方式，变相得实现了update

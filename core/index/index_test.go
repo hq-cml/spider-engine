@@ -293,6 +293,8 @@ func TestPersist(t *testing.T) {
 	idx3 := NewEmptyForwardIndex(IDX_TYPE_STR_WHOLE, 0) //数字型存入字符
 	err = idx3.AddDocument(0, "abc"); if err != nil {panic(err)}
 	err = idx3.AddDocument(1, "efg"); if err != nil {panic(err)}
+	err = idx3.AddDocument(2, ""); if err != nil {panic(err)}        //测试存入一个“”看结果怎么样
+	err = idx3.AddDocument(3, "xyz"); if err != nil {panic(err)}
 	offset, cnt, err = idx3.Persist("/tmp/spider/Partition.string")
 	if err != nil {
 		panic(err)
@@ -346,6 +348,19 @@ func TestLoadFwdIndex(t *testing.T) {
 		panic("Sth wrong")
 	}
 	t.Log("1: ", sv)
+
+	sv, b = idx2.GetString(2)
+	if !b || sv != "" {
+		panic("Sth wrong")
+	}
+	t.Log("2 is null string!!!!:"+ sv + "###")
+
+	sv, b = idx2.GetString(3)
+	if !b || sv != "xyz" {
+		panic("Sth wrong")
+	}
+	t.Log("3: ", sv)
+
 
 	t.Log("\n\n")
 }

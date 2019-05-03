@@ -90,22 +90,20 @@ func LoadInvertedIndex(btdb btree.Btree, indexType uint16, fieldname string, ivt
 //Note：
 // 增加文档，只会出现在最新的一个分区（即都是内存态的），所以只会操作内存态的
 // 也就是，一个索引一旦落盘之后，就不在支持增加Doc了（会有其他分区的内存态索引去负责新增）
-//TODO 改、删怎么处理的？？
+//Note:
+// 为了保证和正排以及其他字段的一致性，所以无论成功与否，nextDocId都会自增！！
 func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	var nodes map[string]basic.DocNode
-	//校验必须是内存态
-	if !rIdx.inMemory {
-		log.Errf("InvertedIndex--> AddDocument:Must memory status")
-		return errors.New("Must memory status")
+	var err error
+	//校验必须是内存态和DocId
+	if !rIdx.inMemory || docId != rIdx.nextDocId {
+		err = errors.New(fmt.Sprintf("Inverted-->AddDocument. Wrong DocId or MemStatus. DocId:%v, NextId:%v, Mem:%v",
+			docId, rIdx.nextDocId, rIdx.inMemory))
+		//return errors.New("Wrong DocId or MemStatus ")
+		goto FAIL
 	}
 
-	//docId校验
-	if docId != rIdx.nextDocId {
-		log.Errf("InvertedIndex--> AddDocument:Wrong DocId Number. DocId:%v, NextId:%v", docId, rIdx.nextDocId)
-		return errors.New("Wrong DocId Number")
-	}
-
-	//为空的内容，则直接成功返回
+	//新增内容为空的内容，则直接成功返回
 	if len(content) <= 0 {
 		goto SUCC
 	}
@@ -114,17 +112,18 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	switch rIdx.indexType {
 	case IDX_TYPE_STR_WHOLE: 			            //全词匹配模式
 		nodes = SplitWholeWords(docId, content)
-	case IDX_TYPE_STR_LIST: 					//分号切割模式
+	case IDX_TYPE_STR_LIST: 					    //分号切割模式
 		nodes = SplitSemicolonWords(docId, content)
-	case IDX_TYPE_STR_WORD: 				//单个词模式
+	case IDX_TYPE_STR_WORD: 				        //单个词模式
 		nodes = SplitRuneWords(docId, content)
-	case IDX_TYPE_STR_SPLITER:   			    //分词模式
+	case IDX_TYPE_STR_SPLITER:   			        //分词模式
 		nodes = SplitTrueWords(docId, content)
-	case IDX_TYPE_GOD:     						//上帝模式--按分词处理
+	case IDX_TYPE_GOD:     						    //上帝模式--按分词处理
 		nodes = SplitTrueWords(docId, content)
 	default:
-		log.Errf("InvertedIndex--> AddDocument: Type %v can't add invertIndex", rIdx.indexType)
-		return errors.New("Unsupport indexType")
+		err = errors.New(fmt.Sprintf("Inverted-->AddDocument: Type %v can't add invertIndex", rIdx.indexType))
+		//return errors.New("Unsupport indexType")
+		goto FAIL
 	}
 
 	//分词结果填入内存索引
@@ -136,10 +135,15 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 	}
 
 SUCC:
-	//docId自增
-	rIdx.nextDocId++
-	log.Debugf("InvertAddDoc--> Field: %v, DocId: %v ,Content: %v", rIdx.fieldName, docId, content)
+	rIdx.nextDocId++ //docId自增
+	log.Debugf("InvertAddDoc--> DocId: %v, Field: %v ,Content: %v", docId, rIdx.fieldName, content)
 	return nil
+
+FAIL:
+	rIdx.nextDocId++ //docId自增
+	log.Warnf("InvertAddDoc Failed!. DocId: %v, Field: %v, Content: %v, Error: %v",
+		docId, rIdx.fieldName, content, err.Error())
+	return err
 }
 
 //给定一个查询词query，找出doc的list

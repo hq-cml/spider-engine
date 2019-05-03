@@ -220,7 +220,7 @@ func (part *Partition) DeleteField(fieldname string) error {
 //添加文档
 //content, 一篇文档的各个字段的值
 func (part *Partition) AddDocument(docId uint32, content map[string]interface{}) error {
-
+	//校验
 	if docId != part.NextDocId {
 		log.Errf("Partition--> AddDocument, WrongDocId:%v, NextDocId:%v", docId, part.NextDocId)
 		return errors.New("Partition--> AddDocument, Wrong DocId Number")
@@ -228,18 +228,24 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 
 	//各个字段分别新增文档的对应部分
 	godStrs := []string{}
+	successFields := []string{}
+	failedFields := []string{}
 	for fieldName, iField := range part.Fields {
+		var value interface{}
 		if _, ok := content[fieldName]; !ok {
 			//如果某个字段没传, 则会是空值
-			if err := part.Fields[fieldName].AddDocument(docId, ""); err != nil {
-				log.Errf("Partition--> AddDocument [%v] :: %v", part.PrtPathName, err)
-				return err
-			}
+			value = ""
 		} else {
-			if err := part.Fields[fieldName].AddDocument(docId, content[fieldName]); err != nil {
-				log.Errf("Partition--> AddDocument :: field[%v] value[%v] error[%v]", fieldName, content[fieldName], err)
-				return err
-			}
+			value = content[fieldName]
+		}
+
+		err := part.Fields[fieldName].AddDocument(docId, value)
+		if err != nil {
+			log.Warnf("Partition-->AddDocument Error. field[%v],value[%v],error[%v]", fieldName, content[fieldName], err)
+			//return err, 不退出，继续
+			failedFields = append(failedFields, fieldName)
+		} else {
+			successFields = append(successFields, fieldName)
 		}
 
 		//字符类型的字段内容(不包括纯文本类型), 汇入上帝视角
@@ -254,15 +260,33 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		}
 	}
 
+	//上帝视角增加倒排
 	strVal := ""
 	if len(godStrs) > 0 {
-		strVal = strings.Join(godStrs, "。") //汇总, 然后增加倒排
+		strVal = strings.Join(godStrs, "。") //汇总,然后增加倒排（用句号合并，分词器会自动去分词的）
 	}
-	if err := part.GodField.AddDocument(docId, strVal); err != nil {
-		log.Errf("Partition--> AddDocument :: field[%v] value[%v] error[%v]", GOD_FIELD_NAME, strVal, err)
-		return err
+	err := part.GodField.AddDocument(docId, strVal)
+	if err != nil {
+		log.Warnf("Partition-->AddDocument Error,field[%v],value[%v],error[%v]", GOD_FIELD_NAME, strVal, err)
+		//return err
+		failedFields = append(failedFields, GOD_FIELD_NAME)
+	} else {
+		successFields = append(successFields, GOD_FIELD_NAME)
 	}
 
+	//如果，很不幸，某个字段存在了错误，那么，所有正确新增的字段，均需要回滚，以保证nextDocId和docCnt的一致性
+	if len(failedFields) > 0 {
+		for _, fieldName := range successFields {
+			part.Fields[fieldName].AddDocRollback(docId)
+		}
+
+		//DocId自增，在高层会通过bitmap废掉这个docId
+		part.NextDocId++
+		part.DocCnt++
+		return errors.New("Add doc Failed!")
+	}
+
+	//成功，则DocId和docCnt自增
 	part.NextDocId++
 	part.DocCnt++
 	return nil
