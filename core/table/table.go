@@ -36,16 +36,16 @@ import (
 // 为了性能的尽量提升和逻辑简单，priFwdMap可能存在一定量的脏数据（因为doc的编辑和删除操作导致）
 // 不过由于bitmap和priIvtMap为主查询，priFwdMapz只是辅助，所以不会影响正确性
 type Table struct {
-	TableName      string                       `json:"tableName"`
-	Path           string                       `json:"pathName"`
-	BasicFields    map[string]field.BasicField  `json:"fields"`       //不包括主键！！
-	PrimaryKey     string                       `json:"primaryKey"`
-	StartDocId     uint32                       `json:"startDocId"`
-	NextDocId      uint32                       `json:"nextDocId"`
-	CurDocNum      uint32                       `json:"curDocNum"`    //表总文档数，和底层的docCnt不同，这个docNum表示实际有多少有效文档
-	MaxDocNum      uint32                       `json:"maxDocNum"`
-	PartSuffix     uint64                       `json:"prefix"`
-	PrtPathNames   []string                     `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
+	TableName    string                      `json:"tableName"`
+	Path         string                      `json:"pathName"`
+	BasicFields  map[string]field.BasicField `json:"fields"`       //不包括主键！！
+	PrimaryKey   string                      `json:"primaryKey"`
+	StartDocId   uint32                      `json:"startDocId"`
+	NextDocId    uint32                      `json:"nextDocId"`
+	RealDocNum   uint32                      `json:"realDocNum"` //表总文档数，和底层的docCnt不同，这个docNum表示实际有多少有效文档
+	MaxDocNum    uint32                      `json:"maxDocNum"`
+	PartSuffix   uint64                      `json:"prefix"`
+	PrtPathNames []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
 
 	status         uint8
 	memPartition   *partition.Partition   //内存态的分区,分区不包括逐渐
@@ -58,15 +58,15 @@ type Table struct {
 }
 
 type TableStatus struct {
-	TableName     string                        `json:"tableName"`
-	Path          string                        `json:"pathName"`
-	Fields        []*field.BasicStatus          `json:"fields"`       //不包括主键！！
-	PrimaryKey    string                        `json:"primaryKey"`
-	CurDocNum     uint32                        `json:"curDocNum"`
-	StartDocId    uint32                        `json:"startDocId"`
-	NextDocId     uint32                        `json:"nextDocId"`
-	DiskParts     []*partition.PartitionStatus  `json:"partitions"`  //磁盘态的分区列表名--这些分区均不包括主键！！！
-	MemPart       *partition.PartitionStatus    `json:"memPartition"`
+	TableName  string                       `json:"tableName"`
+	Path       string                       `json:"pathName"`
+	Fields     []*field.BasicStatus         `json:"fields"`       //不包括主键！！
+	PrimaryKey string                       `json:"primaryKey"`
+	RealDocNum uint32                       `json:"realDocNum"`
+	StartDocId uint32                       `json:"startDocId"`
+	NextDocId  uint32                       `json:"nextDocId"`
+	DiskParts  []*partition.PartitionStatus `json:"partitions"`  //磁盘态的分区列表名--这些分区均不包括主键！！！
+	MemPart    *partition.PartitionStatus   `json:"memPartition"`
 }
 
 const (
@@ -475,7 +475,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	} else {
 		//成功，NextDocId自增
 		tbl.NextDocId++
-		tbl.CurDocNum++
+		tbl.RealDocNum++
 		log.Infof("Table AddDoc Success. PrimaryKey: %v", key)
 	}
 
@@ -499,13 +499,27 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 	}
 	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
 	if found {
-		//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了，会在btdb留下一点脏数据
-		//不过不过不会影响到正确性，因为以bitmap的删除标记为准
-		delete(tbl.priIvtMap, primaryKey)
-		delete(tbl.priFwdMap, fmt.Sprintf("%v", docId.DocId))
-
 		//核心删除
-		tbl.CurDocNum--
+		tbl.RealDocNum--
+
+		//删除分区的realDocNum
+		if tbl.memPartition != nil &&
+			(docId.DocId >= tbl.memPartition.StartDocId && docId.DocId < tbl.memPartition.NextDocId) {
+			//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了，会在btdb留下一点脏数据
+			//不过不过不会影响到正确性，因为以bitmap的删除标记为准
+			delete(tbl.priIvtMap, primaryKey)
+			delete(tbl.priFwdMap, fmt.Sprintf("%v", docId.DocId))
+			tbl.memPartition.RealDocNum --
+		} else {
+			//尝试从磁盘分区获取
+			for _, prt := range tbl.partitions {
+				if docId.DocId >= prt.StartDocId && docId.DocId < prt.NextDocId {
+					prt.RealDocNum --
+					break
+				}
+			}
+		}
+
 		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
 	}
 
@@ -610,7 +624,7 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 			log.Fatalf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
 		}
 	}
-	
+
 	return newDocId, err
 }
 
@@ -1013,7 +1027,7 @@ func (tbl *Table) GetStatus() *TableStatus {
 		Path           : tbl.Path,
 		Fields         : m,
 		PrimaryKey     : tbl.PrimaryKey,
-		CurDocNum      : tbl.CurDocNum,
+		RealDocNum:      tbl.RealDocNum,
 		StartDocId     : tbl.StartDocId,
 		NextDocId      : tbl.NextDocId,
 		DiskParts      : p,

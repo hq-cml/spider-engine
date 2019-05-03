@@ -179,9 +179,9 @@ func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
 
 //索引销毁
 // Note: 只销毁内存部分，mmap和btdb因为是公用，需要在高层统一销毁
-func (rIdx *InvertedIndex) DoClose() error {
+func (rIdx *InvertedIndex) DoClose() {
 	rIdx.termMap = nil
-	return nil
+	return
 }
 
 //设置倒排文件mmap

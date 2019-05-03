@@ -280,7 +280,7 @@ func (fld *Field) GetValue(docId uint32) (interface{}, bool) {
 }
 
 //销毁字段
-func (fld *Field) DoClose() error {
+func (fld *Field) DoClose() {
 	if fld.FwdIdx != nil {
 		fld.FwdIdx.DoClose()
 	}
@@ -288,7 +288,7 @@ func (fld *Field) DoClose() error {
 	if fld.IvtIdx != nil {
 		fld.IvtIdx.DoClose()
 	}
-	return nil
+	return
 }
 
 func (fld *Field) SetBaseMmap(mmap *mmap.Mmap) {

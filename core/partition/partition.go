@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值
+	PARTITION_MIN_DOC_CNT uint32 = 100000 //10w个文档，分区合并的一个参考值，一个分区至少拥有10w个Doc
 	//PARTITION_MIN_DOC_CNT uint32 = 3
 )
 
@@ -35,7 +35,8 @@ const (
 type Partition struct {
 	StartDocId      uint32                     `json:"startDocId"`
 	NextDocId       uint32                     `json:"nextDocId"`      //下次的DocId（所以Max的DocId是NextId-1）
-	DocCnt          uint32                     `json:"docCnt"` 	       //分区文档个数
+	DocCnt          uint32                     `json:"docCnt"` 	       //分区文档个数，这个是物理上占位的文档个数，可能多余实际的文档数
+	RealDocNum      uint32                     `json:"realDocNum"`     //分区实际拥有的有效文档数
 	PrtPathName     string                     `json:"prtPathName"`
 	CoreFields      map[string]field.CoreField `json:"fields"`         //分区各个字段的最基础信息，落盘用
 	GodBaseField    field.BasicField           `json:"godField"`       //上帝视角字段, 用于跨字段倒排索引搜索
@@ -51,7 +52,8 @@ type Partition struct {
 type PartitionStatus struct {
 	StartDocId      uint32                     `json:"startDocId"`
 	NextDocId       uint32                     `json:"nextDocId"`
-	DocCnt          uint32                     `json:"docCnt"`         //TODO 这个字段!= next-start, 验一下！！
+	DocCnt          uint32                     `json:"docCnt"`
+	RealDocNum      uint32                     `json:"realDocNum"`
 	PrtPathName     string                     `json:"prtPathName"`
 	SubFields       []*field.FieldStatus       `json:"subFields"`      //字段的一部分数据
 	GodField        *field.FieldStatus         `json:"godFields"`      //字段的一部分数据
@@ -60,7 +62,6 @@ type PartitionStatus struct {
 //新建一个空分区, 包含字段
 //相当于建立了一个完整的空骨架，分区=>字段=>索引
 func NewEmptyPartitionWithBasicFields(PrtPathName string, start uint32, basicFields []field.BasicField) *Partition {
-	fmt.Println("A--------------", start)
 	part := &Partition{
 		StartDocId:  start,
 		NextDocId:   start,
@@ -293,6 +294,7 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		//成功，则DocId和docCnt自增
 		part.NextDocId++
 		part.DocCnt++
+		part.RealDocNum ++ //只有真正成功的时候，才会自增realDocNum
 		log.Infof("Partition Success Add Doc: %v", docId)
 		return nil
 	}
@@ -347,6 +349,11 @@ func (part *Partition) DoClose() error {
 	//统一关闭btdb
 	if part.btdb != nil {
 		if err := part.btdb.Close(); err != nil {log.Errf("Btree Close Error:", err)}
+	}
+
+	//元信息落地
+	if err := part.storeMeta(); err != nil {
+		return err
 	}
 
 	return nil
@@ -603,6 +610,11 @@ func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	part.StartDocId = parts[0].StartDocId
 	part.NextDocId = parts[l-1].NextDocId
 	part.DocCnt = docCnt
+	var real uint32
+	for _, pt := range parts {
+		real = real + pt.RealDocNum
+	}
+	part.RealDocNum = real
 
 	log.Infof("MergePartitions [%v] Finish", part.PrtPathName)
 	return part.storeMeta()
@@ -695,6 +707,7 @@ func (part *Partition) GetStatus() *PartitionStatus {
 		NextDocId   : part.NextDocId,
 		PrtPathName : part.PrtPathName,
 		DocCnt      : part.DocCnt,
+		RealDocNum  : part.RealDocNum,
 		SubFields   : sub,
 		GodField    : part.GodField.GetStatus(),
 	}
