@@ -172,14 +172,14 @@ func (fwdIdx *ForwardIndex) AddDocument(docId uint32, content interface{}) error
 
 FAIL:
 	//即便出错，底层也将错就错，高层会做废弃
-	if fwdIdx.indexType != IDX_TYPE_INTEGER && fwdIdx.indexType != IDX_TYPE_DATE {
+	if fwdIdx.indexType == IDX_TYPE_INTEGER || fwdIdx.indexType == IDX_TYPE_DATE {
 		fwdIdx.memoryNum = append(fwdIdx.memoryNum, MaxInt64)
 	} else {
 		fwdIdx.memoryStr = append(fwdIdx.memoryStr, "") //插一个“”占位
 	}
 	fwdIdx.nextDocId++
 	fwdIdx.docCnt ++
-	log.Warnf("Forward AddDocument Error. DocId: %v ,Content: %v, Error:%v", docId, content, err.Error())
+	log.Warnf("Forward AddDocument Error. DocId: %v, Content: %v, Error:%v", docId, content, err.Error())
 	return err
 }
 

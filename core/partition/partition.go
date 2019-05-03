@@ -468,7 +468,7 @@ func (part *Partition) Persist() error {
 		part.CoreFields[coreField.FieldName] = coreField
 		log.Debugf("%v %v %v", name, coreField.FwdOffset, docCnt)
 		if part.DocCnt != docCnt {
-			log.Errf("Doc cnt not same!!. %v, %v", part.DocCnt, docCnt)
+			log.Errf("Doc cnt not same!!. %v, %v, %v", part.DocCnt, docCnt, name)
 			return errors.New("Doc cnt not same!!")
 		}
 	}

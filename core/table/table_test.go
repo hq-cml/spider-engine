@@ -7,10 +7,8 @@ import (
 	"testing"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/core/index"
-	"github.com/hq-cml/spider-engine/utils/helper"
 	"fmt"
-	"github.com/hq-cml/spider-engine/basic"
-	"github.com/hq-cml/spider-engine/core/partition"
+	"github.com/hq-cml/spider-engine/utils/helper"
 )
 
 const TEST_TABLE = "user"         //用户
@@ -27,7 +25,7 @@ func init() {
 		os.Exit(1)
 	}
 }
-
+/*
 func TestNewTableAndPersistAndDelfield(t *testing.T) {
 	table := newEmptyTable("/tmp/spider", TEST_TABLE)
 
@@ -430,7 +428,137 @@ func TestMergeThenLoad(t *testing.T) {
 	table.DoClose()
 	t.Log("\n\n")
 }
+*/
 
+//测试部分出错之后的整体一致性
+func TestConsistentAfterError(t *testing.T) {
+	table := newEmptyTable("/tmp/spider", TEST_TABLE)
+
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD0,
+		IndexType: index.IDX_TYPE_PK,
+	}); err != nil {
+		panic(err)
+	}
+
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD1,
+		IndexType: index.IDX_TYPE_STR_WHOLE,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD2,
+		IndexType: index.IDX_TYPE_INTEGER,
+	}); err != nil {
+		panic(err)
+	}
+	if err := table.AddField(field.BasicField{
+		FieldName: TEST_FIELD3,
+		IndexType: index.IDX_TYPE_STR_SPLITER,
+	}); err != nil {
+		panic(err)
+	}
+
+	table.status = TABLE_STATUS_RUNNING
+
+	docId, key, err := table.AddDoc(map[string]interface{}{TEST_FIELD0: "10001", TEST_FIELD1: "张三",
+		TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId, key)
+
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10002", TEST_FIELD1: "李四",
+		TEST_FIELD2: 28, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	t.Log("Before Error:")
+	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
+
+	//增加一个导致age正排出错的文档
+	docId, key, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: "王二麻",
+		/*TEST_FIELD2: 30, */TEST_FIELD3: "喜欢养生", TEST_FIELD4: 99})
+	if err == nil {
+		panic("Should Error")
+	}
+	t.Log("Add Error DocId:", docId, key)
+	t.Log("Before Error1:")
+	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
+
+	//再增加一个导致name倒排出错的文档
+	docId, key, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003",TEST_FIELD1: /*"王二麻"*/88,
+		TEST_FIELD2: 30, TEST_FIELD3: "喜欢养生", TEST_FIELD4: 99})
+	if err == nil {
+		panic("Should Error")
+	}
+	t.Log("Add Error DocId:", docId, key)
+	t.Log("Before Error2:")
+	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
+
+	//测试落地一个带有曾经错误的分区
+	err = table.Persist()
+	if err != nil {
+		panic(fmt.Sprintf("Persist Error:%s", err))
+		table.DoClose()
+	}
+
+	//再次新增一个正确文档
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10003", TEST_FIELD1: "爱新觉罗",
+		TEST_FIELD2: 30,TEST_FIELD3: "喜欢打仗"})
+	if err != nil {
+		panic(fmt.Sprintf("AddDoc Error:%s", err))
+	}
+	t.Log("Add DocId:", docId)
+
+	//再次增一个错误文档
+	docId, _, err = table.AddDoc(map[string]interface{}{TEST_FIELD0: "10004", TEST_FIELD1: "唐伯虎",
+		/*TEST_FIELD2: 30, */TEST_FIELD3: "喜欢建筑"})
+	if err == nil {
+		panic(fmt.Sprintf("Should Error"))
+	}
+	t.Log("Add DocId:", docId)
+
+	t.Log("After Persist:")
+	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
+
+	ids, ok := table.SearchDocs(TEST_FIELD3, "美食", nil)
+	if !ok {
+		panic("Can't find")
+	}
+	t.Log("美食", helper.JsonEncode(ids))
+
+	ids, ok = table.SearchDocs(TEST_FIELD3, "养生", nil)
+	if ok {
+		panic("should not find")
+	}
+	t.Log("养生", helper.JsonEncode(ids))
+
+
+	//找一个曾经错误过,后来又加回来的试试看
+	content, exist := table.GetDoc("10003")
+	if !exist {
+		panic("Should exist")
+	}
+	t.Log("10003：", helper.JsonEncode(content))
+
+	content, exist = table.GetDoc("10004")
+	if exist {
+		panic("Should not exist")
+	}
+	t.Log("10004：", helper.JsonEncode(content))
+
+	//关闭, 应该会落地最后一个文档的新增变化, 下一个函数测试
+	table.DoClose()
+
+	t.Log("\n\n")
+}
+
+/*
 //测试bitmap自动增长
 //这个用例需要将BitmapOrgNum改成8，方可测试
 func TestExpandBitmap(t *testing.T) {
@@ -891,3 +1019,4 @@ func TestLoadAgainAgain(t *testing.T) {
 
 	t.Log("\n\n")
 }
+*/

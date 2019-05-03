@@ -42,6 +42,7 @@ type Table struct {
 	PrimaryKey     string                       `json:"primaryKey"`
 	StartDocId     uint32                       `json:"startDocId"`
 	NextDocId      uint32                       `json:"nextDocId"`
+	CurDocNum      uint32                       `json:"curDocNum"`    //表总文档数，和底层的docCnt不同，这个docNum表示实际有多少有效文档
 	MaxDocNum      uint32                       `json:"maxDocNum"`
 	PartSuffix     uint64                       `json:"prefix"`
 	PrtPathNames   []string                     `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
@@ -61,6 +62,7 @@ type TableStatus struct {
 	Path          string                        `json:"pathName"`
 	Fields        []*field.BasicStatus          `json:"fields"`       //不包括主键！！
 	PrimaryKey    string                        `json:"primaryKey"`
+	CurDocNum     uint32                        `json:"curDocNum"`
 	StartDocId    uint32                        `json:"startDocId"`
 	NextDocId     uint32                        `json:"nextDocId"`
 	DiskParts     []*partition.PartitionStatus  `json:"partitions"`  //磁盘态的分区列表名--这些分区均不包括主键！！！
@@ -396,6 +398,8 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 }
 
 //新增文档
+//Note:
+// 底层为了保证一致性（各个字段之间、正排和倒排之间），所以出错也会继续执行，此处捕获错误，将docId废弃掉
 func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error) {
 	//校验
 	if tbl.status != TABLE_STATUS_RUNNING {
@@ -420,13 +424,13 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		}
 	}
 
-	//主键不能重复
+	//校验主键不能重复
 	_, exist := tbl.findDocIdByPrimaryKey(key)
 	if exist {
 		return 0, "", errors.New("Duplicate Primary Key! " + key)
 	}
 
-	//如果内存分区为空，则新建
+	//如果内存分区为空，则新建内存分区
 	if tbl.memPartition == nil {
 		tbl.mutex.Lock()
 		err := tbl.generateMemPartition()
@@ -437,30 +441,45 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		tbl.mutex.Unlock()
 	}
 
-	newDocId := tbl.NextDocId
-	tbl.NextDocId++
-
-	fmt.Println("B--------------", tbl.memPartition.StartDocId)
-
-	//bitmap判断自动扩容
-	if newDocId == tbl.MaxDocNum {
-		tbl.doExpandBitMap()
+	//bitmap判断是否需要自动扩容
+	if tbl.NextDocId == tbl.MaxDocNum {
+		err := tbl.doExpandBitMap()
+		if err != nil {
+			log.Errf("doExpandBitMap Error: %v", err.Error())
+			return 0, "", err
+		}
 	}
 
-	//处理主键新增
+	newDocId := tbl.NextDocId
+
+	//实质新增流程开始：一致性考虑，必须执行到底
+	// 处理主键新增
 	if tbl.PrimaryKey != "" {
 		tbl.priIvtMap[key] = fmt.Sprintf("%v", newDocId)
 		tbl.priFwdMap[fmt.Sprintf("%v", newDocId)] = key
 	}
 
 	//其他字段新增Doc
-	err := tbl.memPartition.AddDocument(newDocId, content)
+	var err error
+	err = tbl.memPartition.AddDocument(newDocId, content)
 	if err != nil {
-		log.Errf("tbl.memPartition AddDocument Error:%v", err)
-		return 0, "", err
+		delete(tbl.priIvtMap, key)
+		delete(tbl.priFwdMap, fmt.Sprintf("%v", newDocId))
+
+		//标记删除
+		tbl.delFlagBitMap.Set(uint64(newDocId))
+
+		//失败，但是仍然会新增NextDocId，保证一致性
+		tbl.NextDocId++
+		log.Errf("Table AddDoc Error:%v. PrimaryKey:%v", err, key)
+	} else {
+		//成功，NextDocId自增
+		tbl.NextDocId++
+		tbl.CurDocNum++
+		log.Infof("Table AddDoc Success. PrimaryKey: %v", key)
 	}
 
-	//如果满足了落地归档的阈值, 那么先落地归档
+	//最后，如果满足了落地归档的阈值, 需要先落地归档
 	if tbl.NextDocId % partition.PARTITION_MIN_DOC_CNT == 0 {
 		err := tbl.MergePartitions()
 		if err != nil {
@@ -468,7 +487,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		}
 	}
 
-	return newDocId, key, nil
+	return newDocId, key, err
 }
 
 //删除
@@ -486,6 +505,7 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 		delete(tbl.priFwdMap, fmt.Sprintf("%v", docId.DocId))
 
 		//核心删除
+		tbl.CurDocNum--
 		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
 	}
 
@@ -972,6 +992,7 @@ func (tbl *Table) GetStatus() *TableStatus {
 		Path           : tbl.Path,
 		Fields         : m,
 		PrimaryKey     : tbl.PrimaryKey,
+		CurDocNum      : tbl.CurDocNum,
 		StartDocId     : tbl.StartDocId,
 		NextDocId      : tbl.NextDocId,
 		DiskParts      : p,

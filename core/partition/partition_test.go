@@ -15,7 +15,7 @@ const TEST_FIELD1 = "user_name"
 const TEST_FIELD2 = "user_age"
 const TEST_FIELD3 = "user_desc"
 const TEST_FIELD4 = "pure_text"
-/*
+
 func init() {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
@@ -189,7 +189,7 @@ func TestLoad(t *testing.T) {
 
 	t.Log("\n\n")
 }
-*/
+
 //测试增加出错之后的一致性问题
 func TestConsistentAfterError(t *testing.T) {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
@@ -235,8 +235,10 @@ func TestConsistentAfterError(t *testing.T) {
 
 	t.Log("After Error2:")
 	t.Log(helper.JsonEncodeIndent(memPartition.GetStatus()))
+
+	memPartition.DoClose()
 }
-/*
+
 func TestPartitionMerge(t *testing.T) {
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
@@ -645,4 +647,3 @@ func TestQueryByGodField(t *testing.T) {
 
 	t.Log("\n\n")
 }
-*/
