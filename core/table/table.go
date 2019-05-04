@@ -73,8 +73,8 @@ const (
 	DEFAULT_PRIMARY_FIELD_NAME = "#Def%Pri$Key@" //系统默认主键名称
 	PRI_FWD_BTREE_NAME 		   = "pri_fwd_tree"
 	PRI_IVT_BTREE_NAME         = "pri_ivt_tree"
-	//BitmapOrgNum             = 8 			     //test
 	BitmapOrgNum               = 0x01 << 27      //16M 文件, 表示最大1.3亿的文档
+	//BitmapOrgNum             = 8 			     //test
 )
 
 const (
@@ -527,7 +527,6 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 				}
 			}
 		}
-
 		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
 	}
 

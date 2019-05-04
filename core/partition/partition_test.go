@@ -85,13 +85,13 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log("天安门:", helper.JsonEncode(list))
 
-	c, _ := memPartition.GetDocument(2)
+	c, _ := memPartition.getDocument(2)
 	t.Log(helper.JsonEncode(c))
 
-	s1, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	s1, _ := memPartition.getFieldValue(1, TEST_FIELD3)
 	t.Log(s1)
 
-	s3, _ := memPartition.GetFieldValue(1, TEST_FIELD4) //测试纯文本字段
+	s3, _ := memPartition.getFieldValue(1, TEST_FIELD4) //测试纯文本字段
 	t.Log("纯文本字段:", s3)
 
 	//持久化落地
@@ -124,10 +124,10 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	d, _ := memPartition.GetDocument(2)
+	d, _ := memPartition.getDocument(2)
 	t.Log(helper.JsonEncode(d))
 
-	s2, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	s2, _ := memPartition.getFieldValue(1, TEST_FIELD3)
 	t.Log(s2)
 
 	if s1 != s2 {
@@ -140,7 +140,7 @@ func TestNewPartitionAndQueryAndPersist(t *testing.T) {
 	}
 	t.Log("天安门:", helper.JsonEncode(list))
 
-	s3, _ = memPartition.GetFieldValue(1, TEST_FIELD4) //测试纯文本字段
+	s3, _ = memPartition.getFieldValue(1, TEST_FIELD4) //测试纯文本字段
 	t.Log("纯文本字段:", s3)
 
 	memPartition.DoClose()
@@ -181,10 +181,10 @@ func TestLoad(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	d, _ := part.GetDocument(2)
+	d, _ := part.getDocument(2)
 	t.Log(helper.JsonEncode(d))
 
-	s2, _ := part.GetFieldValue(1, TEST_FIELD3)
+	s2, _ := part.getFieldValue(1, TEST_FIELD3)
 	t.Log(s2)
 
 	t.Log("\n\n")
@@ -348,7 +348,7 @@ func TestPartitionMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	d, ok := part2.GetDocument(2)
+	d, ok := part2.getDocument(2)
 	if !ok {
 		panic("Shuold exist")
 	}
@@ -358,7 +358,7 @@ func TestPartitionMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(d))
 
-	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
+	s2, ok := part2.getFieldValue(1, TEST_FIELD3)
 	if !ok {
 		panic("Shuold exist")
 	}
@@ -419,7 +419,7 @@ func TestLoadMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(list))
 
-	d, ok := part2.GetDocument(2)
+	d, ok := part2.getDocument(2)
 	if !ok {
 		panic("Shuold exist")
 	}
@@ -429,7 +429,7 @@ func TestLoadMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(d))
 
-	s2, ok := part2.GetFieldValue(1, TEST_FIELD3)
+	s2, ok := part2.getFieldValue(1, TEST_FIELD3)
 	if !ok {
 		panic("Shuold exist")
 	}
@@ -548,13 +548,13 @@ func TestPartitionMergeAfterFiledChange(t *testing.T) {
 	t.Log("李八:", helper.JsonEncode(list))
 
 	//测试正排索引
-	d, ok := part2.GetDocument(2)
+	d, ok := part2.getDocument(2)
 	if !ok {
 		panic("Shuold exist")
 	}
 	t.Log("Got doc 2:", helper.JsonEncode(d))
 
-	s2, ok := part2.GetFieldValue(3, TEST_FIELD3)
+	s2, ok := part2.getFieldValue(3, TEST_FIELD3)
 	if !ok {
 		panic("Shuold exist")
 	}
@@ -615,10 +615,10 @@ func TestQueryByGodField(t *testing.T) {
 	}
 	t.Log("上帝视角:张三: ", helper.JsonEncode(list))
 
-	c, _ := memPartition.GetDocument(2)
+	c, _ := memPartition.getDocument(2)
 	t.Log(helper.JsonEncode(c))
 
-	s1, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	s1, _ := memPartition.getFieldValue(1, TEST_FIELD3)
 	t.Log(s1)
 
 	//持久化落地
@@ -633,10 +633,10 @@ func TestQueryByGodField(t *testing.T) {
 	}
 	t.Log("上帝视角:张三: ", helper.JsonEncode(list))
 
-	d, _ := memPartition.GetDocument(2)
+	d, _ := memPartition.getDocument(2)
 	t.Log(helper.JsonEncode(d))
 
-	s2, _ := memPartition.GetFieldValue(1, TEST_FIELD3)
+	s2, _ := memPartition.getFieldValue(1, TEST_FIELD3)
 	t.Log(s2)
 
 	if s1 != s2 {

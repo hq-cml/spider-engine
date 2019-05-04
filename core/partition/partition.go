@@ -20,14 +20,16 @@ import (
 	"github.com/hq-cml/spider-engine/utils/bitmap"
 	"github.com/hq-cml/spider-engine/core/index"
 	"strings"
+	"sync"
 )
 
 var (
-	//PART_PERSIST_MIN_DOC_CNT uint32 = 10000  //1w个文档，内存分区满1w个文档，就落地一次
-	//PART_MERGE_MIN_DOC_CNT   uint32 = 100000 //10w个文档，分区合并的一个参考值，合并一个分区至少拥有10w个Doc
+	PART_PERSIST_MIN_DOC_CNT uint32 = 10000  //1w个文档，内存分区满1w个文档，就落地一次
+	PART_MERGE_MIN_DOC_CNT   uint32 = 100000 //10w个文档，分区合并的一个参考值，合并一个分区至少拥有10w个Doc
 
-	PART_PERSIST_MIN_DOC_CNT uint32 = 2
-	PART_MERGE_MIN_DOC_CNT uint32 = 6
+	//Test
+	//PART_PERSIST_MIN_DOC_CNT uint32 = 2
+	//PART_MERGE_MIN_DOC_CNT uint32 = 6
 )
 
 const (
@@ -50,6 +52,7 @@ type Partition struct {
 	ivtMmap         *mmap.Mmap                 `json:"-"`
 	baseMmap        *mmap.Mmap                 `json:"-"`
 	extMmap         *mmap.Mmap                 `json:"-"`
+	rwMutex         sync.RWMutex               `json:"-"`              //分区的读写锁，仅用于保护内存分区，磁盘分区仅用于查询，不添加
 }
 
 type PartitionStatus struct {
@@ -176,16 +179,20 @@ func (part *Partition) IsEmpty() bool {
 
 //添加字段
 func (part *Partition) AddField(basicField field.BasicField) error {
-	//校验
-	if _, exist := part.CoreFields[basicField.FieldName]; exist {
-		log.Warnf("Partition--> AddField Already has field [%v]", basicField.FieldName)
-		return errors.New("Already has field..")
-	}
+	//锁
+	part.rwMutex.Lock()
+	defer part.rwMutex.Unlock()
 
 	//分区只能是内存态并且为空的时候，才能变更字段(因为已经有部分的doc,新字段没法处理)
 	if !part.inMemory || !part.IsEmpty() {
 		log.Warnf("Partition--> AddField field [%v] fail..", basicField.FieldName)
 		return errors.New("Only memory and enmpty partition can add field..")
+	}
+
+	//校验
+	if _, exist := part.CoreFields[basicField.FieldName]; exist {
+		log.Warnf("Partition--> AddField Already has field [%v]", basicField.FieldName)
+		return errors.New("Already has field..")
 	}
 
 	//新增
@@ -202,16 +209,20 @@ func (part *Partition) AddField(basicField field.BasicField) error {
 
 //删除字段
 func (part *Partition) DeleteField(fieldname string) error {
-	//校验
-	if _, exist := part.CoreFields[fieldname]; !exist {
-		log.Warnf("Partition--> DeleteField not found field [%v]", fieldname)
-		return errors.New("not found field")
-	}
+	//锁
+	part.rwMutex.Lock()
+	defer part.rwMutex.Unlock()
 
 	//分区只能是内存态并且为空的时候，才能变更字段
 	if !part.inMemory || !part.IsEmpty() {
 		log.Warnf("Partition--> deleteField field [%v] fail..", fieldname)
 		return errors.New("Only memory and enmpty partition can delete field..")
+	}
+
+	//校验
+	if _, exist := part.CoreFields[fieldname]; !exist {
+		log.Warnf("Partition--> DeleteField not found field [%v]", fieldname)
+		return errors.New("not found field")
 	}
 
 	part.Fields[fieldname].DoClose()
@@ -224,6 +235,10 @@ func (part *Partition) DeleteField(fieldname string) error {
 //添加文档
 //content, 一篇文档的各个字段的值
 func (part *Partition) AddDocument(docId uint32, content map[string]interface{}) error {
+	//锁
+	part.rwMutex.Lock()
+	defer part.rwMutex.Unlock()
+
 	//校验
 	var checkErr error
 	if docId != part.NextDocId {
@@ -333,6 +348,14 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 
 //关闭Partition
 func (part *Partition) DoClose() error {
+	//锁
+	part.rwMutex.Lock()
+	defer part.rwMutex.Unlock()
+
+	if part.inMemory {
+		return nil
+	}
+
 	//各个字段关闭
 	for _, fld := range part.Fields {
 		fld.DoClose()
@@ -364,6 +387,9 @@ func (part *Partition) DoClose() error {
 
 //销毁分区
 func (part *Partition) Destroy() error {
+	if part.inMemory {
+		return nil
+	}
 	//先关闭
 	part.DoClose()
 
@@ -374,6 +400,14 @@ func (part *Partition) Destroy() error {
 
 //销毁分区
 func (part *Partition) Remove() error {
+	//锁
+	part.rwMutex.Lock()
+	defer part.rwMutex.Unlock()
+
+	if part.inMemory {
+		return nil
+	}
+
 	//删除文件
 	if err := helper.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META); err != nil {return err}
 	if err := helper.Remove(part.PrtPathName + basic.IDX_FILENAME_SUFFIX_INVERT); err != nil {return err}
@@ -384,7 +418,8 @@ func (part *Partition) Remove() error {
 }
 
 //获取详情，单个字段
-func (part *Partition) GetFieldValue(docId uint32, fieldName string) (interface{}, bool) {
+func (part *Partition) getFieldValue(docId uint32, fieldName string) (interface{}, bool) {
+
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return "", false
@@ -399,7 +434,7 @@ func (part *Partition) GetFieldValue(docId uint32, fieldName string) (interface{
 
 //获取整篇文档详情，全部字段
 
-func (part *Partition) GetDocument(docId uint32) (map[string]interface{}, bool) {
+func (part *Partition) getDocument(docId uint32) (map[string]interface{}, bool) {
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
@@ -415,20 +450,26 @@ func (part *Partition) GetDocument(docId uint32) (map[string]interface{}, bool) 
 
 //获取详情，部分字段
 func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (map[string]interface{}, bool) {
+	//对于读取的操作，用读取锁保护内存分区，磁盘分区随便读取
+	if part.inMemory {
+		//读锁
+		part.rwMutex.RLock()
+		defer part.rwMutex.RUnlock()
+	}
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
 	}
 
 	if fieldNames == nil {
-		return part.GetDocument(docId)
+		return part.getDocument(docId)
 	}
 
 	flag := false
 	ret := make(map[string]interface{})
 	for _, fieldName := range fieldNames {
 		if _, ok := part.Fields[fieldName]; ok {
-			ret[fieldName], _ = part.GetFieldValue(docId, fieldName)
+			ret[fieldName], _ = part.getFieldValue(docId, fieldName)
 			flag = true
 		} else {
 			ret[fieldName] = ""
@@ -437,7 +478,7 @@ func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (ma
 	return ret, flag
 }
 
-//存储元信息
+//存储元信息（内部函数不加锁）
 func (part *Partition) storeMeta() error {
 	metaFileName := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_META
 	data := helper.JsonEncodeIndent(part)
@@ -457,6 +498,9 @@ func (part *Partition) storeMeta() error {
 //  和底层的Persit有一些不同，这里会自动加载回来mmap
 //  因为四个文件的公用分为是分区级别，这里已经可以统一加载mmap了
 func (part *Partition) Persist() error {
+	//锁
+	part.rwMutex.Lock()
+	defer part.rwMutex.Unlock()
 
 	btdbPath := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if part.btdb == nil {
@@ -527,6 +571,10 @@ func (part *Partition) Persist() error {
 // 这个和底层的MergePersist有不同, 因为四个文件是按照分区级别公用，所以函数会完整的填充接收者
 // 接受者初始是一个骨架，加载btdb和mmap以及其他控制字段，使之成为一个可用的磁盘态分区
 func (part *Partition) MergePersistPartitions(parts []*Partition) error {
+	//锁
+	part.rwMutex.Lock()
+	defer part.rwMutex.Unlock()
+
 	//一些校验，顺序必须正确
 	l := len(parts)
 	for i:=0; i<(l-1); i++ {
@@ -643,6 +691,14 @@ func (part *Partition) query(fieldName string, key interface{}) ([]basic.DocNode
 //根据搜索结果, 再通过bitmap进行过滤
 func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap,
 		filters []basic.SearchFilter) ([]basic.DocNode, bool) {
+
+	//对于读取的操作，用读取锁保护内存分区，磁盘分区随便读取
+	if part.inMemory {
+		//读锁
+		part.rwMutex.RLock()
+		defer part.rwMutex.RUnlock()
+	}
+
 	//校验
 	_, exist := part.Fields[fieldName]
 	if !exist && fieldName != GOD_FIELD_NAME{
@@ -702,6 +758,14 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 
 func (part *Partition) GetStatus() *PartitionStatus {
 	sub := []*field.FieldStatus{}
+
+	//对于读取的操作，用读取锁保护内存分区，磁盘分区随便读取
+	if part.inMemory {
+		//读锁
+		part.rwMutex.RLock()
+		defer part.rwMutex.RUnlock()
+	}
+
 	for _, fld := range part.Fields {
 		sub = append(sub, fld.GetStatus())
 	}
