@@ -54,7 +54,7 @@ type Table struct {
 	priIvtMap      map[string]string      //主键专用倒排索引（内存态），primaryKey => docId
 	priFwdMap      map[string]string      //主键专正排排索引（内存态），docId => primaryKey
 	delFlagBitMap  *bitmap.Bitmap         //用于文档删除标记
-	mutex          sync.Mutex             //锁，当分区持久化到或者合并时使用或者新建分区时使用 //TODO 关于这把锁，改成读写锁，时机要再梳理
+	rwMutex        sync.RWMutex           //读写锁
 }
 
 type TableStatus struct {
@@ -234,6 +234,10 @@ func (tbl *Table) storeMetaAndBtdb() error {
 // 新增的字段只会在最新的空分区生效，如果新增的时候有非空的分区，会先落地，然后产出新分区
 // 分区的变动，会锁表
 func (tbl *Table) AddField(basicField field.BasicField) error {
+	//锁整张表
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
+
 	//校验
 	if tbl.status != TABLE_STATUS_RUNNING && tbl.status != TABLE_STATUS_INIT {
 		return errors.New("Table status must be running or init")
@@ -255,9 +259,6 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 		tbl.priBtdb.AddTree(PRI_IVT_BTREE_NAME)
 		tbl.priBtdb.AddTree(PRI_FWD_BTREE_NAME)
 	} else {
-		//TODO 锁表? 位置存疑
-		tbl.mutex.Lock()
-		defer tbl.mutex.Unlock()
 
 		//基础信息注册
 		tbl.BasicFields[basicField.FieldName] = basicField
@@ -307,6 +308,10 @@ func (tbl *Table) AddField(basicField field.BasicField) error {
 //本质上也是一种假删除, 只是把tbl.BasicFields对应项删除, 使得上层查询隐藏该字段
 //如果内存分区非空, 则会先落地内存分区
 func (tbl *Table) DeleteField(fieldname string) error {
+	//锁整张表
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
+
 	//校验
 	if tbl.status != TABLE_STATUS_RUNNING && tbl.status != TABLE_STATUS_INIT {
 		return errors.New("Table status must be running or init")
@@ -318,10 +323,6 @@ func (tbl *Table) DeleteField(fieldname string) error {
 		return errors.New(fmt.Sprintf("Field %v not found ", fieldname))
 	}
 
-	//锁表
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
-
 	//假删除
 	delete(tbl.BasicFields, fieldname)
 
@@ -330,7 +331,10 @@ func (tbl *Table) DeleteField(fieldname string) error {
 		log.Info("Delete field. memPartition is nil. do nothing~")
 	} else if tbl.memPartition.IsEmpty() {
 		//删除内存分区的字段
-		tbl.memPartition.DeleteField(fieldname)
+		err := tbl.memPartition.DeleteField(fieldname)
+		if err != nil {
+			return err
+		}
 	} else {
 		//当前内存分区先落地
 		tmpPartition := tbl.memPartition
@@ -356,8 +360,6 @@ func (tbl *Table) DeleteField(fieldname string) error {
 
 //BitMap扩大
 func (tbl *Table) doExpandBitMap() error{
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
 
 	err := tbl.delFlagBitMap.DoExpand()
 	if err != nil {
@@ -371,6 +373,10 @@ func (tbl *Table) doExpandBitMap() error{
 
 //获取文档
 func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
+	//读取
+	tbl.rwMutex.RLock()
+	defer tbl.rwMutex.RUnlock()
+
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return nil, false
 	}
@@ -401,6 +407,10 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 //Note:
 // 底层为了保证一致性（各个字段之间、正排和倒排之间），所以出错也会继续执行，此处捕获错误，将docId废弃掉
 func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error) {
+	//写锁
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
+
 	//校验
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return 0, "", errors.New("Table status must be running!")
@@ -432,13 +442,10 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 
 	//如果内存分区为空，则新建内存分区
 	if tbl.memPartition == nil {
-		tbl.mutex.Lock()
 		err := tbl.generateMemPartition()
 		if err != nil {
-			tbl.mutex.Unlock()
 			return 0, "", err
 		}
-		tbl.mutex.Unlock()
 	}
 
 	//bitmap判断是否需要自动扩容
@@ -501,6 +508,10 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 //删除
 //标记假删除
 func (tbl *Table) DelDoc(primaryKey string) bool {
+	//写锁
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
+
 	//校验
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return false
@@ -540,6 +551,10 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 //Note:
 // 底层为了保证一致性（各个字段之间、正排和倒排之间），所以出错也会继续执行，此处捕获错误，将docId废弃掉
 func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
+	//写锁
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
+
 	//校验
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return 0, errors.New("Table status must be running!")
@@ -562,13 +577,13 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 
 	//如果内存分区为空，则新建
 	if tbl.memPartition == nil {
-		tbl.mutex.Lock()
+		tbl.rwMutex.Lock()
 		err := tbl.generateMemPartition()
 		if err != nil {
-			tbl.mutex.Unlock()
+			tbl.rwMutex.Unlock()
 			return 0, err
 		}
-		tbl.mutex.Unlock()
+		tbl.rwMutex.Unlock()
 	}
 
 	//bitmap自动扩容
@@ -659,7 +674,7 @@ func (tbl *Table) getDocByDocId(docId uint32) (map[string]interface{}, bool) {
 	//如果在内存分区, 则从内存分区获取
 	if tbl.memPartition != nil &&
 		(docId >= tbl.memPartition.StartDocId && docId <  tbl.memPartition.NextDocId) {
-		return  tbl.memPartition.GetValueWithFields(docId, fieldNames)
+			return  tbl.memPartition.GetValueWithFields(docId, fieldNames)
 	}
 
 	//否则尝试从磁盘分区获取
@@ -677,7 +692,8 @@ func (tbl *Table) findDocIdByPrimaryKey(key string) (*basic.DocNode, bool) {
 	var err error
 
 	//先尝试在内存map中找，没有则再去磁盘btree中找
-	if v, exist := tbl.priIvtMap[key]; exist {
+	v, exist := tbl.priIvtMap[key]
+	if exist {
 		docId, err = strconv.Atoi(v)
 		if err != nil {
 			return nil, false
@@ -725,8 +741,6 @@ func (tbl *Table) Persist() error {
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return errors.New("Table status must be running!")
 	}
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
 
 	return tbl.persistMemPartition()
 }
@@ -752,13 +766,15 @@ func (tbl *Table) persistMemPartition() error {
 
 //关闭一张表
 func (tbl *Table) DoClose() error {
+	//写锁
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
+
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return errors.New("Table status must be running!")
 	}
 	tbl.status = TABLE_STATUS_CLOSING
-	//锁表
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
+
 	log.Infof("Close Table [%v] Begin", tbl.TableName)
 
 	//关闭内存分区(非空则需要先落地)
@@ -794,9 +810,9 @@ func (tbl *Table) Destroy() error {
 		}
 	}
 
-	//锁表
-	//tbl.mutex.Lock()
-	//defer tbl.mutex.Unlock()
+	//写锁
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
 	log.Infof("Destroy Table [%v] Begin", tbl.TableName)
 
 	//因为刚刚Close，所以不应该存在内存分区
@@ -825,6 +841,11 @@ func (tbl *Table) Destroy() error {
 
 //合并表内分区
 func (tbl *Table) MergePartitions() error {
+
+	//锁整表
+	tbl.rwMutex.Lock()
+	defer tbl.rwMutex.Unlock()
+
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return errors.New("Table status must be running!")
 	}
@@ -837,9 +858,6 @@ func (tbl *Table) MergePartitions() error {
 
 	var startIdx int = -1
 
-	//锁表
-	tbl.mutex.Lock()
-	defer tbl.mutex.Unlock()
 
 	//内存分区非空则先落地
 	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty(){
@@ -921,6 +939,10 @@ func (tbl *Table) MergePartitions() error {
 
 //表内搜索
 func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool) {
+	//读锁
+	tbl.rwMutex.RLock()
+	defer tbl.rwMutex.RUnlock()
+
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return nil, false
 	}

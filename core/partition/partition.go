@@ -20,7 +20,6 @@ import (
 	"github.com/hq-cml/spider-engine/utils/bitmap"
 	"github.com/hq-cml/spider-engine/core/index"
 	"strings"
-	"sync"
 )
 
 var (
@@ -52,7 +51,7 @@ type Partition struct {
 	ivtMmap         *mmap.Mmap                 `json:"-"`
 	baseMmap        *mmap.Mmap                 `json:"-"`
 	extMmap         *mmap.Mmap                 `json:"-"`
-	rwMutex         sync.RWMutex               `json:"-"`              //分区的读写锁，仅用于保护内存分区，磁盘分区仅用于查询，不添加
+	//rwMutex         sync.RWMutex               `json:"-"`              //分区的读写锁，仅用于保护内存分区，磁盘分区仅用于查询，不添加
 }
 
 type PartitionStatus struct {
@@ -180,8 +179,8 @@ func (part *Partition) IsEmpty() bool {
 //添加字段
 func (part *Partition) AddField(basicField field.BasicField) error {
 	//锁
-	part.rwMutex.Lock()
-	defer part.rwMutex.Unlock()
+	//part.rwMutex.Lock()
+	//defer part.rwMutex.Unlock()
 
 	//分区只能是内存态并且为空的时候，才能变更字段(因为已经有部分的doc,新字段没法处理)
 	if !part.inMemory || !part.IsEmpty() {
@@ -210,8 +209,8 @@ func (part *Partition) AddField(basicField field.BasicField) error {
 //删除字段
 func (part *Partition) DeleteField(fieldname string) error {
 	//锁
-	part.rwMutex.Lock()
-	defer part.rwMutex.Unlock()
+	//part.rwMutex.Lock()
+	//defer part.rwMutex.Unlock()
 
 	//分区只能是内存态并且为空的时候，才能变更字段
 	if !part.inMemory || !part.IsEmpty() {
@@ -236,8 +235,8 @@ func (part *Partition) DeleteField(fieldname string) error {
 //content, 一篇文档的各个字段的值
 func (part *Partition) AddDocument(docId uint32, content map[string]interface{}) error {
 	//锁
-	part.rwMutex.Lock()
-	defer part.rwMutex.Unlock()
+	//part.rwMutex.Lock()
+	//defer part.rwMutex.Unlock()
 
 	//校验
 	var checkErr error
@@ -349,8 +348,8 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 //关闭Partition
 func (part *Partition) DoClose() error {
 	//锁
-	part.rwMutex.Lock()
-	defer part.rwMutex.Unlock()
+	//part.rwMutex.Lock()
+	//defer part.rwMutex.Unlock()
 
 	if part.inMemory {
 		return nil
@@ -401,8 +400,8 @@ func (part *Partition) Destroy() error {
 //销毁分区
 func (part *Partition) Remove() error {
 	//锁
-	part.rwMutex.Lock()
-	defer part.rwMutex.Unlock()
+	//part.rwMutex.Lock()
+	//defer part.rwMutex.Unlock()
 
 	if part.inMemory {
 		return nil
@@ -451,11 +450,11 @@ func (part *Partition) getDocument(docId uint32) (map[string]interface{}, bool) 
 //获取详情，部分字段
 func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (map[string]interface{}, bool) {
 	//对于读取的操作，用读取锁保护内存分区，磁盘分区随便读取
-	if part.inMemory {
-		//读锁
-		part.rwMutex.RLock()
-		defer part.rwMutex.RUnlock()
-	}
+	//if part.inMemory {
+	//	//读锁
+	//	part.rwMutex.RLock()
+	//	defer part.rwMutex.RUnlock()
+	//}
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
@@ -499,8 +498,8 @@ func (part *Partition) storeMeta() error {
 //  因为四个文件的公用分为是分区级别，这里已经可以统一加载mmap了
 func (part *Partition) Persist() error {
 	//锁
-	part.rwMutex.Lock()
-	defer part.rwMutex.Unlock()
+	//part.rwMutex.Lock()
+	//defer part.rwMutex.Unlock()
 
 	btdbPath := part.PrtPathName + basic.IDX_FILENAME_SUFFIX_BTREE
 	if part.btdb == nil {
@@ -572,8 +571,8 @@ func (part *Partition) Persist() error {
 // 接受者初始是一个骨架，加载btdb和mmap以及其他控制字段，使之成为一个可用的磁盘态分区
 func (part *Partition) MergePersistPartitions(parts []*Partition) error {
 	//锁
-	part.rwMutex.Lock()
-	defer part.rwMutex.Unlock()
+	//part.rwMutex.Lock()
+	//defer part.rwMutex.Unlock()
 
 	//一些校验，顺序必须正确
 	l := len(parts)
@@ -693,11 +692,11 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 
 	//对于读取的操作，用读取锁保护内存分区，磁盘分区随便读取
-	if part.inMemory {
-		//读锁
-		part.rwMutex.RLock()
-		defer part.rwMutex.RUnlock()
-	}
+	//if part.inMemory {
+	//	//读锁
+	//	part.rwMutex.RLock()
+	//	defer part.rwMutex.RUnlock()
+	//}
 
 	//校验
 	_, exist := part.Fields[fieldName]
@@ -760,11 +759,11 @@ func (part *Partition) GetStatus() *PartitionStatus {
 	sub := []*field.FieldStatus{}
 
 	//对于读取的操作，用读取锁保护内存分区，磁盘分区随便读取
-	if part.inMemory {
-		//读锁
-		part.rwMutex.RLock()
-		defer part.rwMutex.RUnlock()
-	}
+	//if part.inMemory {
+	//	//读锁
+	//	part.rwMutex.RLock()
+	//	defer part.rwMutex.RUnlock()
+	//}
 
 	for _, fld := range part.Fields {
 		sub = append(sub, fld.GetStatus())

@@ -249,12 +249,12 @@ func (se *SpiderEngine) AddField(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	field := field.BasicField{
+	fld := field.BasicField{
 		FieldName: p.Filed.Name,
 		IndexType: t,
 	}
 
-	err = db.AddField(p.Table, field)
+	err = db.AddField(p.Table, fld)
 	if err != nil {
 		log.Errf("AddField Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
