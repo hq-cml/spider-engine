@@ -12,6 +12,10 @@ import (
 	"github.com/hq-cml/spider-engine/utils/log"
 )
 
+var (
+	g_spider_ins *SpiderEngine
+)
+
 type SpiderEngine struct {
 	Path     string                         `json:"path"`
 	Version  string                         `json:"version"`
@@ -25,6 +29,12 @@ type SpiderStatus struct {
 	DbMap    map[string]*database.DatabaseStatus  `json:"databases"`
 }
 
+//注册实例句柄
+func RegisterInstance( ins *SpiderEngine) {
+	g_spider_ins = ins
+}
+
+//句柄初始化
 func InitSpider(path string, ver string) (*SpiderEngine, error) {
 	//路径修正
 	if string(path[len(path)-1]) != "/" {
@@ -129,10 +139,9 @@ func (se *SpiderEngine) Start() {
 	log.Infof("The Spider Engin Start To Work! Version: %s\n", se.Version)
 }
 
-//TODO
 func (se *SpiderEngine) Stop() string {
 	se.DoClose()
-	return "see you again"
+	return "See you again"
 }
 
 func (se *SpiderEngine) GetStatus() *SpiderStatus {

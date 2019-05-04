@@ -1,5 +1,8 @@
 package engine
 
+/*
+ * 接口层封装，相当于controller层
+ */
 import (
 	"net/http"
 	"io"
@@ -16,27 +19,27 @@ import (
 
 //注册路由
 func (se *SpiderEngine) RegisterRouter() {
-	http.HandleFunc("/_status", se.Status)
-	http.HandleFunc("/_createDb", se.CreateDatabase)
-	http.HandleFunc("/_dropDb", se.DropDatabase)
-	http.HandleFunc("/_createTable", se.CreateTable)
-	http.HandleFunc("/_dropTable", se.DropTable)
-	http.HandleFunc("/_addField", se.AddField)
-	http.HandleFunc("/_deleteField", se.DeleteField)
-	http.HandleFunc("/_addDoc", se.AddDoc)
-	http.HandleFunc("/_getDoc", se.GetDoc)
-	http.HandleFunc("/_deleteDoc", se.DeleteDoc)
-	http.HandleFunc("/_updateDoc", se.UpdateDoc)
-	http.HandleFunc("/_search", se.SearchDocs)
+	http.HandleFunc("/_status", Status)
+	http.HandleFunc("/_createDb", CreateDatabase)
+	http.HandleFunc("/_dropDb", DropDatabase)
+	http.HandleFunc("/_createTable", CreateTable)
+	http.HandleFunc("/_dropTable", DropTable)
+	http.HandleFunc("/_addField", AddField)
+	http.HandleFunc("/_deleteField", DeleteField)
+	http.HandleFunc("/_addDoc", AddDoc)
+	http.HandleFunc("/_getDoc", GetDoc)
+	http.HandleFunc("/_deleteDoc", DeleteDoc)
+	http.HandleFunc("/_updateDoc", UpdateDoc)
+	http.HandleFunc("/_search", SearchDocs)
 }
 
 // hello world, the web server
-func (se *SpiderEngine)Status(w http.ResponseWriter, req *http.Request) {
-	io.WriteString(w, helper.JsonEncodeIndent(se.GetStatus()))
+func Status(w http.ResponseWriter, req *http.Request) {
+	io.WriteString(w, helper.JsonEncodeIndent(g_spider_ins.GetStatus()))
 }
 
 //建库
-func (se *SpiderEngine) CreateDatabase(w http.ResponseWriter, req *http.Request) {
+func CreateDatabase(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -52,7 +55,7 @@ func (se *SpiderEngine) CreateDatabase(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	_, exist := se.DbMap[p.Database]
+	_, exist := g_spider_ins.DbMap[p.Database]
 	if exist {
 		log.Errf("The db already exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db already exist!")))
@@ -60,7 +63,7 @@ func (se *SpiderEngine) CreateDatabase(w http.ResponseWriter, req *http.Request)
 	}
 
 	//创建表和字段
-	path := fmt.Sprintf("%s%s", se.Path, p.Database)
+	path := fmt.Sprintf("%s%s", g_spider_ins.Path, p.Database)
 	db, err := database.NewDatabase(path, p.Database)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v, %v", err, path)
@@ -69,11 +72,11 @@ func (se *SpiderEngine) CreateDatabase(w http.ResponseWriter, req *http.Request)
 	}
 
 	//关联进入db
-	se.DbMap[p.Database] = db
-	se.DbList = append(se.DbList, p.Database)
+	g_spider_ins.DbMap[p.Database] = db
+	g_spider_ins.DbList = append(g_spider_ins.DbList, p.Database)
 
 	//meta落地
-	se.storeMeta()
+	g_spider_ins.storeMeta()
 
 	log.Infof("Create database: %v", p.Database)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
@@ -82,7 +85,7 @@ func (se *SpiderEngine) CreateDatabase(w http.ResponseWriter, req *http.Request)
 
 
 //删除库
-func (se *SpiderEngine) DropDatabase(w http.ResponseWriter, req *http.Request) {
+func DropDatabase(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -98,7 +101,7 @@ func (se *SpiderEngine) DropDatabase(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -114,15 +117,15 @@ func (se *SpiderEngine) DropDatabase(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//删slice
-	delete(se.DbMap, p.Database)
-	for i := 0; i < len(se.DbList); i++ {
-		if se.DbList[i] == p.Database {
-			se.DbList = append(se.DbList[:i], se.DbList[i+1:]...)
+	delete(g_spider_ins.DbMap, p.Database)
+	for i := 0; i < len(g_spider_ins.DbList); i++ {
+		if g_spider_ins.DbList[i] == p.Database {
+			g_spider_ins.DbList = append(g_spider_ins.DbList[:i], g_spider_ins.DbList[i+1:]...)
 		}
 	}
 
 	//更新meta
-	err = se.storeMeta()
+	err = g_spider_ins.storeMeta()
 	if err != nil {
 		log.Errf("DropDatabase Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
@@ -135,7 +138,7 @@ func (se *SpiderEngine) DropDatabase(w http.ResponseWriter, req *http.Request) {
 }
 
 //建表
-func (se *SpiderEngine) CreateTable(w http.ResponseWriter, req *http.Request) {
+func CreateTable(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -151,7 +154,7 @@ func (se *SpiderEngine) CreateTable(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -183,7 +186,7 @@ func (se *SpiderEngine) CreateTable(w http.ResponseWriter, req *http.Request) {
 }
 
 //删除表
-func (se *SpiderEngine) DropTable(w http.ResponseWriter, req *http.Request) {
+func DropTable(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -199,7 +202,7 @@ func (se *SpiderEngine) DropTable(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -219,7 +222,7 @@ func (se *SpiderEngine) DropTable(w http.ResponseWriter, req *http.Request) {
 }
 
 //增减字段
-func (se *SpiderEngine) AddField(w http.ResponseWriter, req *http.Request) {
+func AddField(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -235,7 +238,7 @@ func (se *SpiderEngine) AddField(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -266,7 +269,7 @@ func (se *SpiderEngine) AddField(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
-func (se *SpiderEngine) DeleteField(w http.ResponseWriter, req *http.Request) {
+func DeleteField(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -282,7 +285,7 @@ func (se *SpiderEngine) DeleteField(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -302,7 +305,7 @@ func (se *SpiderEngine) DeleteField(w http.ResponseWriter, req *http.Request) {
 }
 
 //新增Doc
-func (se *SpiderEngine) AddDoc(w http.ResponseWriter, req *http.Request) {
+func AddDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -318,7 +321,7 @@ func (se *SpiderEngine) AddDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -337,14 +340,14 @@ func (se *SpiderEngine) AddDoc(w http.ResponseWriter, req *http.Request) {
 }
 
 //获取Doc
-func (se *SpiderEngine) GetDoc(w http.ResponseWriter, req *http.Request) {
+func GetDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	query := req.URL.Query()
 	dbName := query["db"][0]
 	table := query["table"][0]
 	primaryKey := query["primary_key"][0]
 
-	db, exist := se.DbMap[dbName]
+	db, exist := g_spider_ins.DbMap[dbName]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -364,7 +367,7 @@ func (se *SpiderEngine) GetDoc(w http.ResponseWriter, req *http.Request) {
 }
 
 //改变doc
-func (se *SpiderEngine) UpdateDoc(w http.ResponseWriter, req *http.Request) {
+func UpdateDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -380,7 +383,7 @@ func (se *SpiderEngine) UpdateDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -399,7 +402,7 @@ func (se *SpiderEngine) UpdateDoc(w http.ResponseWriter, req *http.Request) {
 }
 
 //删除Doc
-func (se *SpiderEngine) DeleteDoc(w http.ResponseWriter, req *http.Request) {
+func DeleteDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -415,7 +418,7 @@ func (se *SpiderEngine) DeleteDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
@@ -434,7 +437,7 @@ func (se *SpiderEngine) DeleteDoc(w http.ResponseWriter, req *http.Request) {
 }
 
 //搜索
-func (se *SpiderEngine) SearchDocs(w http.ResponseWriter, req *http.Request) {
+func SearchDocs(w http.ResponseWriter, req *http.Request) {
 	result, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Errf("DeleteDoc Error: %v", err)
@@ -449,7 +452,7 @@ func (se *SpiderEngine) SearchDocs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := se.DbMap[p.Database]
+	db, exist := g_spider_ins.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))

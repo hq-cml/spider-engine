@@ -39,6 +39,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Init spider Error:%v", err)
 	}
+	//注册单例
+	engine.RegisterInstance(se)
+	//启动
 	se.Start()
 	fmt.Println("The spider is running...")
 	//阻塞等待程序结束
