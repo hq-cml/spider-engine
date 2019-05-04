@@ -9,12 +9,8 @@ import (
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/utils/log"
-	"github.com/hq-cml/spider-engine/core/database"
-	"fmt"
 	"io/ioutil"
 	"encoding/json"
-	"github.com/hq-cml/spider-engine/core/field"
-	"github.com/hq-cml/spider-engine/core/index"
 )
 
 //注册路由
@@ -55,34 +51,16 @@ func CreateDatabase(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	_, exist := g_spider_ins.DbMap[p.Database]
-	if exist {
-		log.Errf("The db already exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db already exist!")))
-		return
-	}
-
-	//创建表和字段
-	path := fmt.Sprintf("%s%s", g_spider_ins.Path, p.Database)
-	db, err := database.NewDatabase(path, p.Database)
+	//操作
+	err = g_spider_ins.CreateDatabase(&p)
 	if err != nil {
-		log.Errf("CreateDatabase Error: %v, %v", err, path)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	//关联进入db
-	g_spider_ins.DbMap[p.Database] = db
-	g_spider_ins.DbList = append(g_spider_ins.DbList, p.Database)
-
-	//meta落地
-	g_spider_ins.storeMeta()
-
-	log.Infof("Create database: %v", p.Database)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 	return
 }
-
 
 //删除库
 func DropDatabase(w http.ResponseWriter, req *http.Request) {
@@ -101,38 +79,13 @@ func DropDatabase(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
-		return
-	}
-
-	//删除库
-	err = db.Destory()
+	//操作
+	err = g_spider_ins.DropDatabase(&p)
 	if err != nil {
-		log.Errf("DropDatabase Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	//删slice
-	delete(g_spider_ins.DbMap, p.Database)
-	for i := 0; i < len(g_spider_ins.DbList); i++ {
-		if g_spider_ins.DbList[i] == p.Database {
-			g_spider_ins.DbList = append(g_spider_ins.DbList[:i], g_spider_ins.DbList[i+1:]...)
-		}
-	}
-
-	//更新meta
-	err = g_spider_ins.storeMeta()
-	if err != nil {
-		log.Errf("DropDatabase Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
-		return
-	}
-
-	log.Infof("DropDatabase database: %v", p.Database)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 	return
 }
@@ -154,33 +107,13 @@ func CreateTable(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
-		return
-	}
-	fields := []field.BasicField{}
-	for _, f := range p.Fileds {
-		t, ok := index.IDX_MAP[f.Type]
-		if !ok {
-			log.Errf("Unsuport index type: %v", f.Type)
-			io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Unsuport index type: " + f.Type)))
-			return
-		}
-		fields = append(fields, field.BasicField{
-			FieldName:  f.Name,
-			IndexType:  t,
-		})
-	}
-	_, err = db.CreateTable(p.Table, fields)
+	//操作
+	err = g_spider_ins.CreateTable(&p)
 	if err != nil {
-		log.Errf("CreateTable Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	log.Infof("Create Table: %v", p.Database + "." + p.Table)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 	return
 }
@@ -202,21 +135,13 @@ func DropTable(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
-		return
-	}
-
-	err = db.DropTable(p.Table)
+	//操作
+	err = g_spider_ins.DropTable(&p)
 	if err != nil {
-		log.Errf("Drop Table Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	log.Infof("Drop Table: %v", p.Database + "." + p.Table)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 	return
 }
@@ -238,33 +163,13 @@ func AddField(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
-		return
-	}
-
-	t, ok := index.IDX_MAP[p.Filed.Type]
-	if !ok {
-		log.Errf("Unsuport index type: %v", p.Filed.Type)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Unsuport index type: " + p.Filed.Type)))
-		return
-	}
-
-	fld := field.BasicField{
-		FieldName: p.Filed.Name,
-		IndexType: t,
-	}
-
-	err = db.AddField(p.Table, fld)
+	//操作
+	err = g_spider_ins.AddField(&p)
 	if err != nil {
-		log.Errf("AddField Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	log.Infof("Add Field: %v", p.Database + "." + p.Table + "." + p.Filed.Name + "." + p.Filed.Type)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 	return
 }
@@ -285,21 +190,13 @@ func DeleteField(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
-		return
-	}
-
-	err = db.DeleteField(p.Table, p.Filed.Name)
+	//操作
+	err = g_spider_ins.DeleteField(&p)
 	if err != nil {
-		log.Errf("DeleteField Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	log.Infof("Delete Field: %v", p.Database + "." + p.Table + "." + p.Filed.Name)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
 	return
 }
