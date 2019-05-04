@@ -30,7 +30,7 @@ type SpiderStatus struct {
 }
 
 //注册实例句柄
-func RegisterInstance( ins *SpiderEngine) {
+func RegisterInstance(ins *SpiderEngine) {
 	g_spider_ins = ins
 }
 

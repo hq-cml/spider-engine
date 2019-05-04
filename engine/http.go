@@ -174,6 +174,7 @@ func AddField(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+//删字段
 func DeleteField(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
 	result, err := ioutil.ReadAll(req.Body)
@@ -218,20 +219,13 @@ func AddDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
-		return
-	}
-	docId, primaryKey, err :=  db.AddDoc(p.Table, p.Content)
+	//操作
+	primaryKey, err := g_spider_ins.AddDoc(&p)
 	if err != nil {
-		log.Errf("AddDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(primaryKey)))
 	return
 }
@@ -244,21 +238,12 @@ func GetDoc(w http.ResponseWriter, req *http.Request) {
 	table := query["table"][0]
 	primaryKey := query["primary_key"][0]
 
-	db, exist := g_spider_ins.DbMap[dbName]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+	doc, err := g_spider_ins.GetDoc(dbName, table, primaryKey)
+	if err != nil {
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	doc, ok := db.GetDoc(table, primaryKey)
-	if !ok {
-		log.Errf("GetDoc get null: %v", primaryKey)
-		io.WriteString(w, helper.JsonEncode(basic.NewFailedResult("Can't find " + primaryKey)))
-		return
-	}
-
-	log.Infof("GetDoc: %v", dbName + "." + table + "." + primaryKey)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(doc)))
 	return
 }
@@ -280,22 +265,14 @@ func UpdateDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
-		return
-	}
-
-	docId, err :=  db.UpdateDoc(p.Table, p.Content)
+	err = g_spider_ins.UpdateDoc(&p)
 	if err != nil {
-		log.Errf("UpdateDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	log.Infof("UpdateDoc Doc: %v, %v, %v", p.Database, p.Table, docId)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
+	return
 }
 
 //删除Doc
@@ -315,22 +292,14 @@ func DeleteDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+	err = g_spider_ins.DeleteDoc(&p)
+	if err != nil {
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	ok := db.DeleteDoc(p.Table, p.PrimaryKey)
-	if !ok {
-		log.Errf("DeleteDoc get null: %v", p.PrimaryKey)
-		io.WriteString(w, helper.JsonEncode(basic.NewFailedResult("Can't find " + p.PrimaryKey)))
-		return
-	}
-
-	log.Infof("DeleteDoc: %v", p.Database + "." + p.Table + "." + p.PrimaryKey)
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult("")))
+	return
 }
 
 //搜索
@@ -349,23 +318,13 @@ func SearchDocs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	db, exist := g_spider_ins.DbMap[p.Database]
-	if !exist {
-		log.Errf("The db not exist!")
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("The db not exist!")))
+	docs, err := g_spider_ins.SearchDocs(&p)
+	if err != nil {
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	docs, ok := db.SearchDocs(p.Table, p.FieldName, p.Value, p.Filters)
-	if !ok {
-		log.Info("SearchDocs get null")
-		io.WriteString(w, helper.JsonEncode(basic.NewFailedResult("SearchDocs null")))
-		return
-	}
-
-	log.Infof("SearchDocs: %v, %v, %v, %v, %v", p.Database ,p.Table ,p.FieldName ,p.Value, len(docs))
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(docs)))
-
 	return
 }
 

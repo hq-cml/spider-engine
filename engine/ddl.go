@@ -1,6 +1,6 @@
 package engine
 /*
- * 封装了全部的ddl操作
+ * 封装了ddl操作
  */
 import (
 	"github.com/hq-cml/spider-engine/utils/log"
