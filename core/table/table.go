@@ -479,8 +479,16 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 		log.Infof("Table AddDoc Success. PrimaryKey: %v", key)
 	}
 
-	//最后，如果满足了落地归档的阈值, 需要先落地归档
-	if tbl.NextDocId % partition.PARTITION_MIN_DOC_CNT == 0 {
+	//最后，如果满足了落地的阈值, 需要先落地分区
+	if tbl.NextDocId % partition.PART_PERSIST_MIN_DOC_CNT == 0 {
+		err := tbl.Persist()
+		if err != nil {
+			log.Fatalf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
+		}
+	}
+
+	//最后，如果满足了合并归档的阈值, 需要合并归档
+	if tbl.NextDocId % partition.PART_MERGE_MIN_DOC_CNT == 0 {
 		err := tbl.MergePartitions()
 		if err != nil {
 			log.Fatalf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
@@ -617,8 +625,16 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	//无论成功与否，兼容一致性，均nextDocId均自增
 	tbl.NextDocId++
 
-	//最后，如果满足了落地归档的阈值, 需要先落地归档
-	if tbl.NextDocId % partition.PARTITION_MIN_DOC_CNT == 0 {
+	//最后，如果满足了落地的阈值, 需要先落地分区
+	if tbl.NextDocId % partition.PART_PERSIST_MIN_DOC_CNT == 0 {
+		err := tbl.Persist()
+		if err != nil {
+			log.Fatalf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
+		}
+	}
+
+	//最后，如果满足了合并归档的阈值, 需要合并归档
+	if tbl.NextDocId % partition.PART_MERGE_MIN_DOC_CNT == 0 {
 		err := tbl.MergePartitions()
 		if err != nil {
 			log.Fatalf("MergePartitions Error: %v. Table: %v", err.Error(), tbl.TableName)
@@ -709,9 +725,6 @@ func (tbl *Table) findPrimaryKeyByDocId(docId uint32) (string, bool) {
 func (tbl *Table) Persist() error {
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return errors.New("Table status must be running!")
-	}
-	if tbl.memPartition == nil {
-		return nil
 	}
 	tbl.mutex.Lock()
 	defer tbl.mutex.Unlock()
@@ -836,7 +849,7 @@ func (tbl *Table) MergePartitions() error {
 
 	//找到第一个个数不符合规范，即要合并的partition
 	for idx := range tbl.partitions {
-		if tbl.partitions[idx].NextDocId - tbl.partitions[idx].StartDocId < partition.PARTITION_MIN_DOC_CNT {
+		if tbl.partitions[idx].NextDocId - tbl.partitions[idx].StartDocId < partition.PART_MERGE_MIN_DOC_CNT {
 			startIdx = idx
 			break
 		}
@@ -862,7 +875,7 @@ func (tbl *Table) MergePartitions() error {
 	tmpPrts := []*partition.Partition{}
 	for i := startIdx; i < len(tbl.partitions); i++ {
 		tmpPrts = append(tmpPrts, tbl.partitions[i])
-		if tbl.partitions[i].NextDocId - start >= partition.PARTITION_MIN_DOC_CNT {
+		if tbl.partitions[i].NextDocId - start >= partition.PART_MERGE_MIN_DOC_CNT {
 			todoPartitions = append(todoPartitions, tmpPrts)
 			tmpPrts = []*partition.Partition{}
 			start = tbl.partitions[i].NextDocId
