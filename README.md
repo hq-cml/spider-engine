@@ -3,7 +3,6 @@ spider-engine
 
 //TODO
 
-DDL/DML 并行 => Channel串行
 灌数据压测
 
 接口Rest化

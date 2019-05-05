@@ -20,13 +20,14 @@ var (
 )
 
 type SpiderEngine struct {
-	Path     string                               `json:"path"`
-	Version  string                               `json:"version"`
-	DbList   []string                             `json:"databases"`
-	DbMap    map[string]*database.Database        `json:"-"`
-	CacheMap map[string]*middleware.RequestCache  `json:"-"`
-	Closed   bool								  `json:"-"`
-	RwMutex  sync.RWMutex                         `json:"-"`
+	Path        string                               `json:"path"`
+	Version     string                               `json:"version"`
+	DbList      []string                             `json:"databases"`
+	DbMap       map[string]*database.Database        `json:"-"`
+	CacheMap    map[string]*middleware.RequestCache  `json:"-"`
+	Closed      bool								 `json:"-"`
+	CloseChan   chan bool       					 `json:"-"`
+	RwMutex     sync.RWMutex                         `json:"-"`
 }
 
 type SpiderStatus struct {
@@ -54,6 +55,7 @@ func InitSpider(path string, ver string) (*SpiderEngine, error) {
 
 	se := SpiderEngine{
 		Path: path,
+		CloseChan: make(chan bool),
 	}
 	metaPath := se.genMetaName()
 
@@ -82,7 +84,7 @@ func InitSpider(path string, ver string) (*SpiderEngine, error) {
 		se.DbMap = map[string]*database.Database{}
 	}
 
-	//每一张表，启动独立的任务调度，负责处理dml和ddl中的写入任务
+	//每一张表，启动独立的一对goroutine任务调度，负责处理dml和ddl中的写入任务
 	se.CacheMap = map[string]*middleware.RequestCache{}
 	for dbName, db := range se.DbMap {
 		for tbName, _ := range db.TableMap {
@@ -90,6 +92,8 @@ func InitSpider(path string, ver string) (*SpiderEngine, error) {
 			se.CacheMap[dbTable] = se.doSchedule(dbTable)
 		}
 	}
+
+	//版本号加载
 	se.Version = ver
 	return &se, nil
 }
@@ -141,8 +145,11 @@ func (se *SpiderEngine) Start() {
 func (se *SpiderEngine) Stop() string {
 	se.Closed = true
 
-	//TODO 等待所有调度器结束
-
+	//等待所有调度器结束
+	closeLen := len(se.CacheMap)
+	for i := 0; i < closeLen; i++ {
+		_ = <- se.CloseChan
+	}
 
 	//逐个关闭表
 	se.RwMutex.RLock()
@@ -191,13 +198,11 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 	reqChannel := middleware.NewCommonChannel(1000, dbTable)
 
 	//搬运工
-	go func(reqCache *middleware.RequestCache, reqChan *middleware.CommonChannel) {
-		log.Debug("mover: ", dbTable)
+	go func(reqCache *middleware.RequestCache, reqChan *middleware.CommonChannel, dbTable string) {
 		for {
 			//请求通道的空闲数量（请求通道的容量 - 长度）
 			remainder := reqChan.Cap() - reqChan.Len()
-			log.Debug("mover!", remainder,  reqCache.Capacity() , reqCache.Length())
-			if remainder == 0 && se.Closed {
+			if reqCache.Length() == 0 && se.Closed {
 				reqChan.Close()
 				return
 			}
@@ -214,16 +219,16 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 
 			//time.Sleep(10 * time.Millisecond)
 			time.Sleep(5 * time.Second)
-
 		}
-	}(reqCache, reqChannel)
+	}(reqCache, reqChannel, dbTable)
 
 	//实际worker
-	go func(reqChan *middleware.CommonChannel, se *SpiderEngine) {
-		log.Debug("worker: ", dbTable)
+	go func(reqChan *middleware.CommonChannel, se *SpiderEngine, dbTable string) {
 		for {
 			tmp, ok := reqChan.Get()
 			if !ok {
+				log.Infof("Scheduler [%v] Stop!", dbTable)
+				se.CloseChan <- true
 				return
 			}
 			req := tmp.(*basic.SpiderRequest)
@@ -231,8 +236,8 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 			//处理请求
 			se.ProcessDMLRequest(req)
 		}
-	}(reqChannel, se)
+	}(reqChannel, se, dbTable)
 
-	log.Infof("Init Schedule: %v", dbTable)
+	log.Infof("Scheduler [%v] Start to work!", dbTable)
 	return reqCache
 }
