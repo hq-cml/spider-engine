@@ -32,6 +32,7 @@ var statusMap = map[int]string {
 func NewRequestCache() *RequestCache {
 	rc := &RequestCache {
 		cache: make([]*basic.SpiderRequest, 0),
+		status:REQUEST_CACHE_STATUS_RUNNING,
 	}
 	return rc
 }
@@ -88,6 +89,10 @@ func (rc *RequestCache) Close() {
 	rc.mutex.Lock()
 	defer rc.mutex.Unlock()
 	rc.status = REQUEST_CACHE_STATUS_COLOSED
+}
+
+func (rc *RequestCache) GetStatus() int {
+	return rc.status
 }
 
 // 摘要信息

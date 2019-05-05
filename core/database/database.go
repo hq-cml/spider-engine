@@ -168,7 +168,7 @@ func (db *Database) DropTable(tableName string) (error) {
 		return err
 	}
 
-	//删slice
+	//删map和slice
 	delete(db.TableMap, tableName)
 	for i := 0; i < len(db.TableList); i++ {
 		if db.TableList[i] == tableName {

@@ -775,7 +775,7 @@ func (tbl *Table) DoClose() error {
 	}
 	tbl.status = TABLE_STATUS_CLOSING
 
-	log.Infof("Close Table [%v] Begin", tbl.TableName)
+	log.Infof("DoClose Table [%v] Begin", tbl.TableName)
 
 	//关闭内存分区(非空则需要先落地)
 	if tbl.memPartition != nil {
@@ -796,7 +796,7 @@ func (tbl *Table) DoClose() error {
 	if tbl.delFlagBitMap != nil {
 		tbl.delFlagBitMap.Close()
 	}
-	log.Infof("Close Table [%v] Finish", tbl.TableName)
+	log.Infof("DoClose Table [%v] Finish", tbl.TableName)
 	tbl.status = TABLE_STATUS_CLOSED
 	return nil
 }
@@ -835,7 +835,7 @@ func (tbl *Table) Destroy() error {
 	if err := helper.Remove(bitmapFile); err != nil { log.Err(err.Error()); return err }
 	if err := helper.Remove(tbl.Path); err != nil {	log.Err(err.Error()); return err }
 
-	log.Infof("DoClose Table [%v] Finish", tbl.TableName)
+	log.Infof("Destroy Table [%v] Finish", tbl.TableName)
 	return nil
 }
 

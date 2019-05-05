@@ -1,6 +1,10 @@
 package engine
 /*
  * 封装了ddl操作
+ * Note：
+ *  其中
+ *    建库、删库、建表、删表等操作，相对低频，且需要建立调度等附加工作，故采用直接执行的方式
+ *    增减字段等操作采用串行化的方式
  */
 import (
 	"github.com/hq-cml/spider-engine/utils/log"
@@ -63,6 +67,16 @@ func (se *SpiderEngine) DropDatabase(p *DatabaseParam) error {
 		return errors.New("The db not exist!")
 	}
 
+	//删除对应的请求cache和调度scheduler
+	for tbName, _ := range db.TableMap {
+		dbTable := p.Database + "." + tbName
+		tbCache, ok := se.CacheMap[dbTable]
+		if ok {
+			tbCache.Close()
+		}
+		delete(se.CacheMap, dbTable)
+	}
+
 	//删除库
 	err := db.Destory()
 	if err != nil {
@@ -118,7 +132,10 @@ func (se *SpiderEngine) CreateTable(p *CreateTableParam) error {
 		})
 	}
 
-	//建表
+	//启动独立的一对goroutine任务调度，负责处理dml和ddl中的写入任务
+	dbTable := p.Database + "." + p.Table
+	se.CacheMap[dbTable] = se.doSchedule(dbTable)
+
 	_, err := db.CreateTable(p.Table, fields)
 	if err != nil {
 		log.Errf("CreateTable Error: %v", err)
@@ -129,7 +146,7 @@ func (se *SpiderEngine) CreateTable(p *CreateTableParam) error {
 	return nil
 }
 
-//建表
+//删表
 func (se *SpiderEngine) DropTable(p *CreateTableParam) error {
 	if se.Closed {
 		return errors.New("Spider Engine is closed!")
@@ -150,6 +167,15 @@ func (se *SpiderEngine) DropTable(p *CreateTableParam) error {
 		log.Errf("Drop Table Error: %v", err)
 		return err
 	}
+
+	//删除对应的请求cache和调度scheduler
+	dbTable := p.Database + "." + p.Table
+	tbCache, ok := se.CacheMap[dbTable]
+	if ok {
+		tbCache.Close()
+	}
+	delete(se.CacheMap, dbTable)
+
 
 	log.Infof("Drop Table: %v", p.Database + "." + p.Table)
 	return nil

@@ -53,7 +53,7 @@ func main() {
 //检查状态，并在满足条件时采取必要退出措施。
 //1. 达到了持续空闲时间
 //2. 接收到了结束的信号
-func loopWait(eng *engine.SpiderEngine) uint64 {
+func loopWait(se *engine.SpiderEngine) uint64 {
 	var checkCount uint64
 
 	//创建监听退出chan, 这里遇到一个坑
@@ -70,12 +70,14 @@ func loopWait(eng *engine.SpiderEngine) uint64 {
 			switch s {
 			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 				log.Infoln("Recv signal:", s, ". Begin To Stop")
-				result := eng.Stop()
+				result := se.Stop()
 				log.Infoln("Stop scheduler...", result)
 				break QUIT
 			default:
 				log.Infoln("Recv signal: ", s)
 			}
+		case <-se.CloseChan:
+			log.Infof("One Table Is Delete! The Spider Will Go On！")
 		default:
 		//do nothing
 		//因为存在default分支, 保证程序不会阻塞在此, 但是也要求chan os.Signal长度不能为0

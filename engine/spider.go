@@ -199,14 +199,25 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 
 	//搬运工
 	go func(reqCache *middleware.RequestCache, reqChan *middleware.CommonChannel, dbTable string) {
+		log.Infof("Scheduler Mover [%v] Start to work!", dbTable)
 		for {
-			//请求通道的空闲数量（请求通道的容量 - 长度）
-			remainder := reqChan.Cap() - reqChan.Len()
+			//如果整个系统关闭了，并且此时cache已经处理完毕，则退出
 			if reqCache.Length() == 0 && se.Closed {
 				reqChan.Close()
+				log.Infof("Scheduler Mover [%v] Stop!", dbTable)
 				return
 			}
+
+			//如果仅仅只是cache被关闭了，说明是整个表被删除了
+			if reqCache.GetStatus() == middleware.REQUEST_CACHE_STATUS_COLOSED {
+				reqChan.Close()
+				log.Infof("Scheduler Mover [%v] Stop!", dbTable)
+				return
+			}
+
 			var temp *basic.SpiderRequest
+			//请求通道的空闲数量（请求通道的容量 - 长度）
+			remainder := reqChan.Cap() - reqChan.Len()
 			for remainder > 0 {
 				temp = reqCache.Get()
 				if temp == nil {
@@ -217,17 +228,18 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 				remainder--
 			}
 
-			//time.Sleep(10 * time.Millisecond)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Millisecond)
+			//time.Sleep(5 * time.Second)     //调试用
 		}
 	}(reqCache, reqChannel, dbTable)
 
 	//实际worker
 	go func(reqChan *middleware.CommonChannel, se *SpiderEngine, dbTable string) {
+		log.Infof("Scheduler Worker [%v] Start to work!", dbTable)
 		for {
 			tmp, ok := reqChan.Get()
 			if !ok {
-				log.Infof("Scheduler [%v] Stop!", dbTable)
+				log.Infof("Scheduler Worker [%v] Stop!", dbTable)
 				se.CloseChan <- true
 				return
 			}
@@ -238,6 +250,5 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 		}
 	}(reqChannel, se, dbTable)
 
-	log.Infof("Scheduler [%v] Start to work!", dbTable)
 	return reqCache
 }
