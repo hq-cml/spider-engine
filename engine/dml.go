@@ -13,19 +13,55 @@ import (
 )
 
 func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
-	p := req.Req.(*AddDocParam)
+	if req.Type == basic.REQ_TYPE_DML_ADD_DOC {
+		p := req.Req.(*AddDocParam)
+		//新增文档
+		db, _ := se.DbMap[p.Database]
+		docId, primaryKey, err := db.AddDoc(p.Table, p.Content)
+		if err != nil {
+			log.Errf("AddDoc Error: %v", err)
+			req.Resp <- basic.NewResponse(err, nil)
+			return
+		}
 
-	//操作
-	db, _ := se.DbMap[p.Database]
-	docId, primaryKey, err :=  db.AddDoc(p.Table, p.Content)
-	if err != nil {
-		log.Errf("AddDoc Error: %v", err)
-		req.Resp <- basic.NewResponse(err, nil)
+		log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
+		req.Resp <- basic.NewResponse(nil, primaryKey)
 		return
+	} else if req.Type == basic.REQ_TYPE_DML_DEL_DOC {
+		p := req.Req.(*DocParam)
+		//删除文档
+		db, _ := se.DbMap[p.Database]
+		ok := db.DeleteDoc(p.Table, p.PrimaryKey)
+		if !ok {
+			log.Errf("DeleteDoc get null: %v", p.PrimaryKey)
+			req.Resp <- basic.NewResponse(
+				errors.New(fmt.Sprintf("DeleteDoc get null: %v", p.PrimaryKey)), nil)
+			return
+		}
+
+		log.Infof("DeleteDoc: %v", p.Database + "." + p.Table + "." + p.PrimaryKey)
+		req.Resp <- basic.NewResponse(nil, nil)
+		return
+	} else if req.Type == basic.REQ_TYPE_DML_EDIT_DOC {
+		p := req.Req.(*AddDocParam)
+		//编辑文档
+		db, _ := se.DbMap[p.Database]
+		docId, err :=  db.UpdateDoc(p.Table, p.Content)
+		if err != nil {
+			log.Errf("UpdateDoc Error: %v", err)
+			req.Resp <- basic.NewResponse(err, nil)
+			return
+		}
+
+		log.Infof("UpdateDoc Doc: %v, %v, %v", p.Database, p.Table, docId)
+		req.Resp <- basic.NewResponse(nil, nil)
+		return
+	} else {
+		log.Fatal("Unsupport req.Type:%v", req.Type)
+		req.Resp <- basic.NewResponse(errors.New(fmt.Sprintf("Unsupport req.Type:%v", req.Type)), nil)
 	}
 
-	log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
-	req.Resp <- basic.NewResponse(nil, primaryKey)
+	return
 }
 
 //增加文档（串行化）
@@ -45,7 +81,7 @@ func (se *SpiderEngine) AddDoc(p *AddDocParam) (string, error) {
 	//生成请求放入cache
 	req := basic.NewRequest(basic.REQ_TYPE_DML_ADD_DOC, p)
 	se.CacheMap[p.Database + "." + p.Table].Put(req)
-	log.Debug("Put AddDoc request: ", p.Database + "." +p.Table)
+	log.Debug("Put AddDoc request: ", p.Database + "." + p.Table)
 
 	//等待结果
 	resp := <- req.Resp
@@ -65,19 +101,22 @@ func (se *SpiderEngine) DeleteDoc(p *DocParam) error {
 	defer se.RwMutex.RUnlock()
 
 	//校验
-	db, exist := se.DbMap[p.Database]
+	_, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		return errors.New("The db already exist!")
 	}
 
-	ok := db.DeleteDoc(p.Table, p.PrimaryKey)
-	if !ok {
-		log.Errf("DeleteDoc get null: %v", p.PrimaryKey)
-		return errors.New(fmt.Sprintf("DeleteDoc get null: %v", p.PrimaryKey))
-	}
+	//生成请求放入cache
+	req := basic.NewRequest(basic.REQ_TYPE_DML_DEL_DOC, p)
+	se.CacheMap[p.Database + "." + p.Table].Put(req)
+	log.Debug("Put DeleteDoc request: ", p.Database + "." + p.Table)
 
-	log.Infof("DeleteDoc: %v", p.Database + "." + p.Table + "." + p.PrimaryKey)
+	//等待结果
+	resp := <- req.Resp
+	if resp.Err != nil {
+		return resp.Err
+	}
 	return nil
 }
 
@@ -89,19 +128,23 @@ func (se *SpiderEngine) UpdateDoc(p *AddDocParam) error {
 	se.RwMutex.RLock()          //读锁
 	defer se.RwMutex.RUnlock()
 
-	db, exist := se.DbMap[p.Database]
+	//校验
+	_, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		return errors.New("The db already exist!")
 	}
 
-	docId, err :=  db.UpdateDoc(p.Table, p.Content)
-	if err != nil {
-		log.Errf("UpdateDoc Error: %v", err)
-		return err
-	}
+	//生成请求放入cache
+	req := basic.NewRequest(basic.REQ_TYPE_DML_EDIT_DOC, p)
+	se.CacheMap[p.Database + "." + p.Table].Put(req)
+	log.Debug("Put UpdateDoc request: ", p.Database + "." + p.Table)
 
-	log.Infof("UpdateDoc Doc: %v, %v, %v", p.Database, p.Table, docId)
+	//等待结果
+	resp := <- req.Resp
+	if resp.Err != nil {
+		return resp.Err
+	}
 	return nil
 }
 
