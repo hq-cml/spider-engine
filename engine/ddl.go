@@ -13,6 +13,12 @@ import (
 
 //建库
 func (se *SpiderEngine) CreateDatabase(p *DatabaseParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.Lock()
+	defer se.RwMutex.Unlock()
+
 	//校验
 	_, exist := se.DbMap[p.Database]
 	if exist {
@@ -45,6 +51,11 @@ func (se *SpiderEngine) CreateDatabase(p *DatabaseParam) error {
 
 //删库
 func (se *SpiderEngine) DropDatabase(p *DatabaseParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.Lock()
+	defer se.RwMutex.Unlock()
 	//校验
 	db, exist := se.DbMap[p.Database]
 	if !exist {
@@ -80,6 +91,12 @@ func (se *SpiderEngine) DropDatabase(p *DatabaseParam) error {
 
 //建表
 func (se *SpiderEngine) CreateTable(p *CreateTableParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.Lock()
+	defer se.RwMutex.Unlock()
+
 	//校验
 	db, exist := se.DbMap[p.Database]
 	if !exist {
@@ -114,6 +131,12 @@ func (se *SpiderEngine) CreateTable(p *CreateTableParam) error {
 
 //建表
 func (se *SpiderEngine) DropTable(p *CreateTableParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.Lock()
+	defer se.RwMutex.Unlock()
+
 	//校验
 	db, exist := se.DbMap[p.Database]
 	if !exist {
@@ -134,6 +157,12 @@ func (se *SpiderEngine) DropTable(p *CreateTableParam) error {
 
 //增字段
 func (se *SpiderEngine) AddField(p *AddFieldParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.RLock()          //读锁
+	defer se.RwMutex.RUnlock()
+
 	//校验
 	db, exist := se.DbMap[p.Database]
 	if !exist {
@@ -163,6 +192,12 @@ func (se *SpiderEngine) AddField(p *AddFieldParam) error {
 
 //减字段
 func (se *SpiderEngine) DeleteField(p *AddFieldParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.RLock()          //读锁
+	defer se.RwMutex.RUnlock()
+
 	db, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")

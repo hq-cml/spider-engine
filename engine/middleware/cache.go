@@ -6,13 +6,13 @@ package middleware
  */
 import (
 	"fmt"
-	"github.com/hq-cml/spider-man/basic"
+	"github.com/hq-cml/spider-engine/basic"
 	"sync"
 )
 
 // 请求缓存的实现类型。
 type RequestCache struct {
-	cache  []*basic.Request // 请求的缓存介质。
+	cache  []*basic.SpiderRequest // 请求的缓存介质。
 	mutex  sync.Mutex       // 互斥锁。
 	status int              // 缓存状态。0表示正在运行，1表示已关闭。
 }
@@ -31,13 +31,13 @@ var statusMap = map[int]string {
 // 创建请求缓存。
 func NewRequestCache() *RequestCache {
 	rc := &RequestCache {
-		cache: make([]*basic.Request, 0),
+		cache: make([]*basic.SpiderRequest, 0),
 	}
 	return rc
 }
 
 // 将请求放入请求缓存。
-func (rc *RequestCache) Put(req *basic.Request) bool {
+func (rc *RequestCache) Put(req *basic.SpiderRequest) bool {
 	if req == nil {
 		return false
 	}
@@ -52,7 +52,7 @@ func (rc *RequestCache) Put(req *basic.Request) bool {
 
 //从请求缓存获取最早被放入且仍在其中的请求。
 //如果cache是空, 则返回nil
-func (rc *RequestCache) Get() *basic.Request {
+func (rc *RequestCache) Get() *basic.SpiderRequest {
 	if rc.Length() == 0 {
 		return nil
 	}

@@ -106,3 +106,19 @@ func NewErrorResult(data interface{}) *Result {
 		Data:data,
 	}
 }
+
+//抽象的请求
+type SpiderRequest struct {
+	Type  uint8
+	Req   interface{}
+	Resp  chan interface{}  //用于结果接收
+}
+
+const (
+	REQ_TYPE_DDL_ADD_FIELD = 10
+	REQ_TYPE_DDL_DEL_FIELD = 11
+
+	REQ_TYPE_DML_ADD_DOC   = 20
+	REQ_TYPE_DML_DEL_DOC   = 21
+	REQ_TYPE_DML_EDIT_DOC  = 22
+)

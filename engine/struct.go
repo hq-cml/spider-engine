@@ -50,3 +50,4 @@ type SearchParam struct {
 	Value      string				`json:"value"`
 	Filters    []basic.SearchFilter `json:"filters"`
 }
+

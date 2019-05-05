@@ -12,28 +12,62 @@ import (
 	"github.com/hq-cml/spider-engine/utils/helper"
 )
 
+func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
+	p := req.Req.(*AddDocParam)
+
+	//操作
+	db, _ := se.DbMap[p.Database]
+	docId, primaryKey, err :=  db.AddDoc(p.Table, p.Content)
+	if err != nil {
+		log.Errf("AddDoc Error: %v", err)
+		req.Resp <- err
+	}
+
+	log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
+	req.Resp <- primaryKey
+}
+
 //增加文档
 func (se *SpiderEngine) AddDoc(p *AddDocParam) (string, error) {
+	if se.Closed {
+		return "", errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.RLock()          //读锁
+	defer se.RwMutex.RUnlock()
 	//校验
-	db, exist := se.DbMap[p.Database]
+	_, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		return "", errors.New("The db already exist!")
 	}
 
-	//操作
-	docId, primaryKey, err :=  db.AddDoc(p.Table, p.Content)
-	if err != nil {
-		log.Errf("AddDoc Error: %v", err)
+	//生成请求放入cache
+	req := &basic.SpiderRequest{
+		Type: basic.REQ_TYPE_DML_ADD_DOC,
+		Req:  p,
+		Resp: make(chan interface{}),
+	}
+	se.CacheMap[p.Database + "." + p.Table].Put(req)
+	log.Debug("Put AddDoc request: ", p.Database + "." +p.Table)
+
+	//等待结果
+	resp := <- req.Resp
+	err, ok := resp.(error)
+	if ok {
 		return "", err
 	}
 
-	log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
-	return primaryKey, nil
+	return resp.(string), nil
 }
 
 //删除文档
 func (se *SpiderEngine) DeleteDoc(p *DocParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.RLock()          //读锁
+	defer se.RwMutex.RUnlock()
+
 	//校验
 	db, exist := se.DbMap[p.Database]
 	if !exist {
@@ -53,6 +87,12 @@ func (se *SpiderEngine) DeleteDoc(p *DocParam) error {
 
 //改文档
 func (se *SpiderEngine) UpdateDoc(p *AddDocParam) error {
+	if se.Closed {
+		return errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.RLock()          //读锁
+	defer se.RwMutex.RUnlock()
+
 	db, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
@@ -71,6 +111,12 @@ func (se *SpiderEngine) UpdateDoc(p *AddDocParam) error {
 
 //获取文档
 func (se *SpiderEngine) GetDoc(dbName, tableName, key string) (*basic.DocInfo, error) {
+	if se.Closed {
+		return nil, errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.RLock()          //读锁
+	defer se.RwMutex.RUnlock()
+
 	//校验
 	db, exist := se.DbMap[dbName]
 	if !exist {
@@ -91,6 +137,12 @@ func (se *SpiderEngine) GetDoc(dbName, tableName, key string) (*basic.DocInfo, e
 
 //搜索文档
 func (se *SpiderEngine) SearchDocs(p *SearchParam) ([]basic.DocInfo, error) {
+	if se.Closed {
+		return nil, errors.New("Spider Engine is closed!")
+	}
+	se.RwMutex.RLock()          //读锁
+	defer se.RwMutex.RUnlock()
+
 	db, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
