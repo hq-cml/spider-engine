@@ -13,6 +13,7 @@ import (
 	"errors"
 	"github.com/hq-cml/spider-engine/core/field"
 	"github.com/hq-cml/spider-engine/core/index"
+	"github.com/hq-cml/spider-engine/basic"
 )
 
 //建库
@@ -181,7 +182,49 @@ func (se *SpiderEngine) DropTable(p *CreateTableParam) error {
 	return nil
 }
 
-//增字段
+func (se *SpiderEngine) ProcessDDLRequest(req *basic.SpiderRequest) {
+
+	if req.Type == basic.REQ_TYPE_DDL_ADD_FIELD {
+		p := req.Req.(*AddFieldParam)
+		db, _ := se.DbMap[p.Database]
+		t, _ := index.IDX_MAP[p.Filed.Type]
+
+		//新增
+		fld := field.BasicField{
+			FieldName: p.Filed.Name,
+			IndexType: t,
+		}
+		err := db.AddField(p.Table, fld)
+		if err != nil {
+			log.Errf("AddField Error: %v", err)
+			req.Resp <- basic.NewResponse(err, nil)
+			return
+		}
+
+		log.Infof("Add Field: %v", p.Database + "." + p.Table + "." + p.Filed.Name + "." + p.Filed.Type)
+		req.Resp <- basic.NewResponse(nil, nil)
+
+	} else if req.Type == basic.REQ_TYPE_DDL_DEL_FIELD {
+		p := req.Req.(*AddFieldParam)
+		db, _ := se.DbMap[p.Database]
+		err := db.DeleteField(p.Table, p.Filed.Name)
+		if err != nil {
+			log.Errf("DeleteField Error: %v", err)
+			req.Resp <- basic.NewResponse(err, nil)
+			return
+		}
+
+		log.Infof("Delete Field: %v", p.Database + "." + p.Table + "." + p.Filed.Name)
+		req.Resp <- basic.NewResponse(nil, nil)
+	} else {
+		log.Fatal("Unsupport req.Type:%v", req.Type)
+		req.Resp <- basic.NewResponse(errors.New(fmt.Sprintf("Unsupport req.Type:%v", req.Type)), nil)
+	}
+
+	return
+}
+
+//增字段（串行化）
 func (se *SpiderEngine) AddField(p *AddFieldParam) error {
 	if se.Closed {
 		return errors.New("Spider Engine is closed!")
@@ -190,33 +233,32 @@ func (se *SpiderEngine) AddField(p *AddFieldParam) error {
 	defer se.RwMutex.RUnlock()
 
 	//校验
-	db, exist := se.DbMap[p.Database]
+	_, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		return errors.New("The db not exist!")
 	}
-	t, ok := index.IDX_MAP[p.Filed.Type]
+	_, ok := index.IDX_MAP[p.Filed.Type]
 	if !ok {
 		log.Errf("Unsuport index type: %v", p.Filed.Type)
 		return errors.New(fmt.Sprintf("Unsuport index type: %v", p.Filed.Type))
 	}
 
-	//新增
-	fld := field.BasicField{
-		FieldName: p.Filed.Name,
-		IndexType: t,
-	}
-	err := db.AddField(p.Table, fld)
-	if err != nil {
-		log.Errf("AddField Error: %v", err)
-		return err
+	//生成请求放入cache
+	req := basic.NewRequest(basic.REQ_TYPE_DDL_ADD_FIELD, p)
+	se.CacheMap[p.Database + "." + p.Table].Put(req)
+	log.Debug("Put AddField request: ", p.Database + "." +p.Table)
+
+	//等待结果
+	resp := <- req.Resp
+	if resp.Err != nil {
+		return resp.Err
 	}
 
-	log.Infof("Add Field: %v", p.Database + "." + p.Table + "." + p.Filed.Name + "." + p.Filed.Type)
 	return nil
 }
 
-//减字段
+//减字段（串行化）
 func (se *SpiderEngine) DeleteField(p *AddFieldParam) error {
 	if se.Closed {
 		return errors.New("Spider Engine is closed!")
@@ -224,19 +266,24 @@ func (se *SpiderEngine) DeleteField(p *AddFieldParam) error {
 	se.RwMutex.RLock()          //读锁
 	defer se.RwMutex.RUnlock()
 
-	db, exist := se.DbMap[p.Database]
+	//校验
+	_, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
 		return errors.New("The db not exist!")
 	}
 
-	err := db.DeleteField(p.Table, p.Filed.Name)
-	if err != nil {
-		log.Errf("DeleteField Error: %v", err)
-		return err
+	//生成请求放入cache
+	req := basic.NewRequest(basic.REQ_TYPE_DDL_DEL_FIELD, p)
+	se.CacheMap[p.Database + "." + p.Table].Put(req)
+	log.Debug("Put AddField request: ", p.Database + "." +p.Table)
+
+	//等待结果
+	resp := <- req.Resp
+	if resp.Err != nil {
+		return resp.Err
 	}
 
-	log.Infof("Delete Field: %v", p.Database + "." + p.Table + "." + p.Filed.Name)
 	return nil
 }
 

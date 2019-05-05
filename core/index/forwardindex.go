@@ -330,6 +330,8 @@ func (fwdIdx *ForwardIndex) GetInt(pos uint32) (int64, bool) {
 		if (int(realOffset) >= fwdIdx.baseMmap.Boundary()) {
 			return MaxInt64, false
 		}
+
+		//fmt.Println("A----------------", fwdIdx.baseMmap.ReadInt64(realOffset))
 		return fwdIdx.baseMmap.ReadInt64(realOffset), true
 	}
 }

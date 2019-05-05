@@ -246,7 +246,14 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 			req := tmp.(*basic.SpiderRequest)
 			log.Debug("Got request: ", req.Type)
 			//处理请求
-			se.ProcessDMLRequest(req)
+			switch req.Type {
+			case basic.REQ_TYPE_DDL_ADD_FIELD, basic.REQ_TYPE_DDL_DEL_FIELD:
+				se.ProcessDDLRequest(req)
+			case basic.REQ_TYPE_DML_ADD_DOC, basic.REQ_TYPE_DML_DEL_DOC, basic.REQ_TYPE_DML_EDIT_DOC:
+				se.ProcessDMLRequest(req)
+			default:
+				log.Fatal("Unsupport Type: ", req.Type)
+			}
 		}
 	}(reqChannel, se, dbTable)
 

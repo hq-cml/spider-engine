@@ -20,14 +20,15 @@ func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 	docId, primaryKey, err :=  db.AddDoc(p.Table, p.Content)
 	if err != nil {
 		log.Errf("AddDoc Error: %v", err)
-		req.Resp <- err
+		req.Resp <- basic.NewResponse(err, nil)
+		return
 	}
 
 	log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
-	req.Resp <- primaryKey
+	req.Resp <- basic.NewResponse(nil, primaryKey)
 }
 
-//增加文档
+//增加文档（串行化）
 func (se *SpiderEngine) AddDoc(p *AddDocParam) (string, error) {
 	if se.Closed {
 		return "", errors.New("Spider Engine is closed!")
@@ -42,22 +43,17 @@ func (se *SpiderEngine) AddDoc(p *AddDocParam) (string, error) {
 	}
 
 	//生成请求放入cache
-	req := &basic.SpiderRequest{
-		Type: basic.REQ_TYPE_DML_ADD_DOC,
-		Req:  p,
-		Resp: make(chan interface{}),
-	}
+	req := basic.NewRequest(basic.REQ_TYPE_DML_ADD_DOC, p)
 	se.CacheMap[p.Database + "." + p.Table].Put(req)
 	log.Debug("Put AddDoc request: ", p.Database + "." +p.Table)
 
 	//等待结果
 	resp := <- req.Resp
-	err, ok := resp.(error)
-	if ok {
-		return "", err
+	if resp.Err != nil {
+		return "", resp.Err
 	}
 
-	return resp.(string), nil
+	return resp.Data.(string), nil
 }
 
 //删除文档

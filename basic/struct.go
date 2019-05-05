@@ -111,7 +111,13 @@ func NewErrorResult(data interface{}) *Result {
 type SpiderRequest struct {
 	Type  uint8
 	Req   interface{}
-	Resp  chan interface{}  //用于结果接收
+	Resp  chan *SpiderResponse  //用于结果接收
+}
+
+//抽象的返回结果
+type SpiderResponse struct {
+	Err   error              //表示是否有错误
+	Data  interface{}        //实际结果
 }
 
 const (
@@ -122,3 +128,18 @@ const (
 	REQ_TYPE_DML_DEL_DOC   = 21
 	REQ_TYPE_DML_EDIT_DOC  = 22
 )
+
+func NewRequest(typ uint8, p interface{}) *SpiderRequest {
+	return &SpiderRequest{
+		Type: typ,
+		Req:  p,
+		Resp: make(chan *SpiderResponse),
+	}
+}
+
+func NewResponse(err error, data interface{}) *SpiderResponse {
+	return &SpiderResponse{
+		Err : err,
+		Data: data,
+	}
+}
