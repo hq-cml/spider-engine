@@ -27,7 +27,6 @@ import (
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
 	"fmt"
-	"github.com/hq-cml/spider-engine/utils/helper"
 )
 
 //倒排索引
@@ -156,7 +155,7 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 	if rIdx.inMemory {
 		docNodes, ok := rIdx.termMap[term]
 		if ok {
-			fmt.Println("Ivt Mem QueryTerm:", term, docNodes)
+			//fmt.Println("Ivt Mem QueryTerm:", term, docNodes)
 			retNodes := make([]basic.DocNode, len(docNodes))
 			copy(retNodes, docNodes)
 			return retNodes, true
@@ -169,8 +168,10 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 
 		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
-		fmt.Println("Ivt Disk QueryTerm:", term, count, helper.JsonEncode(docNodes))
-		return docNodes, true
+		//fmt.Println("Ivt Disk QueryTerm:", term, count, helper.JsonEncode(docNodes))
+		retNodes := make([]basic.DocNode, len(docNodes))
+		copy(retNodes, docNodes)
+		return retNodes, true
 	}
 
 	return nil, false
@@ -300,7 +301,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) e
 		btdb.AddTree(rIdx.fieldName)
 	}
 	for term, docNodeList := range rIdx.termMap {
-		fmt.Println(rIdx.fieldName, "落盘：", term, helper.JsonEncode(docNodeList))
+		//fmt.Println(rIdx.fieldName, "落盘：", term, helper.JsonEncode(docNodeList))
 		//先写入长度, 占8个字节
 		nodeCnt := len(docNodeList)
 		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)

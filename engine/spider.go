@@ -118,16 +118,15 @@ func (se *SpiderEngine) storeMeta() error {
 func (se *SpiderEngine) Start() {
 	go func() {
 		//启动前,看看分区是否合并必要
-		//TODO 排查问题，一会儿放开
-		//for _, db := range se.DbMap {
-		//	for _, tab := range db.TableMap {
-		//		err := tab.MergePartitions()
-		//		if err != nil {
-		//			log.Fatalf("Table MergePartitions failed! db:%v, table:%v", db.DbName, tab.TableName)
-		//			return
-		//		}
-		//	}
-		//}
+		for _, db := range se.DbMap {
+			for _, tab := range db.TableMap {
+				err := tab.MergePartitions()
+				if err != nil {
+					log.Fatalf("Table MergePartitions failed! db:%v, table:%v", db.DbName, tab.TableName)
+					return
+				}
+			}
+		}
 
 		//注册路由
 		se.RegisterRouter()

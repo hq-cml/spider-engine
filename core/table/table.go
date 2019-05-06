@@ -202,9 +202,6 @@ func LoadTable(path, name string) (*Table, error) {
 		tbl.priFwdMap = make(map[string]string)
 	}
 
-	tbl.priBtdb.Display(PRI_IVT_BTREE_NAME)
-	tbl.priBtdb.Display(PRI_FWD_BTREE_NAME)
-
 	log.Infof("Load Table %v success", tbl.TableName)
 	tbl.status = TABLE_STATUS_RUNNING
 	return &tbl, nil
@@ -216,6 +213,7 @@ func (tbl *Table) storeMetaAndBtdb() error {
 	data := helper.JsonEncodeIndent(tbl)
 	if data != "" {
 		if err := helper.OverWriteToFile([]byte(data), metaFileName); err != nil {
+			log.Errf("OverWriteToFile Error:%v", err.Error())
 			return err
 		}
 	} else {
@@ -224,8 +222,14 @@ func (tbl *Table) storeMetaAndBtdb() error {
 
 	//将内存态的主键，全部落盘到btree
 	if tbl.PrimaryKey != "" {
-		tbl.priBtdb.MutiSet(PRI_IVT_BTREE_NAME, tbl.priIvtMap)
-		tbl.priBtdb.MutiSet(PRI_FWD_BTREE_NAME, tbl.priFwdMap)
+		err := tbl.priBtdb.MutiSet(PRI_IVT_BTREE_NAME, tbl.priIvtMap); if err != nil {
+			log.Errf("tbl.priBtdb.MutiSet Error:%v", err.Error())
+			return err
+		}
+		err = tbl.priBtdb.MutiSet(PRI_FWD_BTREE_NAME, tbl.priFwdMap); if err != nil {
+			log.Errf("tbl.priBtdb.MutiSet Error:%v", err.Error())
+			return err
+		}
 		tbl.priIvtMap = make(map[string]string)
 		tbl.priFwdMap = make(map[string]string)
 	}
@@ -541,11 +545,9 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 				}
 			}
 		}
-
-		//核心删除
+		//核心标记删除
 		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
 	}
-
 	return true
 }
 
@@ -614,6 +616,8 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 	var err error
 	err = tbl.memPartition.AddDocument(newDocId, content)
 	if err != nil {
+		//在顶层将新的docId标记删除
+		tbl.delFlagBitMap.Set(uint64(newDocId))
 		log.Errf("MemPartition.UpdateDocument Error:%v. PrimaryKey:%v", err, key)
 	} else {
 		//成功增加了主体文档，则开始底层篡改
@@ -949,7 +953,6 @@ func (tbl *Table) MergePartitions() error {
 
 	//存储meta
 	err := tbl.storeMetaAndBtdb()
-
 	if err != nil {
 		return err
 	}
@@ -968,12 +971,11 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 	docIds := []basic.DocNode{}
 	exist := false
 
-	fmt.Println("-----------Table search -------------")
-	fmt.Println("BitMap: ", tbl.delFlagBitMap.String())
+	//fmt.Println("-----------Table search -------------")
+	//fmt.Println("BitMap: ", tbl.delFlagBitMap.String())
 
 	//各个磁盘分区执行搜索
 	for _, prt := range tbl.partitions {
-		fmt.Println("Y-----------")
 		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)
 		if ok {
 			exist = true
@@ -992,19 +994,17 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 
 	//结果组装
 	retDocs := []basic.DocInfo{}
-	for _, id := range docIds {
-		tmp, ok := tbl.getDocByDocId(id.DocId)
+	for _, doc := range docIds {
+		tmp, ok := tbl.getDocByDocId(doc.DocId)
 		if !ok {
-			fmt.Println("6---------------", id.DocId)
-			log.Errf("Can't find doc[%v] !!!!", id.DocId)
+			log.Errf("Can't find doc[%v] !!!!", doc.DocId)
 			//return nil, false
 			continue
 		}
 
-		primaryKey, ok := tbl.findPrimaryKeyByDocId(id.DocId)
+		primaryKey, ok := tbl.findPrimaryKeyByDocId(doc.DocId)
 		if !ok {
-			log.Errf("Can't find doc[%v]' primary key !!!!", id.DocId)
-			fmt.Println("7---------------", id.DocId)
+			log.Errf("Can't find doc[%v]' primary key !!!!", doc.DocId)
 			//return nil, false
 			continue
 		}
@@ -1022,7 +1022,6 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 
 		retDocs = append(retDocs, detail)
 	}
-
 	return retDocs, exist
 }
 
@@ -1079,13 +1078,19 @@ func (tbl *Table) GetStatus() *TableStatus {
 		m = append(m, v.GetBasicStatus())
 	}
 	for _, prt := range tbl.partitions {
-		prt.Fields["user_desc"].IvtIdx.Walk()
+		//prt.Fields["user_desc"].IvtIdx.Walk()
 		p = append(p, prt.GetStatus())
 	}
 	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty() {
-		tbl.memPartition.Fields["user_desc"].IvtIdx.Walk()
+		//tbl.memPartition.Fields["user_desc"].IvtIdx.Walk()
 		memPart = tbl.memPartition.GetStatus()
 	}
+
+	fmt.Println("-----------Table Status -------------")
+	fmt.Println("BitMap: ", tbl.delFlagBitMap.String())
+	fmt.Println("PRIMARY BTDB:")
+	tbl.priBtdb.Display(PRI_IVT_BTREE_NAME)
+	tbl.priBtdb.Display(PRI_FWD_BTREE_NAME)
 
 	return &TableStatus {
 		TableName      : tbl.TableName,

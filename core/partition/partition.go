@@ -432,7 +432,6 @@ func (part *Partition) getFieldValue(docId uint32, fieldName string) (interface{
 }
 
 //获取整篇文档详情，全部字段
-
 func (part *Partition) getDocument(docId uint32) (map[string]interface{}, bool) {
 	//校验
 	if docId < part.StartDocId || docId >= part.NextDocId {
@@ -459,7 +458,6 @@ func (part *Partition) GetValueWithFields(docId uint32, fieldNames []string) (ma
 	if docId < part.StartDocId || docId >= part.NextDocId {
 		return nil, false
 	}
-
 	if fieldNames == nil {
 		return part.getDocument(docId)
 	}
@@ -706,7 +704,7 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		return nil, false
 	}
 
-	fmt.Println("\n--------------------\nPart SearchDocs:", part.PrtPathName, fieldName, keyWord)
+	//fmt.Println("\n--------------------\nPart SearchDocs:", part.PrtPathName, fieldName, keyWord)
 	retDocs := []basic.DocNode{}
 	//如果keyWord为空, 则取出所有未删除的节点
 	if keyWord == "" {
@@ -717,17 +715,12 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		var match bool
 		retDocs, match = part.query(fieldName, keyWord)
 		if !match {
-			fmt.Println("Get not docs")
+			//fmt.Println("Get not docs")
 			return retDocs, false
 		}
 	}
 
-
-
-
-	fmt.Println("B------------")
-	part.Fields[fieldName].IvtIdx.Walk()
-	fmt.Println("Org Docs:", helper.JsonEncode(retDocs))
+	//fmt.Println("Org Docs:", helper.JsonEncode(retDocs))
 	//再用bitmap去掉已删除的数据
 	if bitmap != nil {
 		idx := 0
@@ -740,15 +733,8 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		}
 		retDocs = retDocs[:idx] //截断没用的
 	}
-	fmt.Println("B------------")
-	part.Fields[fieldName].IvtIdx.Walk()
 
-
-
-
-
-
-	fmt.Println("After bitmap, Final Docs:", helper.JsonEncode(retDocs))
+	//fmt.Println("After bitmap, Final Docs:", helper.JsonEncode(retDocs))
 	//再使用过滤器
 	finalRetDocs := []basic.DocNode{}
 	if filters != nil && len(filters) > 0 {
