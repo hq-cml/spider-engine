@@ -27,6 +27,7 @@ func (se *SpiderEngine) RegisterRouter() {
 	http.HandleFunc("/_deleteDoc", DeleteDoc)
 	http.HandleFunc("/_updateDoc", UpdateDoc)
 	http.HandleFunc("/_search", SearchDocs)
+	//http.HandleFunc("/_test", TestDocs)
 }
 
 // hello world, the web server
@@ -328,3 +329,10 @@ func SearchDocs(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+//搜索
+//func TestDocs(w http.ResponseWriter, req *http.Request) {
+//	g_spider_ins.DbMap["sp_db"].TableMap["user"].RealDocNum
+//
+//	io.WriteString(w, "aa")
+//	return
+//}

@@ -719,6 +719,7 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		}
 	}
 
+	fmt.Println("1----------------", helper.JsonEncode(retDocs))
 	//再用bitmap去掉已删除的数据
 	if bitmap != nil {
 		idx := 0
@@ -731,7 +732,8 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 		}
 		retDocs = retDocs[:idx]
 	}
-
+	fmt.Println("2----------------", bitmap.String())
+	fmt.Println("2----------------", helper.JsonEncode(retDocs))
 	//再使用过滤器
 	finalRetDocs := []basic.DocNode{}
 	if filters != nil && len(filters) > 0 {
@@ -752,6 +754,8 @@ func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitm
 	} else {
 		finalRetDocs = retDocs
 	}
+	fmt.Println("3----------------", helper.JsonEncode(finalRetDocs))
+
 	return finalRetDocs, len(finalRetDocs)>0
 }
 

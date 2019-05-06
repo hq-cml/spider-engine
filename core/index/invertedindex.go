@@ -27,6 +27,7 @@ import (
 	"github.com/hq-cml/spider-engine/utils/btree"
 	"github.com/hq-cml/spider-engine/utils/log"
 	"fmt"
+	"github.com/hq-cml/spider-engine/utils/helper"
 )
 
 //倒排索引
@@ -148,6 +149,7 @@ FAIL:
 
 //给定一个查询词query，找出doc的list
 func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
+	fmt.Println("X-----------------", term)
 	if rIdx.inMemory {
 		docNodes, ok := rIdx.termMap[term]
 		if ok {
@@ -160,7 +162,9 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 		}
 
 		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
+		fmt.Println("Y-----------------", count)
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
+		fmt.Println("Z-----------------", helper.JsonEncode(docNodes))
 		return docNodes, true
 	}
 

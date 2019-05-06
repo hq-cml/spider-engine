@@ -33,8 +33,8 @@ import (
 // 最新的文档增加只会操作内存态分区，到达阈值后回落地或者和其他分区合并落地
 // 文档的删除采用假删除，通过bitmap标记
 //
-// 为了性能的尽量提升和逻辑简单，priFwdMap可能存在一定量的脏数据（因为doc的编辑和删除操作导致）
-// 不过由于bitmap和priIvtMap为主查询，priFwdMapz只是辅助，所以不会影响正确性
+// 为了性能的尽量提升和逻辑简单，并且便于追溯和排查，priFwdMap将会留存全部的docId
+// 由于bitmap和priIvtMap为主查询，priFwdMapz只是辅助，所以不会影响正确性
 type Table struct {
 	TableName    string                      `json:"tableName"`
 	Path         string                      `json:"pathName"`
@@ -201,6 +201,9 @@ func LoadTable(path, name string) (*Table, error) {
 		tbl.priIvtMap = make(map[string]string)
 		tbl.priFwdMap = make(map[string]string)
 	}
+
+	tbl.priBtdb.Display(PRI_IVT_BTREE_NAME)
+	tbl.priBtdb.Display(PRI_FWD_BTREE_NAME)
 
 	log.Infof("Load Table %v success", tbl.TableName)
 	tbl.status = TABLE_STATUS_RUNNING
@@ -471,7 +474,7 @@ func (tbl *Table) AddDoc(content map[string]interface{}) (uint32, string, error)
 	err = tbl.memPartition.AddDocument(newDocId, content)
 	if err != nil {
 		delete(tbl.priIvtMap, key)
-		delete(tbl.priFwdMap, fmt.Sprintf("%v", newDocId))
+		//delete(tbl.priFwdMap, fmt.Sprintf("%v", newDocId))
 
 		//标记删除
 		tbl.delFlagBitMap.Set(uint64(newDocId))
@@ -524,10 +527,10 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 		//删除分区的realDocNum
 		if tbl.memPartition != nil &&
 			(docId.DocId >= tbl.memPartition.StartDocId && docId.DocId < tbl.memPartition.NextDocId) {
-			//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了，会在btdb留下一点脏数据
-			//不过不过不会影响到正确性，因为以bitmap的删除标记为准
+			//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了
+			//不过不会影响到正确性，因为以bitmap的删除标记为准
 			delete(tbl.priIvtMap, primaryKey)
-			delete(tbl.priFwdMap, fmt.Sprintf("%v", docId.DocId))
+			//delete(tbl.priFwdMap, fmt.Sprintf("%v", docId.DocId))
 			tbl.memPartition.RealDocNum --
 		} else {
 			//尝试从磁盘分区获取
@@ -618,7 +621,7 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 		//变更指向 key=>docId
 		if _, exist := tbl.priIvtMap[key]; exist {
 			tbl.priIvtMap[key] = strconv.Itoa(int(newDocId))           //直接覆盖
-			delete(tbl.priFwdMap, strconv.Itoa(int(oldDocid.DocId)))   //捎带手删一下，不会留下脏数据
+			//delete(tbl.priFwdMap, strconv.Itoa(int(oldDocid.DocId))) //不主动删除，留存下来便于排查追溯等
 			tbl.priFwdMap[strconv.Itoa(int(newDocId))] = key           //设置辅助映射
 		} else {
 			//对于已经落盘的主键，则修改btdb，（会在PRI_FWD_BTREE_NAME留下一点脏数据，不影响是正确性）
@@ -966,18 +969,24 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 			docIds = append(docIds, ids...)
 		}
 	}
-
+	fmt.Println("4-------------", helper.JsonEncode(docIds))
 	//结果组装
 	retDocs := []basic.DocInfo{}
 	for _, id := range docIds {
 		tmp, ok := tbl.getDocByDocId(id.DocId)
 		if !ok {
-			return nil, false
+			fmt.Println("6---------------", id.DocId)
+			log.Errf("Can't find doc[%v] !!!!", id.DocId)
+			//return nil, false
+			continue
 		}
 
 		primaryKey, ok := tbl.findPrimaryKeyByDocId(id.DocId)
 		if !ok {
-			return nil, false
+			log.Errf("Can't find doc[%v]' primary key !!!!", id.DocId)
+			fmt.Println("7---------------", id.DocId)
+			//return nil, false
+			continue
 		}
 
 		//如果表主键是系统自动生成的，则在详情中隐藏不体现
@@ -994,6 +1003,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 		retDocs = append(retDocs, detail)
 	}
 
+	fmt.Println("5----------------", helper.JsonEncode(retDocs))
 	return retDocs, exist
 }
 
@@ -1050,6 +1060,7 @@ func (tbl *Table) GetStatus() *TableStatus {
 		m = append(m, v.GetBasicStatus())
 	}
 	for _, v := range tbl.partitions {
+		v.Fields["user_desc"].IvtIdx.Walk()
 		p = append(p, v.GetStatus())
 	}
 	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty() {
