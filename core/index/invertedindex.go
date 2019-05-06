@@ -137,7 +137,8 @@ func (rIdx *InvertedIndex) AddDocument(docId uint32, content string) error {
 
 SUCC:
 	rIdx.nextDocId++ //docId自增
-	log.Debugf("InvertAddDoc--> DocId: %v, Field: %v ,Content: %v", docId, rIdx.fieldName, content)
+	log.Debugf("InvertAddDoc--> DocId: %v, Field: %v, Content: %v, NodesNum: %v",
+		docId, rIdx.fieldName, content, len(nodes))
 	return nil
 
 FAIL:
@@ -148,12 +149,17 @@ FAIL:
 }
 
 //给定一个查询词query，找出doc的list
+//Note
+// 2019-5-6 发现一个隐藏的小坑，直接返回slice的函数，最好在底层copy一下
+// 否则如果上层对slice进行了更改，那么底层就彻底乱了，而且不好排查。。。
 func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
-	fmt.Println("X-----------------", term)
 	if rIdx.inMemory {
 		docNodes, ok := rIdx.termMap[term]
 		if ok {
-			return docNodes, true
+			fmt.Println("Ivt Mem QueryTerm:", term, docNodes)
+			retNodes := make([]basic.DocNode, len(docNodes))
+			copy(retNodes, docNodes)
+			return retNodes, true
 		}
 	} else if (rIdx.ivtMmap != nil && rIdx.btdb != nil) {
 		offset, ok := rIdx.btdb.GetInt(rIdx.fieldName, term)
@@ -162,9 +168,8 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 		}
 
 		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
-		fmt.Println("Y-----------------", count)
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
-		fmt.Println("Z-----------------", helper.JsonEncode(docNodes))
+		fmt.Println("Ivt Disk QueryTerm:", term, count, helper.JsonEncode(docNodes))
 		return docNodes, true
 	}
 
@@ -238,10 +243,26 @@ func (rIdx *InvertedIndex) GetNextId() uint32 {
 //btree操作
 func (rIdx *InvertedIndex) Walk() error {
 	if rIdx.btdb != nil {
-		return rIdx.btdb.Display(rIdx.fieldName)
+		//return rIdx.btdb.Display(rIdx.fieldName)
+		term, _, ok := rIdx.GetFristKV()
+		if !ok {
+			return nil
+		}
+
+		for {
+			tmpNodes, ok := rIdx.QueryTerm(term)
+			if !ok {
+				return nil
+			}
+			fmt.Println("磁盘中的ivt:", term, "----", tmpNodes)
+			term, _, ok = rIdx.btdb.GetNextKV(rIdx.fieldName, term)
+			if !ok {
+				return nil
+			}
+		}
 	} else if rIdx.termMap != nil {
 		for k,v := range rIdx.termMap {
-			fmt.Println(k, "----", v)
+			fmt.Println("内存中的ivt:", k, "----", v)
 		}
 		return nil
 	} else {
@@ -279,6 +300,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) e
 		btdb.AddTree(rIdx.fieldName)
 	}
 	for term, docNodeList := range rIdx.termMap {
+		fmt.Println(rIdx.fieldName, "落盘：", term, helper.JsonEncode(docNodeList))
 		//先写入长度, 占8个字节
 		nodeCnt := len(docNodeList)
 		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)

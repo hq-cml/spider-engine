@@ -968,8 +968,12 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 	docIds := []basic.DocNode{}
 	exist := false
 
+	fmt.Println("-----------Table search -------------")
+	fmt.Println("BitMap: ", tbl.delFlagBitMap.String())
+
 	//各个磁盘分区执行搜索
 	for _, prt := range tbl.partitions {
+		fmt.Println("Y-----------")
 		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)
 		if ok {
 			exist = true
@@ -985,7 +989,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 			docIds = append(docIds, ids...)
 		}
 	}
-	fmt.Println("4-------------", helper.JsonEncode(docIds))
+
 	//结果组装
 	retDocs := []basic.DocInfo{}
 	for _, id := range docIds {
@@ -1019,7 +1023,6 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 		retDocs = append(retDocs, detail)
 	}
 
-	fmt.Println("5----------------", helper.JsonEncode(retDocs))
 	return retDocs, exist
 }
 
@@ -1075,11 +1078,12 @@ func (tbl *Table) GetStatus() *TableStatus {
 	for _, v := range tbl.BasicFields {
 		m = append(m, v.GetBasicStatus())
 	}
-	for _, v := range tbl.partitions {
-		v.Fields["user_desc"].IvtIdx.Walk()
-		p = append(p, v.GetStatus())
+	for _, prt := range tbl.partitions {
+		prt.Fields["user_desc"].IvtIdx.Walk()
+		p = append(p, prt.GetStatus())
 	}
 	if tbl.memPartition != nil && !tbl.memPartition.IsEmpty() {
+		tbl.memPartition.Fields["user_desc"].IvtIdx.Walk()
 		memPart = tbl.memPartition.GetStatus()
 	}
 

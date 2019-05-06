@@ -245,7 +245,8 @@ func (fld *Field) Query(key interface{}) ([]basic.DocNode, bool) {
 		return nil, false
 	}
 
-	return fld.IvtIdx.QueryTerm(fmt.Sprintf("%v", key))
+	nodes, ok := fld.IvtIdx.QueryTerm(fmt.Sprintf("%v", key))
+	return nodes, ok
 }
 
 //获取字符值
