@@ -521,10 +521,10 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 	}
 	docId, found := tbl.findDocIdByPrimaryKey(primaryKey)
 	if found {
-		//核心删除
+		//Table的realDocNum--
 		tbl.RealDocNum--
 
-		//删除分区的realDocNum
+		//文档所属分区的realDocNum--
 		if tbl.memPartition != nil &&
 			(docId.DocId >= tbl.memPartition.StartDocId && docId.DocId < tbl.memPartition.NextDocId) {
 			//如果主键此刻还在内存中，则捎带手删掉，如果已经落了btdb，那就算了
@@ -541,6 +541,8 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 				}
 			}
 		}
+
+		//核心删除
 		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
 	}
 
@@ -636,6 +638,20 @@ func (tbl *Table) UpdateDoc(content map[string]interface{}) (uint32, error) {
 				log.Errf("Set key error  %v", tmpErr)
 				//return 0, tmpErr
 				err = tmpErr
+			}
+		}
+
+		//被删除文档所属分区的realDocNum--
+		if tbl.memPartition != nil &&
+			(oldDocid.DocId >= tbl.memPartition.StartDocId && oldDocid.DocId < tbl.memPartition.NextDocId) {
+			tbl.memPartition.RealDocNum --
+		} else {
+			//尝试从磁盘分区获取
+			for _, prt := range tbl.partitions {
+				if oldDocid.DocId >= prt.StartDocId && oldDocid.DocId < prt.NextDocId {
+					prt.RealDocNum --
+					break
+				}
 			}
 		}
 	}
