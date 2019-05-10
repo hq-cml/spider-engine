@@ -56,7 +56,21 @@ var RE_IDX_MAP = map[uint16]string {
 var Splitter splitter.Splitter
 
 var punctuationMap = map[string]bool {
-	" ":true, ".":true, ",":true, "，":true, "。":true,
+	" ":true,
+	".":true, "。":true,
+	",":true, "，":true,
+	"\\":true, "、":true,
+	";":true, "；":true,
+	":":true, "：":true,
+	"?":true, "？":true,
+	"!":true, "！":true,
+	"\"":true, "“":true,, "”":true,
+	"(":true, ")":true,"（":true, "）":true,
+	"《":true, "》":true,
+	"-":true, "":true,
+	"~":true, "#":true, "$":true,
+	"%":true, "&":true, "`":true, "^":true,
+	"+":true, "=":true,
 }
 
 func init() {
