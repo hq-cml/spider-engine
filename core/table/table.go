@@ -1086,11 +1086,11 @@ func (tbl *Table) GetStatus() *TableStatus {
 		memPart = tbl.memPartition.GetStatus()
 	}
 
-	fmt.Println("-----------Table Status -------------")
-	fmt.Println("BitMap: ", tbl.delFlagBitMap.String())
-	fmt.Println("PRIMARY BTDB:")
-	tbl.priBtdb.Display(PRI_IVT_BTREE_NAME)
-	tbl.priBtdb.Display(PRI_FWD_BTREE_NAME)
+	//fmt.Println("-----------Table Status -------------")
+	//fmt.Println("BitMap: ", tbl.delFlagBitMap.String())
+	//fmt.Println("PRIMARY BTDB:")
+	//tbl.priBtdb.Display(PRI_IVT_BTREE_NAME)
+	//tbl.priBtdb.Display(PRI_FWD_BTREE_NAME)
 
 	return &TableStatus {
 		TableName      : tbl.TableName,
