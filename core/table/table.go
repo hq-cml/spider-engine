@@ -551,6 +551,8 @@ func (tbl *Table) DelDoc(primaryKey string) bool {
 		}
 		//核心标记删除
 		return tbl.delFlagBitMap.Set(uint64(docId.DocId))
+	} else {
+		log.Infof("No found %v!, Do nothing", primaryKey)
 	}
 	return true
 }
