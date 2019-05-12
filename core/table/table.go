@@ -379,21 +379,21 @@ func (tbl *Table) doExpandBitMap() error{
 }
 
 //获取文档
-func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
+func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, uint32, bool) {
 	//读取
 	tbl.rwMutex.RLock()
 	defer tbl.rwMutex.RUnlock()
 
 	if tbl.status != TABLE_STATUS_RUNNING {
-		return nil, false
+		return nil, 0, false
 	}
 	docNode, exist := tbl.findDocIdByPrimaryKey(primaryKey)
 	if !exist {
-		return nil, false
+		return nil, 0, false
 	}
 	tmp, ok := tbl.getDocByDocId(docNode.DocId)
 	if !ok {
-		return nil, false
+		return nil, 0, false
 	}
 
 	//如果表主键是系统自动生成的，则在详情中隐藏不体现
@@ -407,7 +407,7 @@ func (tbl *Table) GetDoc(primaryKey string) (*basic.DocInfo, bool) {
 		Detail:tmp,
 	}
 
-	return &detail, true
+	return &detail, docNode.DocId, true
 }
 
 //新增文档
@@ -963,13 +963,16 @@ func (tbl *Table) MergePartitions() error {
 }
 
 //表内搜索
-func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool) {
+func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool, error) {
 	//读锁
 	tbl.rwMutex.RLock()
 	defer tbl.rwMutex.RUnlock()
 
 	if tbl.status != TABLE_STATUS_RUNNING {
-		return nil, false
+		if tbl.status == TABLE_STATUS_MERGEING {
+			return nil, false, errors.New("The Spider Is Merging. Please Try Again Later!")
+		}
+		return nil, false, errors.New("The Spider Is Not Running!")
 	}
 	docIds := []basic.DocNode{}
 	exist := false
@@ -1025,7 +1028,7 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 
 		retDocs = append(retDocs, detail)
 	}
-	return retDocs, exist
+	return retDocs, exist, nil
 }
 
 func (tbl *Table) displayInner() string {

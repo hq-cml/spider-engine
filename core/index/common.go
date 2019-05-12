@@ -71,6 +71,7 @@ var punctuationMap = map[string]bool {
 	"~":true, "#":true, "$":true,
 	"%":true, "&":true, "`":true, "^":true,
 	"+":true, "=":true,
+	"【":true, "】":true,
 }
 
 func init() {

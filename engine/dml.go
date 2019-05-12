@@ -164,13 +164,13 @@ func (se *SpiderEngine) GetDoc(dbName, tableName, key string) (*basic.DocInfo, e
 	}
 
 	//获取
-	doc, ok := db.GetDoc(tableName, key)
+	doc, docId, ok := db.GetDoc(tableName, key)
 	if !ok {
 		log.Warnf("GetDoc get null: %v", key)
 		return nil, nil
 	}
 
-	log.Infof("GetDoc: %v", dbName + "." + tableName + "." + key)
+	log.Infof("GetDoc: %v. Db:%v. Table:%v. DocId:%v", key, dbName, tableName, docId)
 	return doc, nil
 }
 
@@ -187,7 +187,11 @@ func (se *SpiderEngine) SearchDocs(p *SearchParam) ([]basic.DocInfo, error) {
 		log.Errf("The db not exist!")
 		return nil, errors.New("The db already exist!")
 	}
-	docs, ok := db.SearchDocs(p.Table, p.FieldName, p.Value, p.Filters)
+	docs, ok, err := db.SearchDocs(p.Table, p.FieldName, p.Value, p.Filters)
+	if err != nil {
+		log.Errf("SearchDocs Error: %v", err.Error())
+		return nil, err
+	}
 	if !ok {
 		log.Warnf("SearchDocs get null:%v", helper.JsonEncode(p))
 		return nil, nil

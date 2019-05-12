@@ -86,25 +86,25 @@ func TestLoadDatabase(t *testing.T) {
 	}
 
 	//!!!!这里从临时变量里面拿到了主键
-	user, ok := db.GetDoc(TEST_TABLE, temp_pk)
+	user, _, ok := db.GetDoc(TEST_TABLE, temp_pk)
 	if !ok {
 		panic("Should exist!")
 	}
 	t.Log("Got the user[",temp_pk,"]:", helper.JsonEncode(user))
 
-	tmp, ok := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "游泳", nil)
+	tmp, ok, _ := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "游泳", nil)
 	if ok {
 		panic("Should not exist!")
 	}
 	t.Log("Got the doc[游泳]:", helper.JsonEncode(tmp))
 
-	tmp, ok = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "", nil)
+	tmp, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "", nil)
 	if !ok {
 		panic("Should exist!")
 	}
 	t.Log("Got the doc[美食]:", helper.JsonEncode(tmp))
 
-	tmp, ok = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电影", nil)
+	tmp, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电影", nil)
 	if !ok {
 		panic("Should exist!")
 	}
@@ -348,7 +348,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("F------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, ok := db.GetDoc(TEST_TABLE, "10004")
+	d, _, ok := db.GetDoc(TEST_TABLE, "10004")
 	if !ok {
 		panic("Err")
 	}
@@ -375,7 +375,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("G------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, ok = db.GetDoc(TEST_TABLE, "10004")
+	d, _, ok = db.GetDoc(TEST_TABLE, "10004")
 	if !ok {
 		panic("Err")
 	}
@@ -429,7 +429,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("I------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, ok = db.GetDoc(TEST_TABLE, "10005")
+	d, _, ok = db.GetDoc(TEST_TABLE, "10005")
 	if !ok {
 		panic("Err")
 	}
@@ -459,7 +459,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("J------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, ok = db.GetDoc(TEST_TABLE, "10005")
+	d, _, ok = db.GetDoc(TEST_TABLE, "10005")
 	if !ok {
 		panic("Err")
 	}
