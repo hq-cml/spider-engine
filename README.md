@@ -26,17 +26,18 @@ Spider-Engine是一款基于Go实现的的迷你搜索引擎，参考借鉴了My
 - 3. 分布式
 
 #### 概念解释与对齐：
-	对于各类存储，很多概念都类似、通用，但又有些许区别，比如同一个表的概念，在Mysql中称之为表，在ES中称之为index。这里统一解释拉平对齐，便于消除歧义。
+	对于各类存储，很多概念都类似、通用，但又有些许区别，比如同一个表的概念，在Mysql中称之为Table，在ES中称之为index或type。
+	这里统一解释拉平对齐，便于消除歧义。
 
-概念名称 | Mysql | ES | Spider-Engine
----|---|---|---|---
-- | Database | Indexes| Database
-- | Table| Index/Type| Table
-- |Row| Document| Document
-- | Column| Field| Field
+Mysql | ES | Spider-Engine
+---|---|---
+Database | Indexes| Database
+Table| Index/Type| Table
+Row| Document| Document
+Column| Field| Field
+
 
 这里我参考并结合了Mysql和ES的命名规则，一个原则是让头一次看的人一眼就看明白，没什么歧义。具体的解释，见：[开发文档](./design.md)
-
 #### 获取与编译：
 
 ```
