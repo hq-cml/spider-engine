@@ -22,15 +22,6 @@ import (
 	"strings"
 )
 
-var (
-	PART_PERSIST_MIN_DOC_CNT uint32 = 10000  //1w个文档，内存分区满1w个文档，就落地一次
-	PART_MERGE_MIN_DOC_CNT   uint32 = 100000 //10w个文档，分区合并的一个参考值，合并一个分区至少拥有10w个Doc
-
-	//Test
-	//PART_PERSIST_MIN_DOC_CNT uint32 = 2
-	//PART_MERGE_MIN_DOC_CNT uint32 = 6
-)
-
 const (
 	GOD_FIELD_NAME = "#O@H!M*Y&G%O(D#"
 )

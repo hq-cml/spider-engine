@@ -5,6 +5,8 @@ import "github.com/Unknwon/goconfig"
 /************************************** 配置相关 *************************************/
 type SpiderEngineConf struct {
 	DataDir       	    string    //数据目录(存放数据文件)
+	PartPersistMinCnt   int
+	PartMergeMinCnt     int
 
 	LogPath             string    //日志路径
 	LogLevel            string    //日志级别
@@ -27,7 +29,15 @@ func ParseConfig(confPath string) (*SpiderEngineConf, error) {
 
 	c := &SpiderEngineConf{}
 	if c.DataDir, err = cfg.GetValue("spider", "dataDir"); err != nil {
-		panic("Load conf pluginKey failed!")
+		panic("Load conf dataDir failed!")
+	}
+
+	if c.PartPersistMinCnt, err = cfg.Int("spider", "partitionPersistMinDocCnt"); err != nil {
+		panic("Load conf PartPersistMinCnt failed!")
+	}
+
+	if c.PartMergeMinCnt, err = cfg.Int("spider", "partitionMergeMinDocCnt"); err != nil {
+		panic("Load conf PartPersistMinCnt failed!")
 	}
 
 	if c.LogPath, err = cfg.GetValue("log", "logPath"); err != nil {

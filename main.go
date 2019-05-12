@@ -29,6 +29,8 @@ func main() {
 		panic("parse conf err:" + err.Error())
 	}
 	basic.GlobalConf = conf
+	basic.PART_PERSIST_MIN_DOC_CNT = uint32(conf.PartPersistMinCnt)
+	basic.PART_MERGE_MIN_DOC_CNT = uint32(conf.PartMergeMinCnt)
 
 	//创建日志文件并初始化日志句柄
 	log.InitLog(conf.LogPath, conf.LogLevel)

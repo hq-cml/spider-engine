@@ -1,5 +1,5 @@
 #!/bin/sh
-
+go build ./
 spider_path=$SPIDER_PATH
 
 #校验

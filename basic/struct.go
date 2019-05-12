@@ -143,3 +143,13 @@ func NewResponse(err error, data interface{}) *SpiderResponse {
 		Data: data,
 	}
 }
+
+//分区自动落地和合并参数
+var (
+	PART_PERSIST_MIN_DOC_CNT uint32  //1w个文档，内存分区满1w个文档，就落地一次
+	PART_MERGE_MIN_DOC_CNT   uint32  //10w个文档，分区合并的一个参考值，合并一个分区至少拥有10w个Doc
+
+	//Test
+	//PART_PERSIST_MIN_DOC_CNT uint32 = 2
+	//PART_MERGE_MIN_DOC_CNT uint32 = 6
+)
