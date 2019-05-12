@@ -164,7 +164,11 @@ func (se *SpiderEngine) GetDoc(dbName, tableName, key string) (*basic.DocInfo, e
 	}
 
 	//获取
-	doc, docId, ok := db.GetDoc(tableName, key)
+	doc, docId, ok, err := db.GetDoc(tableName, key)
+	if err != nil {
+		log.Warnf("GetDoc Error: %v", err.Error())
+		return nil, err
+	}
 	if !ok {
 		log.Warnf("GetDoc get null: %v", key)
 		return nil, nil

@@ -86,7 +86,7 @@ func TestLoadDatabase(t *testing.T) {
 	}
 
 	//!!!!这里从临时变量里面拿到了主键
-	user, _, ok := db.GetDoc(TEST_TABLE, temp_pk)
+	user, _, ok, _ := db.GetDoc(TEST_TABLE, temp_pk)
 	if !ok {
 		panic("Should exist!")
 	}
@@ -348,7 +348,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("F------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, _, ok := db.GetDoc(TEST_TABLE, "10004")
+	d, _, ok, _ := db.GetDoc(TEST_TABLE, "10004")
 	if !ok {
 		panic("Err")
 	}
@@ -375,7 +375,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("G------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, _, ok = db.GetDoc(TEST_TABLE, "10004")
+	d, _, ok, _ = db.GetDoc(TEST_TABLE, "10004")
 	if !ok {
 		panic("Err")
 	}
@@ -429,7 +429,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("I------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, _, ok = db.GetDoc(TEST_TABLE, "10005")
+	d, _, ok, _ = db.GetDoc(TEST_TABLE, "10005")
 	if !ok {
 		panic("Err")
 	}
@@ -459,7 +459,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	fmt.Println("J------", db.TableMap[TEST_TABLE].GetFwdMap())
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_IVT_BTREE_NAME)
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
-	d, _, ok = db.GetDoc(TEST_TABLE, "10005")
+	d, _, ok, _ = db.GetDoc(TEST_TABLE, "10005")
 	if !ok {
 		panic("Err")
 	}
@@ -479,12 +479,12 @@ func TestDocUpdateAndDel(t *testing.T) {
 
 
 	//测试搜索
-	tmp, ok := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "微积分", nil)
+	tmp, ok, _ := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "微积分", nil)
 	if !ok {
 		panic("Err")
 	}
 	fmt.Println(helper.JsonEncode(tmp))
-	tmp, ok = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电子", nil)
+	tmp, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电子", nil)
 	if ok {
 		panic("Err")
 	}

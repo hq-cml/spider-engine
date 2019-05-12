@@ -237,7 +237,7 @@ func TestLoad(t *testing.T) {
 	if docId != 5 {
 		panic("Error")
 	}
-	tmp, _, exist := table.GetDoc("10005") //找回来试试
+	tmp, _, exist, _ := table.GetDoc("10005") //找回来试试
 	if !exist {
 		panic("Should exist")
 		table.DoClose()
@@ -299,7 +299,7 @@ func TestLoadAgain(t *testing.T) {
 	}
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
-	_, _, exist = table.GetDoc("10005") //找回来试试
+	_, _, exist, _ = table.GetDoc("10005") //找回来试试
 	if exist {
 		panic("Should not exist")
 	} else {
@@ -319,7 +319,7 @@ func TestMerge(t *testing.T) {
 	}
 
 	//找一个已经删除的来试试
-	_, _, exist := table.GetDoc("10005")
+	_, _, exist, _ := table.GetDoc("10005")
 	if exist {
 		panic("Should not exist")
 	} else {
@@ -371,7 +371,7 @@ func TestMerge(t *testing.T) {
 	t.Log("唐伯虎", helper.JsonEncode(ids)) //测试最后一个由Persist落地的文档
 
 	//搜索一个重新增加的doc
-	tmp, _, exist := table.GetDoc("10005") //找回来试试
+	tmp, _, exist, _ := table.GetDoc("10005") //找回来试试
 	if !exist {
 		panic("Should exist")
 	}
@@ -391,7 +391,7 @@ func TestMergeThenLoad(t *testing.T) {
 	}
 
 	//找一个曾经删除过,后来又加回来的试试看
-	content, _, exist := table.GetDoc("10005")
+	content, _, exist, _ := table.GetDoc("10005")
 	if !exist {
 		panic("Should exist")
 	}
@@ -547,13 +547,13 @@ func TestConsistentAfterError(t *testing.T) {
 
 
 	//找一个曾经错误过,后来又加回来的试试看
-	content, _, exist := table.GetDoc("10003")
+	content, _, exist, _ := table.GetDoc("10003")
 	if !exist {
 		panic("Should exist")
 	}
 	t.Log("10003：", helper.JsonEncode(content))
 
-	content, _, exist = table.GetDoc("10004")
+	content, _, exist, _ = table.GetDoc("10004")
 	if exist {
 		panic("Should not exist")
 	}
@@ -581,7 +581,7 @@ func TestConsistentAfterError(t *testing.T) {
 	}
 	t.Log("打怪", helper.JsonEncode(ids))
 
-	content, _, exist = table.GetDoc("10002")
+	content, _, exist, _ = table.GetDoc("10002")
 	if !exist {
 		panic("Should exist")
 	}
@@ -609,7 +609,7 @@ func TestConsistentAfterError(t *testing.T) {
 	}
 	t.Log("打怪", helper.JsonEncode(ids))
 
-	content, _, exist = table.GetDoc("10002")
+	content, _, exist, _ = table.GetDoc("10002")
 	if !exist {
 		panic("Should exist")
 	}
@@ -1025,7 +1025,7 @@ func TestMultiMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(docs))
 
-	user, _, ok := table.GetDoc("10003")
+	user, _, ok, _ := table.GetDoc("10003")
 	if !ok {
 		panic("shuoud exist")
 	}
@@ -1044,7 +1044,7 @@ func TestMultiMerge(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(docs))
 
-	user, _, ok = table.GetDoc("10003")
+	user, _, ok, _ = table.GetDoc("10003")
 	if !ok {
 		panic("shuoud exist")
 	}
@@ -1069,7 +1069,7 @@ func TestLoadAgainAgain(t *testing.T) {
 	}
 	t.Log(helper.JsonEncode(docs))
 
-	user, _, ok := table.GetDoc("10003")
+	user, _, ok, _ := table.GetDoc("10003")
 	if !ok {
 		panic("shuoud exist")
 	}

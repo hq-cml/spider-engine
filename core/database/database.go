@@ -193,10 +193,10 @@ func (db *Database) AddDoc(tableName string, content map[string]interface{}) (ui
 }
 
 //获取Doc
-func (db *Database) GetDoc(tableName string, primaryKey string) (*basic.DocInfo, uint32, bool) {
+func (db *Database) GetDoc(tableName string, primaryKey string) (*basic.DocInfo, uint32, bool, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
-		return nil, 0, false
+		return nil, 0, false, errors.New("Table not exist!")
 	}
 
 	return tab.GetDoc(primaryKey)
@@ -227,7 +227,7 @@ func (db *Database) SearchDocs(tableName, fieldName, keyWord string,
 		filters []basic.SearchFilter) ([]basic.DocInfo, bool, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
-		return nil, false, errors.New("The Db Not Exist!")
+		return nil, false, errors.New("The Table Not Exist!")
 	}
 
 	return tab.SearchDocs(fieldName, keyWord, filters)

@@ -508,7 +508,7 @@ func (part *Partition) Persist() error {
 		//设置coreField的fwdOffset和docCnt
 		coreField.FwdOffset = fwdOffset
 		part.CoreFields[coreField.FieldName] = coreField
-		log.Debugf("%v %v %v", name, coreField.FwdOffset, docCnt)
+		log.Debugf("Persist Field:%v, fwdOffset:%v, docCnt:%v", name, coreField.FwdOffset, docCnt)
 		if part.DocCnt != docCnt {
 			log.Errf("Doc cnt not same!!. %v, %v, %v", part.DocCnt, docCnt, name)
 			return errors.New("Doc cnt not same!!")
