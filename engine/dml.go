@@ -5,10 +5,10 @@ package engine
  */
 
 import (
-	"github.com/hq-cml/spider-engine/utils/log"
-	"errors"
-	"github.com/hq-cml/spider-engine/basic"
 	"fmt"
+	"errors"
+	"github.com/hq-cml/spider-engine/utils/log"
+	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/helper"
 )
 
@@ -24,7 +24,7 @@ func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 			return
 		}
 
-		log.Infof("Add Doc: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
+		log.Infof("Add Doc Success: %v, %v, %v, %v", p.Database, p.Table, primaryKey, docId)
 		req.Resp <- basic.NewResponse(nil, primaryKey)
 		return
 	} else if req.Type == basic.REQ_TYPE_DML_DEL_DOC {
@@ -39,7 +39,7 @@ func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 			return
 		}
 
-		log.Infof("DeleteDoc: %v", p.Database + "." + p.Table + "." + p.PrimaryKey)
+		log.Infof("DeleteDoc Success: %v", p.Database + "." + p.Table + "." + p.PrimaryKey)
 		req.Resp <- basic.NewResponse(nil, nil)
 		return
 	} else if req.Type == basic.REQ_TYPE_DML_EDIT_DOC {
@@ -53,7 +53,7 @@ func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 			return
 		}
 
-		log.Infof("UpdateDoc Doc: %v, %v, %v", p.Database, p.Table, docId)
+		log.Infof("UpdateDoc Doc Success: %v, %v, %v", p.Database, p.Table, docId)
 		req.Resp <- basic.NewResponse(nil, nil)
 		return
 	} else {

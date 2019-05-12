@@ -865,9 +865,9 @@ func (tbl *Table) Destroy() error {
 //合并表内分区
 func (tbl *Table) MergePartitions() error {
 
-	//锁整表
-	tbl.rwMutex.Lock()
-	defer tbl.rwMutex.Unlock()
+	//锁整表，取消锁，否则会在AddDoc和UpdateDoc中把自己锁死
+	//tbl.rwMutex.Lock()
+	//defer tbl.rwMutex.Unlock()
 
 	if tbl.status != TABLE_STATUS_RUNNING {
 		return errors.New("Table status must be running!")
@@ -932,6 +932,7 @@ func (tbl *Table) MergePartitions() error {
 	for _, todoParts := range todoPartitions {
 		//生成内存分区骨架，开始合并
 		prtPathName := tbl.getPrtPathName()
+		log.Infof("Table[%v] Merge Partition[%v] Begin!", tbl.TableName, prtPathName)
 		tbl.PartSuffix++
 		tmpPartition := partition.NewEmptyPartitionWithBasicFields(prtPathName, todoParts[0].StartDocId, basicFields)
 
@@ -949,6 +950,8 @@ func (tbl *Table) MergePartitions() error {
 		for _, prt := range todoParts {
 			prt.Destroy()
 		}
+
+		log.Infof("Table[%v] Merge Partition[%v] Finish!", tbl.TableName, prtPathName)
 	}
 
 	//存储meta

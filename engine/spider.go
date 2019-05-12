@@ -199,19 +199,19 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 
 	//搬运工
 	go func(reqCache *middleware.RequestCache, reqChan *middleware.CommonChannel, dbTable string) {
-		log.Infof("Scheduler Mover [%v] Start to work!", dbTable)
+		log.Infof("Scheduler-Mover [%v] Start to work!", dbTable)
 		for {
 			//如果整个系统关闭了，并且此时cache已经处理完毕，则退出
 			if reqCache.Length() == 0 && se.Closed {
 				reqChan.Close()
-				log.Infof("Scheduler Mover [%v] Stop!", dbTable)
+				log.Infof("Scheduler-Mover [%v] Stop!", dbTable)
 				return
 			}
 
 			//如果仅仅只是cache被关闭了，说明是整个表被删除了
 			if reqCache.GetStatus() == middleware.REQUEST_CACHE_STATUS_COLOSED {
 				reqChan.Close()
-				log.Infof("Scheduler Mover [%v] Stop!", dbTable)
+				log.Infof("Scheduler-Mover [%v] Stop!", dbTable)
 				return
 			}
 
@@ -235,16 +235,16 @@ func (se *SpiderEngine)doSchedule(dbTable string) *middleware.RequestCache {
 
 	//实际worker
 	go func(reqChan *middleware.CommonChannel, se *SpiderEngine, dbTable string) {
-		log.Infof("Scheduler Worker [%v] Start to work!", dbTable)
+		log.Infof("Scheduler-Worker [%v] Start to work!", dbTable)
 		for {
 			tmp, ok := reqChan.Get()
 			if !ok {
-				log.Infof("Scheduler Worker [%v] Stop!", dbTable)
+				log.Infof("Scheduler-Worker [%v] Stop!", dbTable)
 				se.CloseChan <- true
 				return
 			}
 			req := tmp.(*basic.SpiderRequest)
-			log.Debug("Got request: ", req.Type)
+			log.Debug("Got request. Type: ", req.Type)
 			//处理请求
 			switch req.Type {
 			case basic.REQ_TYPE_DDL_ADD_FIELD, basic.REQ_TYPE_DDL_DEL_FIELD:

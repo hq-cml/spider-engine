@@ -73,7 +73,7 @@ func loopWait(se *engine.SpiderEngine) uint64 {
 			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
 				log.Infoln("Recv signal:", s, ". Begin To Stop")
 				result := se.Stop()
-				log.Infoln("Stop scheduler...", result)
+				log.Infoln("Stop loopWait...", result)
 				break QUIT
 			default:
 				log.Infoln("Recv signal: ", s)
