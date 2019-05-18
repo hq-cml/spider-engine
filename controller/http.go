@@ -1,4 +1,4 @@
-package engine
+package controller
 
 /*
  * 接口层封装，相当于controller层
@@ -6,6 +6,7 @@ package engine
 import (
 	"net/http"
 	"io"
+	"github.com/hq-cml/spider-engine/engine"
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/utils/helper"
 	"github.com/hq-cml/spider-engine/utils/log"
@@ -13,9 +14,26 @@ import (
 	"encoding/json"
 )
 
+//注册路由
+func RegisterRouter() {
+	http.HandleFunc("/_status", Status)
+	http.HandleFunc("/_createDb", CreateDatabase)
+	http.HandleFunc("/_dropDb", DropDatabase)
+	http.HandleFunc("/_createTable", CreateTable)
+	http.HandleFunc("/_dropTable", DropTable)
+	http.HandleFunc("/_addField", AddField)
+	http.HandleFunc("/_deleteField", DeleteField)
+	http.HandleFunc("/_addDoc", AddDoc)
+	http.HandleFunc("/_getDoc", GetDoc)
+	http.HandleFunc("/_deleteDoc", DeleteDoc)
+	http.HandleFunc("/_updateDoc", UpdateDoc)
+	http.HandleFunc("/_search", SearchDocs)
+	//http.HandleFunc("/_test", TestDocs)
+}
+
 // hello world, the web server
 func Status(w http.ResponseWriter, req *http.Request) {
-	io.WriteString(w, helper.JsonEncodeIndent(g_spider_ins.GetStatus()))
+	io.WriteString(w, helper.JsonEncodeIndent(engine.SpdInstance().GetStatus()))
 }
 
 //建库
@@ -27,7 +45,7 @@ func CreateDatabase(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := DatabaseParam{}
+	p := engine.DatabaseParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v", err)
@@ -36,7 +54,7 @@ func CreateDatabase(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	err = g_spider_ins.CreateDatabase(&p)
+	err = engine.SpdInstance().CreateDatabase(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -55,7 +73,7 @@ func DropDatabase(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := DatabaseParam{}
+	p := engine.DatabaseParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("DropDatabase Error: %v", err)
@@ -64,7 +82,7 @@ func DropDatabase(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	err = g_spider_ins.DropDatabase(&p)
+	err = engine.SpdInstance().DropDatabase(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -83,7 +101,7 @@ func CreateTable(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := CreateTableParam{}
+	p := engine.CreateTableParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v", err)
@@ -92,7 +110,7 @@ func CreateTable(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	err = g_spider_ins.CreateTable(&p)
+	err = engine.SpdInstance().CreateTable(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -111,7 +129,7 @@ func DropTable(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := CreateTableParam{}
+	p := engine.CreateTableParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("CreateDatabase Error: %v", err)
@@ -120,7 +138,7 @@ func DropTable(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	err = g_spider_ins.DropTable(&p)
+	err = engine.SpdInstance().DropTable(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -139,7 +157,7 @@ func AddField(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := AddFieldParam{}
+	p := engine.AddFieldParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("AddField Error: %v", err)
@@ -148,7 +166,7 @@ func AddField(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	err = g_spider_ins.AddField(&p)
+	err = engine.SpdInstance().AddField(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -167,7 +185,7 @@ func DeleteField(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := AddFieldParam{}
+	p := engine.AddFieldParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("DeleteField Error: %v", err)
@@ -176,7 +194,7 @@ func DeleteField(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	err = g_spider_ins.DeleteField(&p)
+	err = engine.SpdInstance().DeleteField(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -195,7 +213,7 @@ func AddDoc(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := AddDocParam{}
+	p := engine.AddDocParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("AddDoc Error: %v", err)
@@ -204,7 +222,7 @@ func AddDoc(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	primaryKey, err := g_spider_ins.AddDoc(&p)
+	primaryKey, err := engine.SpdInstance().AddDoc(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -222,7 +240,7 @@ func GetDoc(w http.ResponseWriter, req *http.Request) {
 	table := query["table"][0]
 	primaryKey := query["primary_key"][0]
 
-	doc, err := g_spider_ins.GetDoc(dbName, table, primaryKey)
+	doc, err := engine.SpdInstance().GetDoc(dbName, table, primaryKey)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -241,7 +259,7 @@ func UpdateDoc(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := AddDocParam{}
+	p := engine.AddDocParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("UpdateDoc Error: %v", err)
@@ -249,7 +267,7 @@ func UpdateDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = g_spider_ins.UpdateDoc(&p)
+	err = engine.SpdInstance().UpdateDoc(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -268,7 +286,7 @@ func DeleteDoc(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := DocParam{}
+	p := engine.DocParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("DeleteDoc Error: %v", err)
@@ -276,7 +294,7 @@ func DeleteDoc(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = g_spider_ins.DeleteDoc(&p)
+	err = engine.SpdInstance().DeleteDoc(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -294,7 +312,7 @@ func SearchDocs(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := SearchParam{}
+	p := engine.SearchParam{}
 	err = json.Unmarshal(result, &p)
 	if err != nil {
 		log.Errf("DeleteDoc Error: %v", err)
@@ -302,7 +320,7 @@ func SearchDocs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	docs, err := g_spider_ins.SearchDocs(&p)
+	docs, err := engine.SpdInstance().SearchDocs(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -314,7 +332,7 @@ func SearchDocs(w http.ResponseWriter, req *http.Request) {
 
 //搜索
 //func TestDocs(w http.ResponseWriter, req *http.Request) {
-//	g_spider_ins.DbMap["sp_db"].TableMap["user"].RealDocNum
+//	engine.SpdInstance().DbMap["sp_db"].TableMap["user"].RealDocNum
 //
 //	io.WriteString(w, "aa")
 //	return

@@ -12,6 +12,7 @@ import (
 	"github.com/hq-cml/spider-engine/engine"
 	"github.com/hq-cml/spider-engine/utils/log"
 	"fmt"
+	"github.com/hq-cml/spider-engine/controller"
 )
 
 //全局配置
@@ -43,6 +44,8 @@ func main() {
 	}
 	//注册单例
 	engine.RegisterInstance(se)
+	//注册路由
+	controller.RegisterRouter()
 	//启动
 	se.Start()
 	fmt.Println("The spider is running...")

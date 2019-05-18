@@ -41,6 +41,10 @@ func RegisterInstance(ins *SpiderEngine) {
 	g_spider_ins = ins
 }
 
+func SpdInstance() *SpiderEngine {
+	return g_spider_ins
+}
+
 //句柄初始化
 func InitSpider(path string, ver string) (*SpiderEngine, error) {
 	//路径修正
@@ -129,7 +133,7 @@ func (se *SpiderEngine) Start() {
 		}
 
 		//注册路由
-		se.RegisterRouter()
+		//controller.RegisterRouter()
 
 		//启动http服务
 		addr := fmt.Sprintf("%s:%s", basic.GlobalConf.BindIp, basic.GlobalConf.Port)
