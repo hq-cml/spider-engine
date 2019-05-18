@@ -1,6 +1,6 @@
 # 开发文档：
 ## 整体架构如图：
-![架构图](./img/spider-engine-struct.png)
+![架构图](./img/spider-struct.png)
 
 项目底层索引的实现，我参考了吴老师的：[博客](https://segmentfault.com/a/1190000004905748)。他通俗的讲解对于搜索引擎原理的学习很有帮助。
 
@@ -27,7 +27,7 @@ Row| Document| Document
 Column| Field| Field
 
 ## 核心存储的设计与实现：
-![整体架构图](./img/spider-engine-struct.png)
+![整体架构图](./img/spider-core-struct.png)
 
 ### 倒排索引的实现：
 根据搜索引擎的基本原理, 一个字段(列)需要支持搜索，那么其需要拥有一个倒排索引。具体倒排索引的原理：[解释](https://baike.baidu.com/item/倒排索引)。  
@@ -74,12 +74,12 @@ Spider倒排索引由一颗B+树和一个倒排文件搭配，宏观上可以看
 - 同一个分区中的各个字段的共用同一套正、倒排文件(btdb, ivt, fwd, ext)  
 
 
-    Btw：
+    Btw：  
     因为分区的这个特点（每个分区只是一部分的文档）所以正排索引的startDocId和nextDocId相当于分区的边界，左闭右开。
-     - tartDocId表示在当前分区索引的起始docId
-     - nextDocId表示在当前分区下一个新增doc期望的Id
-     - 判断一个docId是否属于当前分区：startDocId <= docId < nextDocId
-     - 每个分区中，正排索引实际的key并不是docId，而是的是pos = docId-startId
+      tartDocId表示在当前分区索引的起始docId
+      nextDocId表示在当前分区下一个新增doc期望的Id
+      判断一个docId是否属于当前分区：startDocId <= docId < nextDocId
+      每个分区中，正排索引实际的key并不是docId，而是的是pos = docId-startId
 
 ### 索引、字段、分区的状态：
 索引、字段、分区都存在两种状态内存和磁盘。：
