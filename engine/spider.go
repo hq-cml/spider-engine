@@ -119,7 +119,7 @@ func (se *SpiderEngine) storeMeta() error {
 	return nil
 }
 
-func (se *SpiderEngine) Start() {
+func (se *SpiderEngine) Start(server http.Server) {
 	go func() {
 		//启动前,看看分区是否合并必要
 		for _, db := range se.DbMap {
@@ -132,12 +132,8 @@ func (se *SpiderEngine) Start() {
 			}
 		}
 
-		//注册路由
-		//controller.RegisterRouter()
-
 		//启动http服务
-		addr := fmt.Sprintf("%s:%s", basic.GlobalConf.BindIp, basic.GlobalConf.Port)
-		err := http.ListenAndServe(addr, nil)
+		err := server.ListenAndServe()
 		if err != nil {
 			log.Fatal("ListenAndServe: ", err)
 		}

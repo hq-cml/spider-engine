@@ -45,9 +45,9 @@ func main() {
 	//注册单例
 	engine.RegisterInstance(se)
 	//注册路由
-	controller.RegisterRouter()
+	httpServer := controller.InitHttpServer()
 	//启动
-	se.Start()
+	se.Start(httpServer)
 	fmt.Println("The spider is running...")
 	//阻塞等待程序结束
 	loopWait(se)
