@@ -74,100 +74,108 @@ pure | 纯字符类型，该类型不会建立倒排索引，仅拥有正排索�
 #### 接口使用说明：
     spider-engine接口整体采用RestFul风格：
 
+##### 整体状态详情：
+```
+curl -X GET 'http://127.0.0.1:9528/_status'
+```
+
 ##### 建库：
-
 ```
-{
-    "database":"sp_db"
-}
-
+curl -X POST 'http://127.0.0.1:9528/sp_db'
 ```
 
+##### 删库：
+```
+curl -X DELETE 'http://127.0.0.1:9528/sp_db'
+```
 
 ##### 建表：
-
 ```
-{
-	"database":"sp_db",
-	"table":"user",
-	"fields":[
-		{"name":"user_id", "type":"primary"},
-		{"name":"user_name", "type":"whole"},
-		{"name":"agent", "type":"number"},
-		{"name":"user_desc", "type":"words"}
-	]
-}
+curl -X POST 'http://127.0.0.1:9528/sp_db/user' -d '[
+	{"name":"user_id", "type":"primary"},
+	{"name":"user_name", "type":"whole"},
+	{"name":"age", "type":"number"},
+	{"name":"user_desc", "type":"words"}
+]'
 ```
 
-##### 增、减字段：
-
+##### 删除表：
 ```
-{
-	"database":"sp_db",
-	"table":"user",
-	"field": {"name":"user_desc", "type":"words"}
-}
+curl -X DELETE 'http://127.0.0.1:9528/sp_db/user'
 ```
 
+##### 增字段：
+```
+curl -X PATCH 'http://127.0.0.1:9528/sp_db/user' -d '{
+	"type":"addField",
+	"field": {"name":"tobe_del", "type":"words"}
+}'
+```
+
+##### 删字段：
+```
+curl -X PATCH 'http://127.0.0.1:9528/sp_db/user' -d '{
+	"type":"delField",
+	"field": {"name":"tobe_del", "type":"words"}
+}'
+```
 
 ##### 增加文档：
-
 ```
-{
-	"database":"sp_db",
-	"table":"user",
-	"content":{
-		"user_id":"10001",
-		"user_name":"张三",
-		"date":23,
-		"user_desc":"喜欢看书，也喜欢运动。他是一个文武兼备的人。"
-	}
-}
+curl -X POST 'http://127.0.0.1:9528/sp_db/user/10001' -d '{
+    "user_id" : "10001",
+	"user_name":"张三",
+	"age":23,
+	"user_desc":"喜欢文学，也喜欢运动，是个好青年"
+}'
 ```
-
+    btw: 主键user_id在url path中必填, 在http body中可以填也可以不填,如果填需要和path中保持一致.
+         如果没有主键,可以用_auto代替, spider会在底层自动生成主键
+```
+curl -X POST 'http://127.0.0.1:9528/sp_db/user/_auto' -d '{
+	"user_name":"张三",
+	"age":23,
+	"user_desc":"喜欢文学，也喜欢运动，是个好青年"
+}'
+```
 ##### 删除文档：
 
 ```
-{
-	"database":"test",
-	"table":"user",
-	"primary_key":"10004"
-}
+curl -X DELETE 'http://127.0.0.1:9528/sp_db/user/10001'
 ```
-
 
 ##### 编辑文档：
 
 ```
-{
-	"database":"sp_db",
-	"table":"user",
-	"content":{
-		"user_id":"10001",
-		"user_name":"张三",
-		"date":23,
-		"user_desc":"喜欢看书，也喜欢运动。他是一个文武兼备的人。"
-	}
-}
+curl -X PUT 'http://127.0.0.1:9528/sp_db/user/10001' -d '{
+    "user_id" : "10001",
+	"user_name":"唐伯虎",
+	"age":23,
+	"user_desc":"喜欢秋香"
+}'
 ```
+    btw: 主键user_id在url path中必填, 在http body中可以填也可以不填,如果填需要和path中保持一致.
 
-
+```
+curl -X PUT 'http://127.0.0.1:9528/sp_db/user/10001' -d '{
+	"user_name":"祝枝山",
+	"age":23,
+	"user_desc":"喜欢石榴姐"
+}'
+```
 ##### 获取文档：
-
 ```
-_getDoc?db=sp_db&table=weibo&primary_key=10001
+curl -X GET 'http://127.0.0.1:9528/sp_db/user/10001'
 ```
-
 
 ##### 搜索：
-
 ```
-{
+curl -X GET 'http://127.0.0.1:9528/_search' -d '{
 	"database":"sp_db",
 	"table":"user",
-	"field_name":"user_desc",
-	"value":"运动"
-}
+	"fieldName":"user_desc",
+	"value":"秋香"
+}'
 ```
 
 ##### 跨字段搜索：

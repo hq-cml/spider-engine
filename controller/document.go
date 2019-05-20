@@ -9,19 +9,31 @@ import (
 	"github.com/hq-cml/spider-engine/basic"
 	"github.com/hq-cml/spider-engine/engine"
 	"github.com/hq-cml/spider-engine/utils/log"
+	"strings"
 )
 
 //新增Doc
 func AddDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
-	result, err := ioutil.ReadAll(req.Body)
+	url := strings.Trim(req.URL.String(), "/")
+	parts := strings.Split(url, "/")
+	partLen := len(parts)
+	if partLen != 3 {
+		log.Errf("AlterTable Param Error: %v", url)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Param Error")))
+		return
+	}
+	db := parts[0]
+	table := parts[1]
+	primaryKey := parts[2]
+	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Errf("AddDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := engine.AddDocParam{}
-	err = json.Unmarshal(result, &p)
+	p := engine.DocContent{}
+	err = json.Unmarshal(body, &p)
 	if err != nil {
 		log.Errf("AddDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
@@ -29,12 +41,16 @@ func AddDoc(w http.ResponseWriter, req *http.Request) {
 	}
 
 	//操作
-	primaryKey, err := engine.SpdInstance().AddDoc(&p)
+	primaryKey, err = engine.SpdInstance().AddDoc(&engine.DocParam{
+		Database: db,
+		Table:  table,
+		Primary: primaryKey,
+		Content: p,
+	})
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-
 	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(primaryKey)))
 	return
 }
@@ -42,12 +58,19 @@ func AddDoc(w http.ResponseWriter, req *http.Request) {
 //获取Doc
 func GetDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
-	query := req.URL.Query()
-	dbName := query["db"][0]
-	table := query["table"][0]
-	primaryKey := query["primary_key"][0]
+	url := strings.Trim(req.URL.String(), "/")
+	parts := strings.Split(url, "/")
+	partLen := len(parts)
+	if partLen != 3 {
+		log.Errf("AlterTable Param Error: %v", url)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Param Error")))
+		return
+	}
+	db := parts[0]
+	table := parts[1]
+	primaryKey := parts[2]
 
-	doc, err := engine.SpdInstance().GetDoc(dbName, table, primaryKey)
+	doc, err := engine.SpdInstance().GetDoc(db, table, primaryKey)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -60,21 +83,37 @@ func GetDoc(w http.ResponseWriter, req *http.Request) {
 //改变doc
 func UpdateDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
-	result, err := ioutil.ReadAll(req.Body)
+	url := strings.Trim(req.URL.String(), "/")
+	parts := strings.Split(url, "/")
+	partLen := len(parts)
+	if partLen != 3 {
+		log.Errf("AlterTable Param Error: %v", url)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Param Error")))
+		return
+	}
+	db := parts[0]
+	table := parts[1]
+	primaryKey := parts[2]
+	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Errf("UpdateDoc Error: %v", err)
+		log.Errf("AddDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
-	p := engine.AddDocParam{}
-	err = json.Unmarshal(result, &p)
+	p := engine.DocContent{}
+	err = json.Unmarshal(body, &p)
 	if err != nil {
 		log.Errf("UpdateDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	err = engine.SpdInstance().UpdateDoc(&p)
+	err = engine.SpdInstance().UpdateDoc(&engine.DocParam{
+		Database: db,
+		Table:  table,
+		Primary: primaryKey,
+		Content: p,
+	})
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -87,21 +126,21 @@ func UpdateDoc(w http.ResponseWriter, req *http.Request) {
 //删除Doc
 func DeleteDoc(w http.ResponseWriter, req *http.Request) {
 	//参数读取与解析
-	result, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		log.Errf("DeleteDoc Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
+	url := strings.Trim(req.URL.String(), "/")
+	parts := strings.Split(url, "/")
+	partLen := len(parts)
+	if partLen != 3 {
+		log.Errf("AlterTable Param Error: %v", url)
+		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult("Param Error")))
 		return
 	}
-	p := engine.DocParam{}
-	err = json.Unmarshal(result, &p)
-	if err != nil {
-		log.Errf("DeleteDoc Error: %v", err)
-		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
-		return
+	p := engine.DelDocParam{
+		Database: parts[0],
+		Table: parts[1],
+		PrimaryKey:parts[2],
 	}
 
-	err = engine.SpdInstance().DeleteDoc(&p)
+	err := engine.SpdInstance().DeleteDoc(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
@@ -113,14 +152,14 @@ func DeleteDoc(w http.ResponseWriter, req *http.Request) {
 
 //搜索
 func SearchDocs(w http.ResponseWriter, req *http.Request) {
-	result, err := ioutil.ReadAll(req.Body)
+	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Errf("DeleteDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 	p := engine.SearchParam{}
-	err = json.Unmarshal(result, &p)
+	err = json.Unmarshal(body, &p)
 	if err != nil {
 		log.Errf("DeleteDoc Error: %v", err)
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))

@@ -185,7 +185,7 @@ func (se *SpiderEngine) DropTable(p *CreateTableParam) error {
 func (se *SpiderEngine) ProcessDDLRequest(req *basic.SpiderRequest) {
 
 	if req.Type == basic.REQ_TYPE_DDL_ADD_FIELD {
-		p := req.Req.(*AddFieldParam)
+		p := req.Req.(*AlterFieldParam)
 		db, _ := se.DbMap[p.Database]
 		t, _ := index.IDX_MAP[p.Filed.Type]
 
@@ -205,7 +205,7 @@ func (se *SpiderEngine) ProcessDDLRequest(req *basic.SpiderRequest) {
 		req.Resp <- basic.NewResponse(nil, nil)
 
 	} else if req.Type == basic.REQ_TYPE_DDL_DEL_FIELD {
-		p := req.Req.(*AddFieldParam)
+		p := req.Req.(*AlterFieldParam)
 		db, _ := se.DbMap[p.Database]
 		err := db.DeleteField(p.Table, p.Filed.Name)
 		if err != nil {
@@ -225,7 +225,7 @@ func (se *SpiderEngine) ProcessDDLRequest(req *basic.SpiderRequest) {
 }
 
 //增字段（串行化）
-func (se *SpiderEngine) AddField(p *AddFieldParam) error {
+func (se *SpiderEngine) AddField(p *AlterFieldParam) error {
 	if se.Closed {
 		return errors.New("Spider Engine is closed!")
 	}
@@ -259,7 +259,7 @@ func (se *SpiderEngine) AddField(p *AddFieldParam) error {
 }
 
 //减字段（串行化）
-func (se *SpiderEngine) DeleteField(p *AddFieldParam) error {
+func (se *SpiderEngine) DeleteField(p *AlterFieldParam) error {
 	if se.Closed {
 		return errors.New("Spider Engine is closed!")
 	}
@@ -276,7 +276,7 @@ func (se *SpiderEngine) DeleteField(p *AddFieldParam) error {
 	//生成请求放入cache
 	req := basic.NewRequest(basic.REQ_TYPE_DDL_DEL_FIELD, p)
 	se.CacheMap[p.Database + "." + p.Table].Put(req)
-	log.Debug("Put AddField request: ", p.Database + "." +p.Table)
+	log.Debug("Put DeleteField request: ", p.Database + "." +p.Table)
 
 	//等待结果
 	resp := <- req.Resp

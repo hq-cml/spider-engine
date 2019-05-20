@@ -9,6 +9,7 @@ import (
 	"github.com/hq-cml/spider-engine/core/index"
 	"fmt"
 	"github.com/hq-cml/spider-engine/core/table"
+	"github.com/hq-cml/spider-engine/basic"
 )
 
 const TEST_TABLE = "user"         //用户
@@ -20,6 +21,8 @@ const TEST_FIELD3 = "user_desc"
 var temp_pk string
 
 func init() {
+	basic.PART_PERSIST_MIN_DOC_CNT = 10000
+	basic.PART_MERGE_MIN_DOC_CNT = 100000
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {
@@ -57,14 +60,14 @@ func TestNewDatabase(t *testing.T) {
 	}
 
 	docId, key, err := db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+		map[string]interface{}{TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"}, "_auto")
 	if err != nil {
 		panic(err)
 	}
 	t.Log("Add doc:", docId, key)
 
 	docId, temp_pk, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+		map[string]interface{}{TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"}, "_auto")
 	if err != nil {
 		panic(err)
 	}
@@ -152,14 +155,14 @@ func TestDuplicatePrimaryKey(t *testing.T) {
 	}
 
 	docId, key, err := db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10001", TEST_FIELD1: "张三", TEST_FIELD2: 20, TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+		map[string]interface{}{TEST_FIELD0:"10001", TEST_FIELD1: "张三", TEST_FIELD2: 20, TEST_FIELD3: "喜欢美食,也喜欢旅游"}, "10001")
 	if err != nil {
 		panic(err)
 	}
 	t.Log("Add doc:", docId, key)
 
 	docId, key, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10001", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+		map[string]interface{}{TEST_FIELD0:"10001", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"}, "10001")
 	if err == nil {
 		panic(err)
 	}
@@ -202,35 +205,35 @@ func TestDocUpdateAndDel(t *testing.T) {
 	}
 
 	docId, key, err := db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"})
+		map[string]interface{}{TEST_FIELD0:"10001", TEST_FIELD1: "张三",TEST_FIELD2: 20,TEST_FIELD3: "喜欢美食,也喜欢旅游"}, "10001")
 	if err != nil {
 		panic(err)
 	}
 	t.Log("Add doc:", docId, key)
 
 	docId, key, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10002", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"})
+		map[string]interface{}{TEST_FIELD0:"10002", TEST_FIELD1: "李四", TEST_FIELD2: 18, TEST_FIELD3: "喜欢电影,也喜欢美食"}, "10002")
 	if err != nil {
 		panic(err)
 	}
 	t.Log("Add doc:", docId, key)
 
 	docId, key, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10003", TEST_FIELD1: "王二", TEST_FIELD2: 13, TEST_FIELD3: "喜欢电脑，也喜欢看书"})
+		map[string]interface{}{TEST_FIELD0:"10003", TEST_FIELD1: "王二", TEST_FIELD2: 13, TEST_FIELD3: "喜欢电脑，也喜欢看书"}, "10003")
 	if err != nil {
 		panic(err)
 	}
 	t.Log("Add doc:", docId, key)
 
 	docId, key, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10004", TEST_FIELD1: "哈哈", TEST_FIELD2: 11, TEST_FIELD3: "喜欢电脑，也喜欢看书"})
+		map[string]interface{}{TEST_FIELD0:"10004", TEST_FIELD1: "哈哈", TEST_FIELD2: 11, TEST_FIELD3: "喜欢电脑，也喜欢看书"}, "10004")
 	if err != nil {
 		panic(err)
 	}
 	t.Log("Add doc:", docId, key)
 
 	docId, key, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10005", TEST_FIELD1: "asdfa", TEST_FIELD2: 13, TEST_FIELD3: "日乐购"})
+		map[string]interface{}{TEST_FIELD0:"10005", TEST_FIELD1: "asdfa", TEST_FIELD2: 13, TEST_FIELD3: "日乐购"}, "10005")
 	if err != nil {
 		panic(err)
 	}
@@ -256,7 +259,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	db.TableMap[TEST_TABLE].GetBtdb().Display(table.PRI_FWD_BTREE_NAME)
 	fmt.Println("B------")
 	if len(db.TableMap[TEST_TABLE].GetIvtMap()) != 4 ||
-		len(db.TableMap[TEST_TABLE].GetFwdMap()) != 4 {
+		len(db.TableMap[TEST_TABLE].GetFwdMap()) != 5 {
 		panic("Err")
 	}
 
@@ -311,7 +314,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 
 	//再增加一个Doc，并且还是主键的10004
 	docId, key, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10004", TEST_FIELD1: "李冰", TEST_FIELD2: 2000, TEST_FIELD3: "喜欢工程"})
+		map[string]interface{}{TEST_FIELD0:"10004", TEST_FIELD1: "李冰", TEST_FIELD2: 2000, TEST_FIELD3: "喜欢工程"}, "10004")
 	if err != nil {
 		panic(err)
 	}
@@ -369,7 +372,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 
 	//编辑
 	db.UpdateDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10004", TEST_FIELD1: "牛顿", TEST_FIELD2: 200, TEST_FIELD3: "喜欢物理"})
+		map[string]interface{}{TEST_FIELD0:"10004", TEST_FIELD1: "牛顿", TEST_FIELD2: 200, TEST_FIELD3: "喜欢物理"}, "10004")
 	fmt.Println("\nAfter update !!")
 	fmt.Println("G------", db.TableMap[TEST_TABLE].GetIvtMap())
 	fmt.Println("G------", db.TableMap[TEST_TABLE].GetFwdMap())
@@ -395,7 +398,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 
 	//再增加一个Doc，并且还是主键的10005
 	docId, key, err = db.AddDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10005", TEST_FIELD1: "爱婴斯坦", TEST_FIELD2: 100, TEST_FIELD3: "喜欢电子"})
+		map[string]interface{}{TEST_FIELD0:"10005", TEST_FIELD1: "爱婴斯坦", TEST_FIELD2: 100, TEST_FIELD3: "喜欢电子"}, "10005")
 	if err != nil {
 		panic(err)
 	}
@@ -420,10 +423,9 @@ func TestDocUpdateAndDel(t *testing.T) {
 		panic("Err")
 	}
 
-
 	//编辑内存中的doc
 	db.UpdateDoc(TEST_TABLE,
-		map[string]interface{}{TEST_FIELD0:"10005", TEST_FIELD1: "莱布尼茨", TEST_FIELD2: 200, TEST_FIELD3: "微积分"})
+		map[string]interface{}{TEST_FIELD0:"10005", TEST_FIELD1: "莱布尼茨", TEST_FIELD2: 200, TEST_FIELD3: "微积分"}, "10005")
 	fmt.Println("\nAfter update !!")
 	fmt.Println("I------", db.TableMap[TEST_TABLE].GetIvtMap())
 	fmt.Println("I------", db.TableMap[TEST_TABLE].GetFwdMap())
@@ -435,7 +437,7 @@ func TestDocUpdateAndDel(t *testing.T) {
 	}
 	fmt.Println("I------", helper.JsonEncode(d))
 	if len(db.TableMap[TEST_TABLE].GetIvtMap()) != 1 ||
-		len(db.TableMap[TEST_TABLE].GetFwdMap()) != 1 {
+		len(db.TableMap[TEST_TABLE].GetFwdMap()) != 2 {
 		panic("Err")
 	}
 	v,ok = db.TableMap[TEST_TABLE].GetBtdb().GetStr(table.PRI_IVT_BTREE_NAME, "10004")

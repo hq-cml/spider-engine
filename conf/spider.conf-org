@@ -1,5 +1,5 @@
 [spider]
-dataDir=/data/spider-engine/data
+dataDir=TODO_REPLACE/data
 partitionPersistMinDocCnt=10000
 partitionMergeMinDocCnt=100000
 
@@ -8,7 +8,7 @@ bindIp=0.0.0.0
 port=9528
 
 [log]
-logPath=/data/spider-engine/log/spider.log
+logPath=TODO_REPLACE/log/spider.log
 logLevel=debug
 
 [debug]

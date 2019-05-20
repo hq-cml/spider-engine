@@ -183,12 +183,27 @@ func (db *Database) DropTable(tableName string) (error) {
 }
 
 //新增Doc
-func (db *Database) AddDoc(tableName string, content map[string]interface{}) (uint32, string, error) {
+func (db *Database) AddDoc(tableName string, content map[string]interface{}, primaryVal string) (uint32, string, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
 		return 0, "", errors.New("Table not exist!")
 	}
 
+	//主键值的一致性校验 get参数和post参数需一致
+	primaryKey := tab.PrimaryKey
+	if v, exist := content[primaryKey]; !exist {
+		content[primaryKey] = primaryVal
+	} else {
+		if v != primaryVal {
+			return 0, "", errors.New("PrimaryKey val is not consitent!")
+		}
+	}
+
+	//如果主键值给了_auto, 那么清除之, 底层会自动创建主键值
+	_, exist = content[primaryKey]
+	if primaryVal == "_auto" && exist {
+		delete(content, primaryKey)
+	}
 	return tab.AddDoc(content)
 }
 
@@ -203,10 +218,20 @@ func (db *Database) GetDoc(tableName string, primaryKey string) (*basic.DocInfo,
 }
 
 //改变doc
-func (db *Database) UpdateDoc(tableName string, content map[string]interface{}) (uint32, error) {
+func (db *Database) UpdateDoc(tableName string, content map[string]interface{}, primaryVal string) (uint32, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
 		return 0, errors.New("Table not exist!")
+	}
+
+	//主键值的一致性校验 get参数和post参数需一致
+	primaryKey := tab.PrimaryKey
+	if v, exist := content[primaryKey]; !exist {
+		content[primaryKey] = primaryVal
+	} else {
+		if v != primaryVal {
+			return 0, errors.New("PrimaryKey val is not consitent!")
+		}
 	}
 
 	return tab.UpdateDoc(content)

@@ -14,10 +14,10 @@ import (
 
 func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 	if req.Type == basic.REQ_TYPE_DML_ADD_DOC {
-		p := req.Req.(*AddDocParam)
+		p := req.Req.(*DocParam)
 		//新增文档
 		db, _ := se.DbMap[p.Database]
-		docId, primaryKey, err := db.AddDoc(p.Table, p.Content)
+		docId, primaryKey, err := db.AddDoc(p.Table, p.Content, p.Primary)
 		if err != nil {
 			log.Errf("AddDoc Error: %v", err)
 			req.Resp <- basic.NewResponse(err, nil)
@@ -28,7 +28,7 @@ func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 		req.Resp <- basic.NewResponse(nil, primaryKey)
 		return
 	} else if req.Type == basic.REQ_TYPE_DML_DEL_DOC {
-		p := req.Req.(*DocParam)
+		p := req.Req.(*DelDocParam)
 		//删除文档
 		db, _ := se.DbMap[p.Database]
 		ok := db.DeleteDoc(p.Table, p.PrimaryKey)
@@ -43,10 +43,10 @@ func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 		req.Resp <- basic.NewResponse(nil, nil)
 		return
 	} else if req.Type == basic.REQ_TYPE_DML_EDIT_DOC {
-		p := req.Req.(*AddDocParam)
+		p := req.Req.(*DocParam)
 		//编辑文档
 		db, _ := se.DbMap[p.Database]
-		docId, err :=  db.UpdateDoc(p.Table, p.Content)
+		docId, err :=  db.UpdateDoc(p.Table, p.Content, p.Primary)
 		if err != nil {
 			log.Errf("UpdateDoc Error: %v", err)
 			req.Resp <- basic.NewResponse(err, nil)
@@ -65,7 +65,7 @@ func (se *SpiderEngine) ProcessDMLRequest(req *basic.SpiderRequest) {
 }
 
 //增加文档（串行化）
-func (se *SpiderEngine) AddDoc(p *AddDocParam) (string, error) {
+func (se *SpiderEngine) AddDoc(p *DocParam) (string, error) {
 	if se.Closed {
 		return "", errors.New("Spider Engine is closed!")
 	}
@@ -93,7 +93,7 @@ func (se *SpiderEngine) AddDoc(p *AddDocParam) (string, error) {
 }
 
 //删除文档
-func (se *SpiderEngine) DeleteDoc(p *DocParam) error {
+func (se *SpiderEngine) DeleteDoc(p *DelDocParam) error {
 	if se.Closed {
 		return errors.New("Spider Engine is closed!")
 	}
@@ -121,7 +121,7 @@ func (se *SpiderEngine) DeleteDoc(p *DocParam) error {
 }
 
 //改文档
-func (se *SpiderEngine) UpdateDoc(p *AddDocParam) error {
+func (se *SpiderEngine) UpdateDoc(p *DocParam) error {
 	if se.Closed {
 		return errors.New("Spider Engine is closed!")
 	}

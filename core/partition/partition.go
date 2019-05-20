@@ -296,8 +296,8 @@ func (part *Partition) AddDocument(docId uint32, content map[string]interface{})
 		//DocId自增，在高层会通过bitmap废掉这个docId
 		part.NextDocId++
 		part.DocCnt++
-		log.Warnf(fmt.Sprintf("Partition Add doc Failed! Failed fields: %v", failedFields))
-		return errors.New("Partition Add doc Failed!")
+		log.Warnf(fmt.Sprintf("Partition Add Doc Failed! Failed fields: %v", failedFields))
+		return errors.New("Partition Add Doc Failed!")
 	} else {
 		//成功，则DocId和docCnt自增
 		part.NextDocId++

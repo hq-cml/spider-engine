@@ -21,6 +21,8 @@ const TEST_FIELD3 = "user_desc"
 const TEST_FIELD4 = "tobe_del"
 
 func init() {
+	basic.PART_PERSIST_MIN_DOC_CNT = 10000
+	basic.PART_MERGE_MIN_DOC_CNT = 100000
 	cmd := exec.Command("/bin/sh", "-c", `/bin/rm -rf /tmp/spider/*`)
 	_, err := cmd.Output()
 	if err != nil {

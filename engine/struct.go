@@ -16,28 +16,35 @@ type FieldParam struct {
 }
 
 //建/删表参数
+type FieldsParam []FieldParam
 type CreateTableParam struct {
 	Database string 	   `json:"database"`
 	Table 	 string        `json:"table"`
-	Fileds   []FieldParam  `json:"fields"`
+	Fileds   FieldsParam   `json:"fields"`
 }
 
 //增/删段参数
-type AddFieldParam struct {
+type AlterTableParam struct {
+	Type     string       `json:"type"`
+	Filed    FieldParam   `json:"field"`
+}
+type AlterFieldParam struct {
 	Database string 	  `json:"database"`
 	Table    string       `json:"table"`
 	Filed    FieldParam   `json:"field"`
 }
 
 //增/改文档参数
-type AddDocParam struct {
-	Database string 				  `json:"database"`
-	Table    string 			      `json:"table"`
-	Content  map[string]interface{}   `json:"content"`
+type DocContent map[string]interface{}
+type DocParam struct {
+	Database string 	  `json:"database"`
+	Table    string 	  `json:"table"`
+	Primary  string       `json:"parimary"`
+	Content  DocContent   `json:"content"`
 }
 
 //获取/删除文档参数
-type DocParam struct {
+type DelDocParam struct {
 	Database   string 	 `json:"database"`
 	Table	   string 	 `json:"table"`
 	PrimaryKey string	 `json:"primaryKey"`
