@@ -165,8 +165,7 @@ func Err(v ...interface{}) {
 func Fatalf(format string, v ...interface{}) {
 	if spiderLog.level > SPIDER_LOG_LEVEL_FATAL {return}
 	prefix := fmt.Sprintf("[FATAL]%v", getFileLenPrefix())
-	spiderLog.Fatalf(prefix + format, v...)
-
+	spiderLog.Printf(prefix + format, v...)
 }
 
 func Fatalln(v ...interface{}) {
@@ -174,7 +173,7 @@ func Fatalln(v ...interface{}) {
 	prefix := fmt.Sprintf("[FATAL]%v", getFileLenPrefix())
 	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
-	spiderLog.Fatalln(v1...)
+	spiderLog.Println(v1...)
 }
 
 func Fatal(v ...interface{}) {
@@ -182,5 +181,5 @@ func Fatal(v ...interface{}) {
 	prefix := fmt.Sprintf("[FATAL]%v", getFileLenPrefix())
 	v1 := []interface{}{prefix}
 	v1 = append(v1, v...)
-	spiderLog.Fatal(v1...)
+	spiderLog.Print(v1...)
 }
