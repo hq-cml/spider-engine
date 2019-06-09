@@ -987,6 +987,11 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 	//fmt.Println("-----------Table search -------------")
 	//fmt.Println("BitMap: ", tbl.delFlagBitMap.String())
 
+	//如果字段为空，那么会使用上帝视角进行跨字段搜索
+	if fieldName == "" {
+		fieldName = partition.GOD_FIELD_NAME
+	}
+
 	//各个磁盘分区执行搜索
 	for _, prt := range tbl.partitions {
 		ids, ok := prt.SearchDocs(fieldName, keyWord, tbl.delFlagBitMap, filters)

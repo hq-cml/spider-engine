@@ -91,22 +91,6 @@ func InitHttpServer() http.Server {
 	return server
 }
 
-//注册路由
-//func RegisterRouter() {
-	//http.HandleFunc("/_status", Status)
-	//http.HandleFunc("/_createDb", CreateDatabase)
-	//http.HandleFunc("/_dropDb", DropDatabase)
-	//http.HandleFunc("/_createTable", CreateTable)
-	//http.HandleFunc("/_dropTable", DropTable)
-	//http.HandleFunc("/_addField", AddField)
-	//http.HandleFunc("/_deleteField", DeleteField)
-	//http.HandleFunc("/_addDoc", AddDoc)
-	//http.HandleFunc("/_getDoc", GetDoc)
-	//http.HandleFunc("/_deleteDoc", DeleteDoc)
-	//http.HandleFunc("/_updateDoc", UpdateDoc)
-	//http.HandleFunc("/_search", SearchDocs)
-//}
-
 // hello world, the web server
 func Status(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, helper.JsonEncodeIndent(engine.SpdInstance().GetStatus()))
