@@ -42,6 +42,7 @@ func main() {
 	se, err := engine.InitSpider(conf.DataDir, basic.SPIDER_VERSION)
 	if err != nil {
 		log.Fatalf("Init spider Error:%v", err)
+		return
 	}
 	//注册单例
 	engine.RegisterInstance(se)

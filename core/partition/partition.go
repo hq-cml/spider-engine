@@ -123,7 +123,7 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 		log.Errf("mmap error : %v \n", err)
 		return nil, err
 	}
-	log.Debugf("Load Invert File : %v.idx ", prtPathName)
+	log.Debugf("Load Invert File : %v.ivt ", prtPathName)
 
 	//加载正排文件
 	part.baseMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWD, prtPathName), true, 0)
@@ -131,14 +131,14 @@ func LoadPartition(prtPathName string) (*Partition, error) {
 		log.Errf("mmap error : %v \n", err)
 		return nil, err
 	}
-	log.Debugf("Load Profile File : %v.pfl", prtPathName)
+	log.Debugf("Load Profile File : %v.fwd", prtPathName)
 
 	//加载正排辅助文件
 	part.extMmap, err = mmap.NewMmap(fmt.Sprintf("%v" + basic.IDX_FILENAME_SUFFIX_FWDEXT, prtPathName), true, 0)
 	if err != nil {
 		log.Errf("mmap error : %v \n", err)
 	}
-	log.Debugf("Load Detail File : %v.dtl", prtPathName)
+	log.Debugf("Load Detail File : %v.ext", prtPathName)
 
 	//加载各个Field
 	for _, coreField := range part.CoreFields {
