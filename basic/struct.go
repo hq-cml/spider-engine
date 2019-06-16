@@ -6,7 +6,7 @@ import (
 
 type DocNode struct {
 	DocId  uint32
-	Weight uint32
+	Weight uint32           //权重，存储的时候是词频tf，搜索的时候，实时计算出tf-idf值
 }
 
 type DocInfo struct {

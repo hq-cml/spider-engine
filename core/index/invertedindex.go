@@ -148,7 +148,7 @@ FAIL:
 }
 
 //给定一个查询词query，找出doc的list
-//Note
+//Note:
 // 2019-5-6 发现一个隐藏的小坑，直接返回slice的函数，最好在底层copy一下
 // 否则如果上层对slice进行了更改，那么底层就彻底乱了，而且不好排查。。。
 func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {

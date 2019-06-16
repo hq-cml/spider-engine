@@ -19,6 +19,7 @@ import (
 var confPath *string = flag.String("c", "conf/spider.conf", "config file")
 
 func main() {
+	//TODO recover兜底panic
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	//解析参数

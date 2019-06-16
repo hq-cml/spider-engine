@@ -1010,6 +1010,9 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 		}
 	}
 
+	//TF-IDF排序
+	fmt.Println("A------------------", helper.JsonEncode(docIds))
+
 	//结果组装
 	retDocs := []basic.DocInfo{}
 	for _, doc := range docIds {

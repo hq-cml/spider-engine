@@ -11,6 +11,7 @@ import (
 	"fmt"
 )
 
+//TODO 日志增加trace_id
 type SpiderLog struct {
 	*log.Logger
 	level   int

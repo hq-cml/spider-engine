@@ -74,6 +74,10 @@ var punctuationMap = map[string]bool {
 	"【":true, "】":true,
 }
 
+const (
+	BIGGER_MULTIPLE = 10000 //词频放大倍数，存储浮点不太方便，将词频放大10000倍取整存储，使用的时候再缩减回来
+)
+
 func init() {
 	Splitter = splitter.NewSplitter("jieba")
 }
@@ -129,6 +133,7 @@ func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 	terms = trimPunctuation(terms) //过滤无意义的标点
 	totalCnt := len(terms)
 
+	//统计单词term的个数
 	uniqMap := make(map[string]int)
 	for _, term := range terms {
 		if _, ok := uniqMap[term]; !ok {
@@ -138,10 +143,10 @@ func SplitTrueWords(docId uint32, content string) map[string]basic.DocNode {
 		}
 	}
 	m := map[string]basic.DocNode {}
-	for term, tf := range uniqMap {
+	for term, termCnt := range uniqMap {
 		node := basic.DocNode {
 			DocId:  docId,
-			Weight: uint32((float32(tf)/float32(totalCnt)) * 10000), //TODO 这个10000是个魔幻数字
+			Weight: uint32((float32(termCnt)/float32(totalCnt)) * BIGGER_MULTIPLE), //词频放大10000倍
 		}
 		m[term] = node
 	}
