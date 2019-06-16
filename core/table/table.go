@@ -27,6 +27,7 @@ import (
 	"github.com/hq-cml/spider-engine/core/index"
 	"github.com/hq-cml/spider-engine/core/field"
 	"math"
+	"sort"
 )
 
 //表的原则：
@@ -1012,12 +1013,10 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 	}
 
 	//将词频转化为TF-IDF
-	fmt.Println("A------------------", helper.JsonEncode(docIds))
 	convertWeight(docIds, tbl.NextDocId)
-	fmt.Println("B------------------", helper.JsonEncode(docIds))
 
 	//TF-IDF排序
-
+	sort.Sort(DocWeightSort(docIds))
 
 	//结果组装
 	retDocs := []basic.DocInfo{}
@@ -1062,7 +1061,12 @@ func convertWeight(res []basic.DocNode, maxdoc uint32) {
 }
 
 //按TF-IDF排序
-
+type DocWeightSort []basic.DocNode
+func (a DocWeightSort) Len() int      { return len(a) }
+func (a DocWeightSort) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a DocWeightSort) Less(i, j int) bool {
+	return a[i].Weight > a[j].Weight
+}
 
 func (tbl *Table) displayInner() string {
 	str := "\n"
