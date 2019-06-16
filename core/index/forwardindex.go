@@ -566,6 +566,7 @@ func (fwdIdx *ForwardIndex) Filter(pos uint32, filter basic.SearchFilter) bool {
 		return false
 	}
 
+	filterType := basic.FilterTypeMap[filter.FilterType]
 	if fwdIdx.indexType == IDX_TYPE_INTEGER || fwdIdx.indexType == IDX_TYPE_DATE {
 		//数字类型, 现获取值
 		value, ok := fwdIdx.GetInt(pos)
@@ -574,7 +575,7 @@ func (fwdIdx *ForwardIndex) Filter(pos uint32, filter basic.SearchFilter) bool {
 		}
 
 		//根据不同的匹配类型，进行对应的匹配
-		switch filter.FilterType {
+		switch filterType {
 		case basic.FILT_EQ:
 			return (MaxInt64 & value != MaxInt64) && (value == filter.IntVal)
 		case basic.FILT_NEQ:
@@ -609,7 +610,7 @@ func (fwdIdx *ForwardIndex) Filter(pos uint32, filter basic.SearchFilter) bool {
 			return false
 		}
 
-		switch filter.FilterType {
+		switch filterType {
 		case basic.FILT_EQ:
 			return value == filter.StrVal
 		case basic.FILT_NEQ:

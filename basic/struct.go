@@ -35,6 +35,20 @@ const (
 	FILT_STR_CONTAIN = 13 //包含
 )
 
+var FilterTypeMap = map[string]int{
+	"=" 		: FILT_EQ,
+	"!=" 		: FILT_NEQ,
+	">" 		: FILT_MORE_THAN,
+	"<" 		: FILT_LESS_THAN,
+	"in" 		: FILT_IN,
+	"not in"	: FILT_NOTIN,
+	"between" 	: FILT_BETWEEN,
+
+	"prefix" 	: FILT_STR_PREFIX,
+	"suffix" 	: FILT_STR_SUFFIX,
+	"contain" 	: FILT_STR_CONTAIN,
+}
+
 const (
 	IDX_FILENAME_SUFFIX_BTREE  = ".btdb"
 	IDX_FILENAME_SUFFIX_FWD    = ".fwd"
@@ -44,30 +58,15 @@ const (
 	IDX_FILENAME_SUFFIX_BITMAP = ".btmp"
 )
 
-/*************************************************************************
-索引查询接口
-索引查询分为 查询和过滤, 统计，子查询四种
-查询：倒排索引匹配
-过滤：正排索引过滤
-统计：汇总某个字段，然后进行统计计算
-子查询：必须是有父子
-************************************************************************/
-//查询接口数据结构[用于倒排索引查询]，内部都是求交集
-type SearchQuery struct {
-	FieldName string `json:"_field"`   //要过滤的字段
-	Value     string `json:"_value"`   //要过滤的值
-	Type      uint64 `json:"_type"`    //过滤类型
-}
-
 type SearchFilter struct {
-	FieldName       string
-	FilterType      uint8
-	StrVal          string   //用于字符的==/!=
-	IntVal          int64    //用于数字的==/!=/>/<
-	Begin           int64    //用于数字between
-	End             int64    //用于数字between
-	RangeNums       []int64  //用于数字in或not in
-	RangeStrs       []string //用于字符in或not in
+	FieldName       string   `json:"field"`   //需要过滤的字段，和搜索字段不是一个东西
+	FilterType      string   `json:"type"` 	  //过滤类型: =, !=, >, <, in, not in, between, prefix, suffix, contain
+	StrVal          string   `json:"str"` 	  //用于字符的==/!=, prefix, suffix
+	IntVal          int64    `json:"int"` 	  //用于数字的==/!=/>/<
+	Begin           int64    `json:"begin"`   //用于数字between
+	End             int64    `json:"end"` 	  //用于数字between
+	RangeNums       []int64  `json:"iranges"` //用于数字in或not in
+	RangeStrs       []string `json:"sranges"` //用于字符in或not in
 }
 
 const (

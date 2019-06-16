@@ -771,7 +771,7 @@ func TestFilter(t *testing.T) {
 
 	//喜欢美食, 并且年龄在18-22之间的人
 	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
-		{FieldName:TEST_FIELD2, FilterType:basic.FILT_BETWEEN, Begin:18, End:22},
+		{FieldName:TEST_FIELD2, FilterType: "between", Begin:18, End:22},
 	})
 	if !ok {
 		panic("Can't find")
@@ -780,7 +780,7 @@ func TestFilter(t *testing.T) {
 
 	//喜欢美食, 并且姓李的人
 	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
-		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
 	})
 	if !ok {
 		panic("Can't find")
@@ -796,7 +796,7 @@ func TestFilter(t *testing.T) {
 
 	//喜欢美食, 并且年龄在18-22之间的人
 	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
-		{FieldName:TEST_FIELD2, FilterType:basic.FILT_BETWEEN, Begin:18, End:22},
+		{FieldName:TEST_FIELD2, FilterType: "between", Begin:18, End:22},
 	})
 	if !ok {
 		panic("Can't find")
@@ -805,7 +805,7 @@ func TestFilter(t *testing.T) {
 
 	//喜欢美食, 并且姓李的人
 	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
-		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
 	})
 	if !ok {
 		panic("Can't find")
@@ -828,7 +828,7 @@ func TestFilter(t *testing.T) {
 	t.Log("Add DocId:", docId)
 
 	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
-		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
 	})
 	if !ok {
 		panic("Can't find")
@@ -850,7 +850,7 @@ func TestFilterLoad(t *testing.T) {
 
 	//喜欢美食, 并且年龄在18-22之间的人
 	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
-		{FieldName:TEST_FIELD2, FilterType:basic.FILT_BETWEEN, Begin:18, End:22},
+		{FieldName:TEST_FIELD2, FilterType: "between", Begin:18, End:22},
 	})
 	if !ok {
 		panic("Can't find")
@@ -859,7 +859,7 @@ func TestFilterLoad(t *testing.T) {
 
 	//喜欢美食, 并且姓李的人
 	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
-		{FieldName:TEST_FIELD1, FilterType:basic.FILT_STR_PREFIX, StrVal:"李"},
+		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
 	})
 	if !ok {
 		panic("Can't find")

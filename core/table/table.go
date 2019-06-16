@@ -979,6 +979,8 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 		return nil, false, errors.New("The Spider Is Not Running!")
 	}
 
+	//过滤器校验
+
 	//读锁
 	tbl.rwMutex.RLock()
 	defer tbl.rwMutex.RUnlock()

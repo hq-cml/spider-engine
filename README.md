@@ -189,7 +189,38 @@ curl -X GET 'http://127.0.0.1:9528/_search' -d '{
 
 
 ##### 过滤器：
+Spider引擎支持简单的过滤器，过滤器用于搜索结果的进一步缩小。
+比如有一个需求，希望找到喜欢秋香的人，并且希望这些人年龄在20到30之间。则可以
 
+```
+curl -X GET 'http://127.0.0.1:9528/_search' -d '{
+	"database":"sp_db",
+	"table":"user",
+	"value":"秋香",
+	"filters":[
+	    {
+	        "field": "age", "type": "between", "begin": 20, "end": 30
+	    }
+	]
+}'
+```
+
+目前支持的所有的过滤器：
+```
+type SearchFilter struct {
+	FieldName       string   `json:"field"`   //需要过滤的字段，和搜索字段不是一个东西
+	FilterType      string   `json:"type"` 	  //过滤类型: =, !=, >, <, in, not in, between, prefix, suffix, contain
+	StrVal          string   `json:"str"` 	  //用于字符的==/!=, prefix, suffix
+	IntVal          int64    `json:"int"` 	  //用于数字的==/!=/>/<
+	Begin           int64    `json:"begin"`   //用于数字between
+	End             int64    `json:"end"` 	  //用于数字between
+	RangeNums       []int64  `json:"iranges"` //用于数字in或not in
+	RangeStrs       []string `json:"sranges"` //用于字符in或not in
+}
+```
+其中
+- prefix, suffix, contain仅支持字符串
+- < , >, between仅支持数字
 
 
 #### TODO：
