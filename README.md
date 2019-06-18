@@ -187,6 +187,17 @@ curl -X GET 'http://127.0.0.1:9528/_search' -d '{
 }'
 ```
 
+##### 分页：
+分页参数为offset和size，如下:
+```
+curl -X GET 'http://127.0.0.1:9528/_search' -d '{
+	"database": "sp_db",
+	"table": "user",
+	"value": "秋香",
+	"offset": 10,
+	"size": 10
+}'
+```
 
 ##### 过滤器：
 Spider引擎支持简单的过滤器，过滤器用于搜索结果的进一步缩小。
@@ -222,9 +233,33 @@ type SearchFilter struct {
 - prefix, suffix, contain仅支持字符串
 - < , >, between仅支持数字
 
+##### 返回结果
+
+```
+{
+	"code": 0,
+	"msg": "ok",
+	"data": {
+		"docs": [{
+			"Key": "10001",
+			"Detail": {
+				"user_id": "10001",
+				"user_name": "唐伯虎",
+				"age": 23,
+				"user_desc": "喜欢秋香"
+			}
+		}],
+		"total": 1
+	}
+}
+```
+说明：
+- code和msg表示请求的结果状态
+- data表示具体返回结果
+- data.total表示一共搜索条数（总条数）
+- data.docs表示文档列表
 
 #### TODO：
-过滤器校验、分页
 - 1. 分布式高可用存储，目前思路是引入etcd，或者将etcd-raft模块移植过来使用
 - 2. 分布式得搜索，区别于分布式的存储
 - 3. 更加智能的排序规则，目前仅支持简单的DF-IDF算法
