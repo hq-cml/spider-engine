@@ -56,5 +56,7 @@ type SearchParam struct {
 	FieldName  string				`json:"fieldName"`
 	Value      string				`json:"value"`
 	Filters    []basic.SearchFilter `json:"filters"`
+	Offset     int32                `json:"offset"`
+	Size       int32                `json:"size"`
 }
 

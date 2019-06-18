@@ -99,7 +99,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -132,7 +132,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -173,7 +173,7 @@ func TestNewTableAndPersistAndDelfield(t *testing.T) {
 		panic(fmt.Sprintf("AddDoc Error:%s", err))
 	}
 	t.Log("Add DocId:", docId)
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -199,13 +199,13 @@ func TestLoad(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -279,13 +279,13 @@ func TestLoadAgain(t *testing.T) {
 		panic("Should is 1")
 	}
 
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil, 0, 0)
 	if ok {
 		panic("should not find")
 	}
@@ -360,13 +360,13 @@ func TestMerge(t *testing.T) {
 	t.Log("User[10002]:", helper.JsonEncode(content))
 
 
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil, 0, 0)
 	if ok {
 		panic("should not find")
 	}
@@ -417,13 +417,13 @@ func TestMergeThenLoad(t *testing.T) {
 	t.Log("User[10002]:", helper.JsonEncode(tmp))
 
 
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log(helper.JsonEncode(ids))
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "书法", nil, 0, 0)
 	if ok {
 		panic("should not find")
 	}
@@ -535,13 +535,13 @@ func TestConsistentAfterError(t *testing.T) {
 	t.Log("After Persist:")
 	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
 
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log("美食", helper.JsonEncode(ids))
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "养生", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "养生", nil, 0, 0)
 	if ok {
 		panic("should not find")
 	}
@@ -572,12 +572,12 @@ func TestConsistentAfterError(t *testing.T) {
 	t.Log("After Update:")
 	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log("美食", helper.JsonEncode(ids))
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "打怪", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "打怪", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -600,12 +600,12 @@ func TestConsistentAfterError(t *testing.T) {
 	t.Log("After Update:")
 	t.Log(helper.JsonEncodeIndent(table.GetStatus()))
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log("美食", helper.JsonEncode(ids))
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "打怪", nil)
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "打怪", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -770,18 +770,18 @@ func TestFilter(t *testing.T) {
 	t.Log("Add DocId:", docId)
 
 	//喜欢美食, 并且年龄在18-22之间的人
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
 		{FieldName:TEST_FIELD2, FilterType: "between", Begin:18, End:22},
-	})
+	}, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log("喜欢美食, 并且年龄在18-22之间的人：", helper.JsonEncode(ids))
 
 	//喜欢美食, 并且姓李的人
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
 		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
-	})
+	}, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -795,18 +795,18 @@ func TestFilter(t *testing.T) {
 	}
 
 	//喜欢美食, 并且年龄在18-22之间的人
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
 		{FieldName:TEST_FIELD2, FilterType: "between", Begin:18, End:22},
-	})
+	}, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log("喜欢美食, 并且年龄在18-22之间的人：", helper.JsonEncode(ids))
 
 	//喜欢美食, 并且姓李的人
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
 		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
-	})
+	}, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -827,9 +827,9 @@ func TestFilter(t *testing.T) {
 	}
 	t.Log("Add DocId:", docId)
 
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
 		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
-	})
+	}, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -849,18 +849,18 @@ func TestFilterLoad(t *testing.T) {
 	}
 
 	//喜欢美食, 并且年龄在18-22之间的人
-	ids, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+	ids, _, ok, _ := table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
 		{FieldName:TEST_FIELD2, FilterType: "between", Begin:18, End:22},
-	})
+	}, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
 	t.Log("喜欢美食, 并且年龄在18-22之间的人：", helper.JsonEncode(ids))
 
 	//喜欢美食, 并且姓李的人
-	ids, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
+	ids, _, ok, _ = table.SearchDocs(TEST_FIELD3, "美食", []basic.SearchFilter {
 		{FieldName:TEST_FIELD1, FilterType: "prefix", StrVal:"李"},
-	})
+	}, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -928,7 +928,7 @@ func TestGodQuery(t *testing.T) {
 	t.Log("Add DocId:", docId)
 
 	//测试倒排搜索(内存)
-	ids, ok, _ := table.SearchDocs(partition.GOD_FIELD_NAME, "李四", nil)
+	ids, _, ok, _ := table.SearchDocs(partition.GOD_FIELD_NAME, "李四", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -944,7 +944,7 @@ func TestGodQuery(t *testing.T) {
 	//测试落地后能否直接从磁盘读取
 	t.Log("After Persist")
 
-	ids, ok, _ = table.SearchDocs(partition.GOD_FIELD_NAME, "李四", nil)
+	ids, _, ok, _ = table.SearchDocs(partition.GOD_FIELD_NAME, "李四", nil, 0, 0)
 	if !ok {
 		panic("Can't find")
 	}
@@ -1021,7 +1021,7 @@ func TestMultiMerge(t *testing.T) {
 	t.Log(table.displayInner())
 
 	//测试一下搜索
-	docs, ok, _ := table.SearchDocs(TEST_FIELD1, "刘七", nil)
+	docs, _, ok, _ := table.SearchDocs(TEST_FIELD1, "刘七", nil, 0, 0)
 	if !ok {
 		panic("shuoud exist")
 	}
@@ -1040,7 +1040,7 @@ func TestMultiMerge(t *testing.T) {
 	}
 
 	//再次测试一下搜索
-	docs, ok, _ = table.SearchDocs(TEST_FIELD1, "刘七", nil)
+	docs, _, ok, _ = table.SearchDocs(TEST_FIELD1, "刘七", nil, 0, 0)
 	if !ok {
 		panic("shuoud exist")
 	}
@@ -1065,7 +1065,7 @@ func TestLoadAgainAgain(t *testing.T) {
 		panic(fmt.Sprintf("Load table Error:%s", err))
 	}
 
-	docs, ok, _ := table.SearchDocs(TEST_FIELD1, "刘七", nil)
+	docs, ok, _ := table.SearchDocs(TEST_FIELD1, "刘七", nil, 0, 0)
 	if !ok {
 		panic("shuoud exist")
 	}

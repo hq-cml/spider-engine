@@ -166,12 +166,15 @@ func SearchDocs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	docs, err := engine.SpdInstance().SearchDocs(&p)
+	docs, total, err := engine.SpdInstance().SearchDocs(&p)
 	if err != nil {
 		io.WriteString(w, helper.JsonEncode(basic.NewErrorResult(err.Error())))
 		return
 	}
 
-	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(docs)))
+	io.WriteString(w, helper.JsonEncode(basic.NewOkResult(map[string]interface{}{
+		"docs": docs,
+		"total": total,
+	})))
 	return
 }

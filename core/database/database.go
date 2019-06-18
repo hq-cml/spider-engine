@@ -249,13 +249,13 @@ func (db *Database) DeleteDoc(tableName string, primaryKey string) (bool) {
 
 //搜索
 func (db *Database) SearchDocs(tableName, fieldName, keyWord string,
-		filters []basic.SearchFilter) ([]basic.DocInfo, bool, error) {
+		filters []basic.SearchFilter, offset, size int32) ([]basic.DocInfo, int, bool, error) {
 	tab, exist := db.TableMap[tableName]
 	if !exist {
-		return nil, false, errors.New("The Table Not Exist!")
+		return nil, 0, false, errors.New("The Table Not Exist!")
 	}
 
-	return tab.SearchDocs(fieldName, keyWord, filters)
+	return tab.SearchDocs(fieldName, keyWord, filters, offset, size)
 }
 
 //增减字段

@@ -179,9 +179,9 @@ func (se *SpiderEngine) GetDoc(dbName, tableName, key string) (*basic.DocInfo, e
 }
 
 //搜索文档
-func (se *SpiderEngine) SearchDocs(p *SearchParam) ([]basic.DocInfo, error) {
+func (se *SpiderEngine) SearchDocs(p *SearchParam) ([]basic.DocInfo, int, error) {
 	if se.Closed {
-		return nil, errors.New("Spider Engine is closed!")
+		return nil, 0, errors.New("Spider Engine is closed!")
 	}
 	se.RwMutex.RLock()          //读锁
 	defer se.RwMutex.RUnlock()
@@ -189,18 +189,18 @@ func (se *SpiderEngine) SearchDocs(p *SearchParam) ([]basic.DocInfo, error) {
 	db, exist := se.DbMap[p.Database]
 	if !exist {
 		log.Errf("The db not exist!")
-		return nil, errors.New("The db already exist!")
+		return nil, 0, errors.New("The db already exist!")
 	}
-	docs, ok, err := db.SearchDocs(p.Table, p.FieldName, p.Value, p.Filters)
+	docs, total, ok, err := db.SearchDocs(p.Table, p.FieldName, p.Value, p.Filters, p.Offset, p.Size)
 	if err != nil {
 		log.Errf("SearchDocs Error: %v", err.Error())
-		return nil, err
+		return nil, 0, err
 	}
 	if !ok {
 		log.Warnf("SearchDocs get null:%v", helper.JsonEncode(p))
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	log.Infof("SearchDocs: %v, %v, %v, %v, %v", p.Database ,p.Table ,p.FieldName ,p.Value, len(docs))
-	return docs, nil
+	return docs, total, nil
 }

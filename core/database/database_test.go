@@ -95,19 +95,19 @@ func TestLoadDatabase(t *testing.T) {
 	}
 	t.Log("Got the user[",temp_pk,"]:", helper.JsonEncode(user))
 
-	tmp, ok, _ := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "游泳", nil)
+	tmp, _, ok, _ := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "游泳", nil, 0, 0)
 	if ok {
 		panic("Should not exist!")
 	}
 	t.Log("Got the doc[游泳]:", helper.JsonEncode(tmp))
 
-	tmp, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "", nil)
+	tmp, _, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "", nil, 0, 0)
 	if !ok {
 		panic("Should exist!")
 	}
 	t.Log("Got the doc[美食]:", helper.JsonEncode(tmp))
 
-	tmp, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电影", nil)
+	tmp, _, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电影", nil, 0, 0)
 	if !ok {
 		panic("Should exist!")
 	}
@@ -481,12 +481,12 @@ func TestDocUpdateAndDel(t *testing.T) {
 
 
 	//测试搜索
-	tmp, ok, _ := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "微积分", nil)
+	tmp, _, ok, _ := db.SearchDocs(TEST_TABLE, TEST_FIELD3, "微积分", nil, 0, 0)
 	if !ok {
 		panic("Err")
 	}
 	fmt.Println(helper.JsonEncode(tmp))
-	tmp, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电子", nil)
+	tmp, _, ok, _ = db.SearchDocs(TEST_TABLE, TEST_FIELD3, "电子", nil, 0, 0)
 	if ok {
 		panic("Err")
 	}

@@ -44,7 +44,7 @@ type Table struct {
 	PrimaryKey   string                      `json:"primaryKey"`
 	StartDocId   uint32                      `json:"startDocId"`
 	NextDocId    uint32                      `json:"nextDocId"`
-	RealDocNum   uint32                      `json:"realDocNum"` //表总文档数，和底层的docCnt不同，这个docNum表示实际有多少有效文档
+	RealDocNum   uint32                      `json:"realDocNum"`  //表总文档数，和底层的docCnt不同，这个docNum表示实际有多少有效文档
 	MaxDocNum    uint32                      `json:"maxDocNum"`
 	PartSuffix   uint64                      `json:"prefix"`
 	PrtPathNames []string                    `json:"prtPathNames"` //磁盘态的分区列表名--这些分区均不包括主键！！！
@@ -971,15 +971,18 @@ func (tbl *Table) MergePartitions() error {
 }
 
 //表内搜索
-func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter) ([]basic.DocInfo, bool, error) {
+func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFilter, offset, size int32) ([]basic.DocInfo, int, bool, error) {
 	if tbl.status != TABLE_STATUS_RUNNING {
 		if tbl.status == TABLE_STATUS_MERGEING {
-			return nil, false, errors.New("The Spider Is Merging. Please Try Again Later!")
+			return nil, 0, false, errors.New("The Spider Is Merging. Please Try Again Later!")
 		}
-		return nil, false, errors.New("The Spider Is Not Running!")
+		return nil, 0, false, errors.New("The Spider Is Not Running!")
 	}
 
 	//过滤器校验
+	if err := tbl.checkFilters(filters); err != nil {
+		return nil, 0, false, err
+	}
 
 	//读锁
 	tbl.rwMutex.RLock()
@@ -1014,11 +1017,26 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 		}
 	}
 
+	//总数
+	total := len(docIds)
+
 	//将词频转化为TF-IDF
 	convertWeight(docIds, tbl.NextDocId)
 
 	//TF-IDF排序
 	sort.Sort(DocWeightSort(docIds))
+
+	//分页, 默认取0-99
+	if offset < 0 || size <= 0 || (offset + size) > int32(len(docIds)) {
+		if len(docIds) > 100 {
+			offset = 0
+			size = 100
+		} else {
+			offset = 0
+			size = int32(len(docIds))
+		}
+	}
+	docIds = docIds[offset: offset + size]
 
 	//结果组装
 	retDocs := []basic.DocInfo{}
@@ -1050,7 +1068,49 @@ func (tbl *Table) SearchDocs(fieldName, keyWord string, filters []basic.SearchFi
 
 		retDocs = append(retDocs, detail)
 	}
-	return retDocs, exist, nil
+	return retDocs, total, exist, nil
+}
+
+//校验过滤器
+func (tbl *Table) checkFilters(filters []basic.SearchFilter) error {
+	if filters != nil && len(filters) > 0 {
+		for _, filter := range filters {
+			fld, exist := tbl.BasicFields[filter.FieldName];
+			if  !exist && filter.FieldName != tbl.PrimaryKey {
+				return errors.New(fmt.Sprintf("Field %v not Exist ", filter.FieldName))
+			}
+
+			switch filter.FilterType {
+			case ">", "<", "between":
+			if fld.IndexType != index.IDX_TYPE_INTEGER &&
+				 fld.IndexType != index.IDX_TYPE_DATE {
+				return errors.New(filter.FieldName + "should be number or time")
+			}
+			case "in", "not in":
+				if fld.IndexType == index.IDX_TYPE_INTEGER ||
+					fld.IndexType == index.IDX_TYPE_DATE {
+					if filter.RangeNums == nil {
+						return errors.New(filter.FieldName + " RangeNums shoud not be nil")
+					}
+				} else {
+					if filter.RangeStrs == nil {
+						return errors.New(filter.FieldName + " RangeStrs shoud not be nil")
+					}
+				}
+
+			case "prefix", "suffix", "contain":
+				if fld.IndexType == index.IDX_TYPE_INTEGER ||
+					fld.IndexType == index.IDX_TYPE_DATE {
+					return errors.New(filter.FieldName + "should be string")
+				}
+			default:
+				// =, != do nothing
+
+			}
+
+		}
+	}
+	return nil
 }
 
 //将词频转化为TF-IDF
