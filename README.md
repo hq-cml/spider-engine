@@ -4,7 +4,10 @@
 
 Spider-Engine是一款基于Go实现的小型搜索引擎，简单、直接、高效、皮实。设计上参考借鉴了Mysql、ES等。
 
-目前已经和[Spider-Engine](https://github.com/hq-cml/spider-man)爬虫项目打通，或者您也可以自己实现爬虫将数据结构化之后导入。
+**Tips:**  
+    目前Spider-Engine已经和 [Spider-Man](https://github.com/hq-cml/spider-man)（一个Go的爬虫框架项目）打通。  
+    并且由 [Spider-Face](https://github.com/hq-cml/spider-man)（一个Go的web框架项目）配了一套简单的搜索引擎页面。  
+    当然，这并非必须的，您也可以自己实现爬虫将数据结构化之后导入并选择自己熟悉的web框架。
 
 #### 支持的功能：
 - 1. 类比Mysql和ES，支持库、表、字段级别的存储单元管理
