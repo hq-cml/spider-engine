@@ -1,0 +1,175 @@
+占用文件过大
+
+改造前：
+1. 大V微博完成导入：
+总条数：54484    占用文件大小：73M   关机：    重新装载后文件大小：68M
+
+2. 粉丝微博导入：
+总条数：88924    占用文件大小：90M   关机：99M    重新装载后文件大小：128M
+
+
+3. 转发用户微博数据导入：
+总条数：    占用文件大小：       重新装载后文件大小：
+
+
+
+改造后：
+
+
+
+
+//The spider is running...
+区分is running和is working
+
+
+//可能存在的问题
+在大V微博完成导入后，关机，开机重载，再导入粉丝微博，这时候分区数会出现6的情况？应该是更大的？
+
+weibo_0000000007是存量落地数据，不该出现weibo_0000000006吧？
+						{
+							"startDocId": 0,
+							"nextDocId": 54484,
+							"docCnt": 54484,
+							"realDocNum": 54484,
+							"prtPathName": "/data/spider-engine/data/sp_db/weibo/weibo_0000000007",
+							"subFields": [
+								{
+									"name": "weibo_content",
+									"startDocId": 0,
+									"nextDocId": 54484,
+									"fwdNextDocId": 54484,
+									"fwdDocCnt": 54484,
+									"ivtNextDocId": 54484
+								},
+								{
+									"name": "date",
+									"startDocId": 0,
+									"nextDocId": 54484,
+									"fwdNextDocId": 54484,
+									"fwdDocCnt": 54484,
+									"ivtNextDocId": -1
+								},
+								{
+									"name": "read_cnt",
+									"startDocId": 0,
+									"nextDocId": 54484,
+									"fwdNextDocId": 54484,
+									"fwdDocCnt": 54484,
+									"ivtNextDocId": -1
+								},
+								{
+									"name": "user_name",
+									"startDocId": 0,
+									"nextDocId": 54484,
+									"fwdNextDocId": 54484,
+									"fwdDocCnt": 54484,
+									"ivtNextDocId": 54484
+								}
+							],
+							"godFields": {
+								"name": "#O@H!M*Y&G%O(D#",
+								"startDocId": 0,
+								"nextDocId": 54484,
+								"fwdNextDocId": -1,
+								"fwdDocCnt": -1,
+								"ivtNextDocId": 54484
+							}
+						},
+						{
+							"startDocId": 54484,
+							"nextDocId": 60000,
+							"docCnt": 5516,
+							"realDocNum": 5516,
+							"prtPathName": "/data/spider-engine/data/sp_db/weibo/weibo_0000000006",
+							"subFields": [
+								{
+									"name": "read_cnt",
+									"startDocId": 54484,
+									"nextDocId": 60000,
+									"fwdNextDocId": 60000,
+									"fwdDocCnt": 5516,
+									"ivtNextDocId": -1
+								},
+								{
+									"name": "user_name",
+									"startDocId": 54484,
+									"nextDocId": 60000,
+									"fwdNextDocId": 60000,
+									"fwdDocCnt": 5516,
+									"ivtNextDocId": 60000
+								},
+								{
+									"name": "weibo_content",
+									"startDocId": 54484,
+									"nextDocId": 60000,
+									"fwdNextDocId": 60000,
+									"fwdDocCnt": 5516,
+									"ivtNextDocId": 60000
+								},
+								{
+									"name": "date",
+									"startDocId": 54484,
+									"nextDocId": 60000,
+									"fwdNextDocId": 60000,
+									"fwdDocCnt": 5516,
+									"ivtNextDocId": -1
+								}
+							],
+							"godFields": {
+								"name": "#O@H!M*Y&G%O(D#",
+								"startDocId": 54484,
+								"nextDocId": 60000,
+								"fwdNextDocId": -1,
+								"fwdDocCnt": -1,
+								"ivtNextDocId": 60000
+							}
+						},
+						{
+							"startDocId": 60000,
+							"nextDocId": 70000,
+							"docCnt": 10000,
+							"realDocNum": 10000,
+							"prtPathName": "/data/spider-engine/data/sp_db/weibo/weibo_0000000008",
+							"subFields": [
+								{
+									"name": "weibo_content",
+									"startDocId": 60000,
+									"nextDocId": 70000,
+									"fwdNextDocId": 70000,
+									"fwdDocCnt": 10000,
+									"ivtNextDocId": 70000
+								},
+								{
+									"name": "date",
+									"startDocId": 60000,
+									"nextDocId": 70000,
+									"fwdNextDocId": 70000,
+									"fwdDocCnt": 10000,
+									"ivtNextDocId": -1
+								},
+								{
+									"name": "read_cnt",
+									"startDocId": 60000,
+									"nextDocId": 70000,
+									"fwdNextDocId": 70000,
+									"fwdDocCnt": 10000,
+									"ivtNextDocId": -1
+								},
+								{
+									"name": "user_name",
+									"startDocId": 60000,
+									"nextDocId": 70000,
+									"fwdNextDocId": 70000,
+									"fwdDocCnt": 10000,
+									"ivtNextDocId": 70000
+								}
+							],
+							"godFields": {
+								"name": "#O@H!M*Y&G%O(D#",
+								"startDocId": 60000,
+								"nextDocId": 70000,
+								"fwdNextDocId": -1,
+								"fwdDocCnt": -1,
+								"ivtNextDocId": 70000
+							}
+						},
