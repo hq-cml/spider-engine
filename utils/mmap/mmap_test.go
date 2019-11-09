@@ -222,3 +222,13 @@ func TestSync(t *testing.T) {
 	time.Sleep(30 * time.Second)
 }
 */
+/*
+func TestLoadBigMmap(t *testing.T) {
+	m, err := NewMmap("/data/spider-engine/data/sp_db/user/user.btmp", true, 0)
+	if err != nil {
+		panic(err)
+	}
+	defer m.Unmap()
+	t.Log(m.Boundary())
+	t.Log("\n")
+}*/
