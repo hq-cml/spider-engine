@@ -85,10 +85,10 @@ func TestLoadMmap(t *testing.T) {
 
 //临时测试函数
 func (mmp *Mmap) tempCheckNeedExpand(length uint64) (int64, bool) {
-	if mmp.innerIdx+ length > mmp.Capacity {
+	if mmp.innerIdx+ length > mmp.TotalCapacity {
 		var i uint64 = 1
 
-		for mmp.innerIdx+ length  > mmp.Capacity + i * 16 {
+		for mmp.innerIdx+ length  > mmp.TotalCapacity+ i * 16 {
 			i ++
 		}
 
@@ -177,7 +177,7 @@ func TestExpand(t *testing.T) {
 	}
 	t.Log("Before expand:" , mmp)
 	mmp.AppendString("abcdefghijklmnop") //16
-	if mmp.Capacity != 24 || mmp.innerIdx != 24 {
+	if mmp.TotalCapacity != 24 || mmp.innerIdx != 24 {
 		panic("Wrong expand")
 	}
 	mmp.Unmap()
@@ -188,7 +188,7 @@ func TestExpand(t *testing.T) {
 	}
 	t.Log("Before expand:" , mmp)
 	mmp.AppendString("abcdefghijklmnopq") //17
-	if mmp.Capacity != (24 + uint64(APPEND_LEN)) || mmp.innerIdx != 25 {
+	if mmp.TotalCapacity != (24 + uint64(APPEND_LEN)) || mmp.innerIdx != 25 {
 		panic("Wrong expand")
 	}
 	mmp.Unmap()
@@ -206,7 +206,7 @@ func TestSync(t *testing.T) {
 		panic(err)
 	}
 	defer mmp.Unmap()
-	fmt.Println("Cap:", mmp.Capacity, "Idx:", mmp.innerIdx)
+	fmt.Println("Cap:", mmp.TotalCapacity, "Idx:", mmp.innerIdx)
 
 	//t.Log("C: ", mmp.DataBytes, len(mmp.DataBytes))
 	fmt.Println("Before:", mmp.ReadString(8, 16))

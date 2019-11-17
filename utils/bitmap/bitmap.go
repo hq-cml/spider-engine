@@ -5,21 +5,21 @@ package bitmap
  */
 import (
 	"fmt"
-	"log"
 	"github.com/hq-cml/spider-engine/utils/mmap"
+	"log"
 )
 
 const (
-	BitmapMaxMax = (0x01 << 63) -1 //最大容忍值, 超过这个直接报错( 因为int64, 符号位占用1位, 所以63. 其实也不可能有这么大的文件啊...
-	BitmapMaxNum = 0x01 << 32      //2^32个bit位, 能够表示2^32个槽位, 即 0 - 2^32-1 的数字范围, 最终512M 文件, 大概42亿
-	BitmapDefNum = 0x01 << 27      //最终16M 文件, 表示大概1.3亿多
-	BYTE_SIZE = 8				   //一个字节占bit数
+	BitmapMaxMax = (0x01 << 63) - 1 //最大容忍值, 超过这个直接报错( 因为int64, 符号位占用1位, 所以63. 其实也不可能有这么大的文件啊...
+	BitmapMaxNum = 0x01 << 32       //2^32个bit位, 能够表示2^32个槽位, 即 0 - 2^32-1 的数字范围, 最终512M 文件, 大概42亿
+	BitmapDefNum = 0x01 << 27       //最终16M 文件, 表示大概1.3亿多
+	BYTE_SIZE    = 8                //一个字节占bit数
 )
 
 // Bitmap
 type Bitmap struct {
-	DataMap     *mmap.Mmap
-	MaxNum      int64      //Bitmap能表示的最大的数, 一般是size-1, 比如一个size=8位的bitmap, 那么她占用1Byte, 能够表示0-7共8个标记
+	DataMap *mmap.Mmap
+	MaxNum  int64 //Bitmap能表示的最大的数, 一般是size-1, 比如一个size=8位的bitmap, 那么她占用1Byte, 能够表示0-7共8个标记
 	//FirstOneIdx int64    //Bitmap被设置为1的最大值（方便遍历），初始值是负数！！
 }
 
@@ -52,7 +52,7 @@ func newBitmapSize(size int, fileName string, loadFile bool) *Bitmap {
 	}
 
 	//新建实例
-	bm := &Bitmap {}
+	bm := &Bitmap{}
 
 	if loadFile {
 		err := bm.loadFile(fileName)
@@ -78,7 +78,7 @@ func (bm *Bitmap) loadFile(indexName string) error {
 	}
 
 	//设置能够最大值
-	bm.MaxNum = int64(bm.DataMap.RealCapcity()) * BYTE_SIZE - 1
+	bm.MaxNum = int64(bm.DataMap.RealCapcity())*BYTE_SIZE - 1
 
 	//找到最大的1
 	//bm.FindMaxOne()
@@ -87,7 +87,7 @@ func (bm *Bitmap) loadFile(indexName string) error {
 }
 
 //将Bitmap和磁盘文件建立mmap映射
-func (bm *Bitmap)newFile(indexName string) error {
+func (bm *Bitmap) newFile(indexName string) error {
 	var err error
 
 	//按理说, 应该先创建0长度的mmap, 然后append一个对应长度的bitmap
@@ -111,15 +111,15 @@ func (bm *Bitmap)newFile(indexName string) error {
 }
 
 //BitMap扩大(涨1倍)
-func (bm *Bitmap)DoExpand() error {
+func (bm *Bitmap) DoExpand() error {
 	var err error
 
 	//扩大2倍
-	err = bm.DataMap.DoExpand(uint64((bm.MaxNum+1)/BYTE_SIZE))
+	err = bm.DataMap.DoExpand(uint64((bm.MaxNum + 1) / BYTE_SIZE))
 	if err != nil {
 		return err
 	}
-	bm.MaxNum = (bm.MaxNum+1) * 2 - 1
+	bm.MaxNum = (bm.MaxNum+1)*2 - 1
 	bm.DataMap.SetInnerIdx(uint64((bm.MaxNum+1)/BYTE_SIZE) + mmap.HEADER_LEN)
 	return nil
 }
@@ -153,7 +153,7 @@ func (bm *Bitmap) Clear(idx uint64) bool {
 //SetBit将idx位置的 bit 置为 value (0/1)
 //idx取值是[0, MaxNum]
 func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
-	index, pos := idx / BYTE_SIZE, idx % BYTE_SIZE
+	index, pos := idx/BYTE_SIZE, idx%BYTE_SIZE
 
 	if int64(idx) > bm.MaxNum {
 		return false
@@ -161,7 +161,7 @@ func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 
 	if value == 0 {
 		tmp := bm.DataMap.GetByte(index)
-		tmp &^= 0x01 << pos   //&^ 清位操作符
+		tmp &^= 0x01 << pos //&^ 清位操作符
 		bm.DataMap.SetByte(index, tmp)
 
 		//如果idx==FirstOneIdx, 则需要重新找到最大的1
@@ -185,7 +185,7 @@ func (bm *Bitmap) setBit(idx uint64, value uint8) bool {
 //GetBit 获得 idx 位置处的 value
 //返回0 或者 1
 func (bm *Bitmap) Get(idx uint64) uint8 {
-	index, pos := idx / BYTE_SIZE, idx % BYTE_SIZE
+	index, pos := idx/BYTE_SIZE, idx%BYTE_SIZE
 
 	if bm.MaxNum < int64(idx) {
 		return 0
@@ -200,7 +200,7 @@ func (bm *Bitmap) IsSet(idx uint64) bool {
 
 //Maxpos 获的置为 1 的最大位置
 func (bm *Bitmap) Maxpos() int64 {
-	for i := bm.MaxNum; i >=0; i-- {
+	for i := bm.MaxNum; i >= 0; i-- {
 		if bm.IsSet(uint64(i)) {
 			return i
 		}

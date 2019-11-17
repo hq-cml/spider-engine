@@ -30,7 +30,7 @@ func TestNewBitmap(t *testing.T) {
 		panic("wrong")
 	}
 
-	if bm.DataMap.Capacity != 10 {
+	if bm.DataMap.TotalCapacity != 10 {
 		panic("wrong")
 	}
 	t.Log("\n")
