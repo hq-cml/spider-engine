@@ -1065,7 +1065,7 @@ func TestLoadAgainAgain(t *testing.T) {
 		panic(fmt.Sprintf("Load table Error:%s", err))
 	}
 
-	docs, ok, _ := table.SearchDocs(TEST_FIELD1, "刘七", nil, 0, 0)
+	docs, _, ok, _ := table.SearchDocs(TEST_FIELD1, "刘七", nil, 0, 0)
 	if !ok {
 		panic("shuoud exist")
 	}
