@@ -55,7 +55,7 @@ type Table struct {
 	priBtdb        btree.Btree            //主键专用正排 & 倒排索引（磁盘态）
 	priIvtMap      map[string]string      //主键专用倒排索引（内存态），primaryKey => docId
 	priFwdMap      map[string]string      //主键专正排排索引（内存态），docId => primaryKey
-	delFlagBitMap  *bitmap.Bitmap         //用于文档删除标记
+	delFlagBitMap  *bitmap.BitMap         //用于文档删除标记
 	rwMutex        sync.RWMutex           //读写锁
 }
 

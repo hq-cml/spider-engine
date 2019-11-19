@@ -13,7 +13,7 @@ func TestLeftShift(t *testing.T) {
 }
 
 func TestNewBitmap(t *testing.T) {
-	bm := newBitmapSize(16, "/tmp/bitmap.dat", false)
+	bm := initBitmapSize(16, "/tmp/bitmap.dat", false)
 
 	t.Log("Create bitmap:", bm)
 	t.Log("Create bitmap:", bm.DataMap)
@@ -37,7 +37,7 @@ func TestNewBitmap(t *testing.T) {
 }
 
 func TestSetGet(t *testing.T) {
-	bm := newBitmapSize(32, "/tmp/bitmap.dat", false)
+	bm := initBitmapSize(32, "/tmp/bitmap.dat", false)
 	defer bm.Close()
 
 	t.Log("Create bitmap:", bm)
@@ -85,7 +85,7 @@ func TestSetGet(t *testing.T) {
 }
 
 func TestLoadBitmap(t *testing.T) {
-	bm := newBitmapSize(0, "/tmp/bitmap.dat", true)
+	bm := initBitmapSize(0, "/tmp/bitmap.dat", true)
 
 	t.Log("Load bitmap:", bm)
 	t.Log("Load bitmap:", bm.DataMap)
@@ -108,7 +108,7 @@ func TestLoadBitmap(t *testing.T) {
 
 //and do expand
 func TestClose(t *testing.T) {
-	bm := newBitmapSize(0, "/tmp/bitmap.dat", true)
+	bm := initBitmapSize(0, "/tmp/bitmap.dat", true)
 
 	err := bm.DoExpand()
 	if err != nil {
@@ -123,7 +123,7 @@ func TestClose(t *testing.T) {
 }
 
 func TestLoadAfterExpand(t *testing.T) {
-	bm := newBitmapSize(0, "/tmp/bitmap.dat", true)
+	bm := initBitmapSize(0, "/tmp/bitmap.dat", true)
 
 	t.Log("Load bitmap:", bm)
 	t.Log("Load bitmap:", bm.DataMap)

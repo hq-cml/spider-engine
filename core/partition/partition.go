@@ -678,7 +678,7 @@ func (part *Partition) query(fieldName string, key interface{}) ([]basic.DocNode
 
 //搜索, 如果keyWord为空, 则取出所有未删除的节点
 //根据搜索结果, 再通过bitmap进行过滤
-func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.Bitmap,
+func (part *Partition) SearchDocs(fieldName, keyWord string, bitmap *bitmap.BitMap,
 		filters []basic.SearchFilter) ([]basic.DocNode, bool) {
 
 	//对于读取的操作，用读取锁保护内存分区，磁盘分区随便读取
