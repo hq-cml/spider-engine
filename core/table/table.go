@@ -1118,7 +1118,7 @@ func convertWeight(res []basic.DocNode, maxdoc uint32) {
 	df := len(res)
 	idf := math.Log10(float64(maxdoc) / float64(df))
 	for idx := 0; idx < len(res); idx++ {
-		res[idx].Weight = uint32(float64(res[idx].Weight) / index.BIGGER_MULTIPLE * idf * 1000)
+		res[idx].Weight = uint16(float64(res[idx].Weight) / index.BIGGER_MULTIPLE * idf * 1000)
 	}
 }
 
