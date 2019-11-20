@@ -150,6 +150,12 @@ func (mmp *Mmap) ReadInt64(start uint64) int64 {
 func (mmp *Mmap) ReadUInt64(start uint64) uint64 {
 	return binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8])
 }
+func (mmp *Mmap) ReadInt64(start uint64) int64 {
+	return int64(binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8]))
+}
+func (mmp *Mmap) ReadUInt64(start uint64) uint64 {
+	return binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8])
+}
 func (mmp *Mmap) ReadString(start, length uint64) string {
 	return string(mmp.DataBytes[start : start+length])
 }

@@ -9,11 +9,12 @@ package index
  *
  * B+树（由bolt实现）: key是term, val则是term在倒排文件中的offset
  * 倒排文件: 由mmap实现，顺序的数据块, 每块数据长这个个样子
- * [nodeCnt(8Byte)|nodeStruct1|nodeStruct2|....][nodeCnt(8Byte)|nodeStruct1|nodeStruct3|....]....
+ * [nodeCnt(4Byte)|nodeStruct1|nodeStruct2|....][nodeCnt(4Byte)|nodeStruct1|nodeStruct3|....]....
  * nodeStuct:{docId: xx, weight: xx}
  *
  * Note：
  * 同一个分区的各个字段的正、倒排公用同一套文件(btdb, ivt, fwd, ext)
+ * 每个字段使用btdb的一个treeName，所以不会干扰
  */
 import (
 	"bytes"
@@ -42,7 +43,8 @@ type InvertedIndex struct {
 	btdb      btree.Btree                //B+树
 }
 
-const DOCNODE_BYTE_CNT = 8
+//const DOCNODE_BYTE_CNT = 8 #压缩
+const DOCNODE_BYTE_CNT = 4
 
 //新建空的倒排索引
 func NewEmptyInvertedIndex(indexType uint16, nextDocId uint32, fieldName string) *InvertedIndex {
@@ -166,7 +168,7 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 			return nil, false
 		}
 
-		count := rIdx.ivtMmap.ReadUInt64(uint64(offset))
+		count := rIdx.ivtMmap.ReadUInt64(uint32(offset))
 		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
 		//fmt.Println("Ivt Disk QueryTerm:", term, count, helper.JsonEncode(docNodes))
 		retNodes := make([]basic.DocNode, len(docNodes))
@@ -305,7 +307,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) e
 		//先写入长度, 占8个字节
 		nodeCnt := len(docNodeList)
 		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
-		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
+		binary.LittleEndian.PutUint32(lenBuffer, uint32(nodeCnt))
 		n, err := idxFd.Write(lenBuffer)
 		if err != nil || n != DOCNODE_BYTE_CNT {
 			log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
@@ -459,7 +461,7 @@ func (rIdx *InvertedIndex)MergePersistIvtIndex(rIndexes []*InvertedIndex, partit
 		//写倒排文件 & 写B+树
 		nodeCnt := len(value)
 		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
-		binary.LittleEndian.PutUint64(lenBuffer, uint64(nodeCnt))
+		binary.LittleEndian.PutUint32(lenBuffer, uint32(nodeCnt))
 		n, err := fd.Write(lenBuffer)
 		if err != nil || n != DOCNODE_BYTE_CNT {
 			log.Errf(fmt.Sprintf("Write err:%v, len:%v, len:%v", err, n, DOCNODE_BYTE_CNT))
