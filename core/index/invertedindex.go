@@ -168,8 +168,8 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 			return nil, false
 		}
 
-		count := rIdx.ivtMmap.ReadUInt64(uint32(offset))
-		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, count, rIdx.ivtMmap)
+		count := rIdx.ivtMmap.ReadUInt32(uint64(offset))
+		docNodes := readDocNodes(uint64(offset) + DOCNODE_BYTE_CNT, uint64(count), rIdx.ivtMmap)
 		//fmt.Println("Ivt Disk QueryTerm:", term, count, helper.JsonEncode(docNodes))
 		retNodes := make([]basic.DocNode, len(docNodes))
 		copy(retNodes, docNodes)
@@ -180,9 +180,9 @@ func (rIdx *InvertedIndex) QueryTerm(term string) ([]basic.DocNode, bool) {
 }
 
 //从mmap中读取出
-func readDocNodes(start, count uint64, mmp *mmap.Mmap) []basic.DocNode {
+func readDocNodes(offset, count uint64, mmp *mmap.Mmap) []basic.DocNode {
 	nodeList := *(*[]basic.DocNode)(unsafe.Pointer(&reflect.SliceHeader {
-		Data: uintptr(unsafe.Pointer(&mmp.DataBytes[start])),
+		Data: uintptr(unsafe.Pointer(&mmp.DataBytes[offset])),
 		Len:  int(count),
 		Cap:  int(count),
 	}))
@@ -209,12 +209,12 @@ func (rIdx *InvertedIndex) SetBtree(tree btree.Btree) {
 	rIdx.btdb = tree
 }
 
-//设置btree
+//设置内存太
 func (rIdx *InvertedIndex) SetInMemory(in bool) {
 	rIdx.inMemory = in
 }
 
-//设置btree
+//获取btree
 func (rIdx *InvertedIndex) GetBtree() btree.Btree {
 	return rIdx.btdb
 }
@@ -276,7 +276,7 @@ func (rIdx *InvertedIndex) Walk() error {
 //持久化倒排索引
 //落地 termMap落地到倒排文件; term进入B+tree
 //倒排文件格式:
-//  顺序的数据块, 每块数据长这个个样子 [{nodeCnt(8Byte)|node1|node2|....}, {}, {}]
+//  顺序的数据块, 每块数据长这个个样子 [{nodeCnt(4Byte)|node1|node2|....}, {}, {}]
 //B+树:
 //  key是term, val则是term在倒排文件中的offset
 //
@@ -304,7 +304,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) e
 	}
 	for term, docNodeList := range rIdx.termMap {
 		//fmt.Println(rIdx.fieldName, "落盘：", term, helper.JsonEncode(docNodeList))
-		//先写入长度, 占8个字节
+		//先写入长度, 占4个字节
 		nodeCnt := len(docNodeList)
 		lenBuffer := make([]byte, DOCNODE_BYTE_CNT)
 		binary.LittleEndian.PutUint32(lenBuffer, uint32(nodeCnt))
@@ -323,7 +323,7 @@ func (rIdx *InvertedIndex) Persist(partitionPathName string, btdb btree.Btree) e
 		}
 		writeLength, err := idxFd.Write(buffer.Bytes())
 		if err != nil || writeLength != nodeCnt * basic.DOC_NODE_SIZE{
-			log.Errf("Write err, %v, %v, %v",err, writeLength, nodeCnt * basic.DOC_NODE_SIZE)
+			log.Errf("Write err, %v, %v, %v, %v",err, nodeCnt, writeLength, nodeCnt * basic.DOC_NODE_SIZE)
 			return errors.New("Write Error")
 		}
 

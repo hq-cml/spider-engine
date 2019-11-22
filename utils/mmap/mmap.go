@@ -144,11 +144,11 @@ func (mmp *Mmap) DoExpand(length uint64) error {
 //}
 
 //Read系列, 未忽略隐藏Header
-func (mmp *Mmap) ReadInt64(start uint64) int64 {
-	return int64(binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8]))
+func (mmp *Mmap) ReadInt32(start uint64) int32 {
+	return int32(binary.LittleEndian.Uint32(mmp.DataBytes[start : start+4]))
 }
-func (mmp *Mmap) ReadUInt64(start uint64) uint64 {
-	return binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8])
+func (mmp *Mmap) ReadUInt32(start uint64) uint32 {
+	return binary.LittleEndian.Uint32(mmp.DataBytes[start : start+4])
 }
 func (mmp *Mmap) ReadInt64(start uint64) int64 {
 	return int64(binary.LittleEndian.Uint64(mmp.DataBytes[start : start+8]))
